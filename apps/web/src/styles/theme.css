@@ -1,0 +1,395 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  
+  /* Buildaweb Brand Colors - Modern AI Theme */
+  --brand-primary: #8B5CF6;
+  --brand-secondary: #06B6D4;
+  --brand-accent: #EC4899;
+  --brand-purple: #A855F7;
+  
+  /* Backgrounds */
+  --background: #ffffff;
+  --background-muted: #F9FAFB;
+  --background-hover: #F3F4F6;
+  
+  /* Foregrounds */
+  --foreground: #111827;
+  --foreground-muted: #6B7280;
+  
+  /* Card & Surfaces */
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  
+  /* Primary - Modern Purple */
+  --primary: #8B5CF6;
+  --primary-foreground: #ffffff;
+  --primary-hover: #7C3AED;
+  
+  /* Secondary - Cyan */
+  --secondary: #06B6D4;
+  --secondary-foreground: #ffffff;
+  
+  /* Muted */
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+  
+  /* Accent */
+  --accent: #F3F4F6;
+  --accent-foreground: #111827;
+  
+  /* State Colors */
+  --success: #10B981;
+  --success-foreground: #ffffff;
+  --warning: #F59E0B;
+  --warning-foreground: #ffffff;
+  --destructive: #EF4444;
+  --destructive-foreground: #ffffff;
+  
+  /* Borders & Inputs */
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --input-background: #ffffff;
+  --switch-background: #D1D5DB;
+  --ring: #8B5CF6;
+  
+  /* Font Weights */
+  --font-weight-bold: 700;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  
+  /* Border Radius - Buildaweb Design Tokens */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius: 8px;
+  
+  /* Spacing Presets */
+  --spacing-xs: 8px;
+  --spacing-sm: 12px;
+  --spacing-md: 20px;
+  --spacing-lg: 32px;
+  --spacing-xl: 48px;
+  
+  /* Chart Colors */
+  --chart-1: #8B5CF6;
+  --chart-2: #06B6D4;
+  --chart-3: #EC4899;
+  --chart-4: #10B981;
+  --chart-5: #F59E0B;
+  
+  /* Sidebar */
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #8B5CF6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #F3F4F6;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: #E5E7EB;
+  --sidebar-ring: #8B5CF6;
+}
+
+.dark {
+  --background: #0f172a;
+  --foreground: #f1f5f9;
+  --card: #1e293b;
+  --card-foreground: #f1f5f9;
+  --popover: #1e293b;
+  --popover-foreground: #f1f5f9;
+  --primary: #8B5CF6;
+  --primary-foreground: #ffffff;
+  --primary-hover: #7C3AED;
+  --secondary: #06B6D4;
+  --secondary-foreground: #ffffff;
+  --muted: #334155;
+  --muted-foreground: #94a3b8;
+  --accent: #334155;
+  --accent-foreground: #f1f5f9;
+  --destructive: #EF4444;
+  --destructive-foreground: #ffffff;
+  --border: #334155;
+  --input: #334155;
+  --input-background: #1e293b;
+  --switch-background: #475569;
+  --ring: #8B5CF6;
+  --success: #10B981;
+  --success-foreground: #ffffff;
+  --warning: #F59E0B;
+  --warning-foreground: #ffffff;
+  
+  /* Chart Colors for dark mode */
+  --chart-1: #a78bfa;
+  --chart-2: #22d3ee;
+  --chart-3: #f472b6;
+  --chart-4: #34d399;
+  --chart-5: #fbbf24;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Add custom Buildaweb colors */
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-purple: var(--brand-purple);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Smooth transitions for all interactive elements */
+a, button, [role="button"] {
+  @apply transition-colors duration-200;
+}
+
+/* ========================================
+   ACCESSIBILITY ENHANCEMENTS
+   ======================================== */
+
+/* Enhanced Focus Indicators */
+*:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 1px;
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+/* Skip to main content link */
+.skip-to-main {
+  position: absolute;
+  left: -9999px;
+  z-index: 999;
+  padding: 1rem 2rem;
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+}
+
+.skip-to-main:focus {
+  left: 0;
+  top: 0;
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* HIGH CONTRAST MODE */
+.high-contrast {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #1a1a1a;
+  --card-foreground: #ffffff;
+  --popover: #1a1a1a;
+  --popover-foreground: #ffffff;
+  --primary: #00ffff;
+  --primary-foreground: #000000;
+  --secondary: #ffff00;
+  --secondary-foreground: #000000;
+  --muted: #333333;
+  --muted-foreground: #ffffff;
+  --accent: #444444;
+  --accent-foreground: #ffffff;
+  --destructive: #ff0000;
+  --destructive-foreground: #ffffff;
+  --success: #00ff00;
+  --success-foreground: #000000;
+  --warning: #ffff00;
+  --warning-foreground: #000000;
+  --border: #ffffff;
+  --input: #ffffff;
+  --ring: #00ffff;
+}
+
+.high-contrast * {
+  border-width: 2px;
+}
+
+.high-contrast button,
+.high-contrast a,
+.high-contrast [role="button"] {
+  font-weight: 700;
+  border: 2px solid currentColor;
+}
+
+.high-contrast *:focus-visible {
+  outline: 4px solid var(--ring);
+  outline-offset: 4px;
+}
+
+/* REDUCED MOTION */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Keyboard-only focus (not mouse clicks) */
+body:not(.user-is-tabbing) *:focus {
+  outline: none;
+}
+
+/* Focus trap for modals */
+[role="dialog"]:focus {
+  outline: none;
+}
+
+/* Improve link visibility */
+a:not([class]) {
+  text-decoration: underline;
+  text-decoration-color: var(--primary);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+a:not([class]):hover {
+  text-decoration-thickness: 3px;
+}
+
+a:not([class]):focus-visible {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+/* Better visible indicators for disabled elements */
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+  filter: grayscale(50%);
+}
+
+/* Improved form error states */
+[aria-invalid="true"] {
+  border-color: var(--destructive);
+  border-width: 2px;
+}
+
+[aria-invalid="true"]:focus-visible {
+  outline-color: var(--destructive);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+/* Loading and busy states */
+[aria-busy="true"] {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+/* Better selection visibility */
+::selection {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+::-moz-selection {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Improve placeholder contrast */
+::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.7;
+}
+
+.high-contrast ::placeholder {
+  color: var(--foreground);
+  opacity: 0.8;
+}
+
+/* Focus within for composite widgets */
+.focus-within:focus-within {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
