@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
@@ -71,5 +71,35 @@ export class AssetsService {
       assetId: String(asset._id),
       publicUrl: asset.publicUrl,
     };
+  }
+
+  async getByIdScoped(params: { tenantId: string; projectId: string; assetId: string }) {
+    const asset = await this.assetModel
+      .findOne({
+        _id: params.assetId,
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      })
+      .exec();
+
+    if (!asset) {
+      throw new NotFoundException('Asset not found');
+    }
+
+    return asset;
+  }
+
+  async getByIdsScoped(params: { tenantId: string; projectId: string; assetIds: string[] }) {
+    if (params.assetIds.length === 0) {
+      return [];
+    }
+
+    return this.assetModel
+      .find({
+        _id: { $in: params.assetIds },
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      })
+      .exec();
   }
 }

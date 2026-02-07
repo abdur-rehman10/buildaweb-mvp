@@ -76,7 +76,7 @@ export class PreviewRendererService {
     return 0;
   }
 
-  private renderNode(node: unknown): string {
+  private renderNode(node: unknown, assetUrlById: Record<string, string>): string {
     const record = this.asRecord(node);
     if (!record) return '<!-- Invalid node -->';
 
@@ -95,9 +95,11 @@ export class PreviewRendererService {
     }
 
     if (type === 'image') {
-      const src =
-        this.readString(record.src, this.readString(record.url, this.readString(record.asset_ref, ''))) ||
-        IMAGE_PLACEHOLDER_SRC;
+      const assetRef = this.readString(record.asset_ref, '');
+      const resolvedFromAssetRef = assetRef ? this.readString(assetUrlById[assetRef], '') : '';
+      const src = assetRef
+        ? resolvedFromAssetRef || IMAGE_PLACEHOLDER_SRC
+        : this.readString(record.src, this.readString(record.url, '')) || IMAGE_PLACEHOLDER_SRC;
       const alt = this.readString(record.alt, 'Image');
       return `<img class="baw-node-image" src="${this.escapeHtml(src)}" alt="${this.escapeHtml(alt)}" />`;
     }
@@ -105,22 +107,22 @@ export class PreviewRendererService {
     return `<!-- Unknown node type: ${this.escapeHtml(type || 'unknown')} -->`;
   }
 
-  private renderBlock(block: unknown): string {
+  private renderBlock(block: unknown, assetUrlById: Record<string, string>): string {
     const record = this.asRecord(block);
     if (!record) return '<div class="baw-block"><!-- Invalid block --></div>';
 
     const blockId = this.readId(record);
-    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node)).join('');
+    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node, assetUrlById)).join('');
     const attr = blockId ? ` data-block="${this.escapeHtml(blockId)}"` : '';
     return `<div class="baw-block"${attr}>${nodes}</div>`;
   }
 
-  private renderSection(section: unknown): string {
+  private renderSection(section: unknown, assetUrlById: Record<string, string>): string {
     const record = this.asRecord(section);
     if (!record) return '<section class="baw-section"><!-- Invalid section --></section>';
 
     const sectionId = this.readId(record);
-    const blocks = this.asArray(record.blocks).map((block) => this.renderBlock(block)).join('');
+    const blocks = this.asArray(record.blocks).map((block) => this.renderBlock(block, assetUrlById)).join('');
     const attr = sectionId ? ` data-section="${this.escapeHtml(sectionId)}"` : '';
     return `<section class="baw-section"${attr}>${blocks}</section>`;
   }
@@ -142,9 +144,10 @@ export class PreviewRendererService {
     return JSON.stringify(visit(value));
   }
 
-  render(params: { pageId: string; editorJson: unknown }) {
+  render(params: { pageId: string; editorJson: unknown; assetUrlById?: Record<string, string> }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
-    const sections = this.asArray(pageRecord.sections).map((section) => this.renderSection(section)).join('');
+    const assetUrlById = params.assetUrlById ?? {};
+    const sections = this.asArray(pageRecord.sections).map((section) => this.renderSection(section, assetUrlById)).join('');
 
     const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${sections}</div>`;
     const css = this.baseCss;

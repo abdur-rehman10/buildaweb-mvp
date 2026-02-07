@@ -7,7 +7,6 @@ export class MinioService {
   private readonly client: MinioClient;
   private readonly bucketName: string;
   private readonly publicBaseUrl: string;
-  private readonly presignedExpirySeconds: number;
   private bucketReadyPromise: Promise<void> | null = null;
 
   constructor(private readonly config: ConfigService) {
@@ -20,7 +19,6 @@ export class MinioService {
     this.bucketName = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
     this.publicBaseUrl =
       this.config.get<string>('MINIO_PUBLIC_BASE_URL') ?? `${useSSL ? 'https' : 'http'}://${endPoint}:${port}`;
-    this.presignedExpirySeconds = Number(this.config.get<string>('MINIO_PRESIGNED_EXPIRES_SECONDS') ?? 60 * 60 * 24);
 
     this.client = new MinioClient({
       endPoint,
@@ -72,12 +70,8 @@ export class MinioService {
       'Content-Type': params.mimeType,
     });
 
-    try {
-      return await this.client.presignedGetObject(this.bucketName, params.objectPath, this.presignedExpirySeconds);
-    } catch {
-      const base = this.publicBaseUrl.replace(/\/$/, '');
-      const objectPath = this.encodedPath(params.objectPath);
-      return `${base}/${this.bucketName}/${objectPath}`;
-    }
+    const base = this.publicBaseUrl.replace(/\/$/, '');
+    const objectPath = this.encodedPath(params.objectPath);
+    return `${base}/${this.bucketName}/${objectPath}`;
   }
 }
