@@ -322,7 +322,7 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                               </button>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
                                 <div>
-                                  <label className="block text-xs font-medium mb-1">Link</label>
+                                  <label className="block text-xs font-medium mb-1">Link type</label>
                                   <select
                                     className="h-9 px-2 border rounded-md bg-background w-full text-sm"
                                     value={linkMode}
@@ -340,8 +340,8 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                                     }}
                                     disabled={!nodeId}
                                   >
-                                    <option value="external">External URL</option>
-                                    <option value="internal">Internal Page</option>
+                                    <option value="external">External</option>
+                                    <option value="internal">Internal</option>
                                   </select>
                                 </div>
 
