@@ -228,6 +228,15 @@ export type UploadAssetResult = {
   publicUrl: string;
 };
 
+export type ResolveAssetsItem = {
+  assetId: string;
+  publicUrl: string;
+};
+
+export type ResolveAssetsResult = {
+  items: ResolveAssetsItem[];
+};
+
 export type NavigationItem = {
   label: string;
   pageId: string;
@@ -372,6 +381,12 @@ export const assetsApi = {
     return apiRequest<UploadAssetResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets/upload`, {
       method: 'POST',
       body,
+    });
+  },
+  resolve(projectId: string, assetIds: string[]) {
+    return apiRequest<ResolveAssetsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ assetIds }),
     });
   },
 };
