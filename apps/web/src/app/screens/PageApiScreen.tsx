@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, pagesApi } from '../../lib/api';
+import { ApiError, assetsApi, pagesApi } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
 import { addSection, type SectionPresetType } from '../../editor/sectionHelpers';
 
@@ -19,6 +19,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [pageSlugInput, setPageSlugInput] = useState('');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
+  const [assetsById, setAssetsById] = useState<Record<string, string>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
 
   const [loading, setLoading] = useState(false);
@@ -53,6 +54,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           ? (json as Record<string, unknown>)
           : {},
       );
+      setAssetsById({});
       onPageIdChange(targetPageId);
       setMessage('Page loaded');
     } catch (err) {
@@ -177,6 +179,18 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     }
   };
 
+  const uploadImageForNode = async (_nodeId: string, file: File) => {
+    try {
+      const uploaded = await assetsApi.upload(projectId, file);
+      setAssetsById((prev) => ({ ...prev, [uploaded.assetId]: uploaded.publicUrl }));
+      return uploaded;
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to upload image');
+      throw err;
+    }
+  };
+
   useEffect(() => {
     if (!pageId) return;
     void loadPage(pageId);
@@ -290,7 +304,12 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
             </Button>
           </div>
           <label className="block text-sm font-medium">Renderer stub (click text nodes to edit)</label>
-          <RendererStub value={editorJson} onChange={setEditorJson} />
+          <RendererStub
+            value={editorJson}
+            onChange={setEditorJson}
+            assetsById={assetsById}
+            onUploadImage={uploadImageForNode}
+          />
         </div>
 
         <div className="flex items-center gap-3">
