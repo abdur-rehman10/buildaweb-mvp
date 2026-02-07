@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, pagesApi } from '../../lib/api';
+import { ApiError, assetsApi, pagesApi } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
-import { addSection, type SectionPresetType } from '../../editor/sectionHelpers';
+import { addSection, type SectionPresetType, updateImageNodeAssetRefById } from '../../editor/sectionHelpers';
 
 interface PageApiScreenProps {
   projectId: string;
@@ -19,6 +19,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [pageSlugInput, setPageSlugInput] = useState('');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
+  const [assetsById, setAssetsById] = useState<Record<string, string>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
 
   const [loading, setLoading] = useState(false);
@@ -26,6 +27,9 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [metaSaving, setMetaSaving] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewSrcDoc, setPreviewSrcDoc] = useState<string | null>(null);
+  const [previewHash, setPreviewHash] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,6 +54,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           ? (json as Record<string, unknown>)
           : {},
       );
+      setAssetsById({});
       onPageIdChange(targetPageId);
       setMessage('Page loaded');
     } catch (err) {
@@ -153,6 +158,38 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setMessage(apiError?.message ?? 'Failed to delete page');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const previewPage = async () => {
+    const targetPageId = pageIdInput.trim();
+    if (!targetPageId) return;
+
+    setPreviewLoading(true);
+    setMessage(null);
+    try {
+      const preview = await pagesApi.preview(projectId, targetPageId);
+      setPreviewHash(preview.hash);
+      setPreviewSrcDoc(`<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`);
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const uploadImageForNode = async (_nodeId: string, file: File) => {
+    const nodeId = _nodeId;
+    try {
+      const uploaded = await assetsApi.upload(projectId, file);
+      setAssetsById((prev) => ({ ...prev, [uploaded.assetId]: uploaded.publicUrl }));
+      setEditorJson((prev) => updateImageNodeAssetRefById(prev, nodeId, uploaded.assetId));
+      return uploaded;
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to upload image');
+      throw err;
     }
   };
 
@@ -269,12 +306,20 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
             </Button>
           </div>
           <label className="block text-sm font-medium">Renderer stub (click text nodes to edit)</label>
-          <RendererStub value={editorJson} onChange={setEditorJson} />
+          <RendererStub
+            value={editorJson}
+            onChange={setEditorJson}
+            assetsById={assetsById}
+            onUploadImage={uploadImageForNode}
+          />
         </div>
 
         <div className="flex items-center gap-3">
           <Button onClick={() => void savePage()} disabled={saving || !pageIdInput.trim()}>
             {saving ? 'Saving...' : 'Save Page'}
+          </Button>
+          <Button variant="outline" onClick={() => void previewPage()} disabled={previewLoading || !pageIdInput.trim()}>
+            {previewLoading ? 'Loading Preview...' : 'Preview'}
           </Button>
           <Button variant="outline" onClick={() => void loadPage()} disabled={loading || !pageIdInput.trim()}>
             Reload
@@ -291,6 +336,23 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           <p className="text-sm" role="alert">
             {message}
           </p>
+        )}
+
+        {previewHash && (
+          <p className="text-xs text-muted-foreground">
+            Preview hash: {previewHash}
+          </p>
+        )}
+
+        {previewSrcDoc && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Preview</label>
+            <iframe
+              title="Page Preview"
+              srcDoc={previewSrcDoc}
+              className="w-full min-h-[420px] border rounded-md bg-white"
+            />
+          </div>
         )}
       </Card>
     </div>

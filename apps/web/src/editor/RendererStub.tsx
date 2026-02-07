@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   deleteNodeById,
   deleteSection,
@@ -12,6 +12,8 @@ type JsonRecord = Record<string, unknown>;
 type RendererStubProps = {
   value: JsonRecord;
   onChange: (nextEditorJson: JsonRecord) => void;
+  assetsById: Record<string, string>;
+  onUploadImage: (nodeId: string, file: File) => Promise<{ assetId: string; publicUrl: string }>;
 };
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -31,6 +33,13 @@ function getText(value: unknown, fallback = ''): string {
 
 function getId(record: JsonRecord): string {
   const raw = record.id;
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'number') return String(raw);
+  return '';
+}
+
+function getAssetRef(record: JsonRecord): string {
+  const raw = record.asset_ref;
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number') return String(raw);
   return '';
@@ -74,9 +83,12 @@ function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string, nextT
   return { ...editorJson, sections: nextSections };
 }
 
-export function RendererStub({ value, onChange }: RendererStubProps) {
+export function RendererStub({ value, onChange, assetsById, onUploadImage }: RendererStubProps) {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
+  const [uploadingNodeId, setUploadingNodeId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputsRef = useRef<Record<string, HTMLInputElement | null>>({});
 
   const beginEdit = (nodeId: string, initialText: string) => {
     if (!nodeId) return;
@@ -88,6 +100,28 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
     const next = updateTextNodeContentById(value, nodeId, draftText);
     onChange(next);
     setEditingNodeId(null);
+  };
+
+  const triggerImagePicker = (nodeId: string) => {
+    const input = fileInputsRef.current[nodeId];
+    input?.click();
+  };
+
+  const handleImageFileChange = async (nodeId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !nodeId) return;
+
+    setUploadingNodeId(nodeId);
+    setUploadError(null);
+
+    try {
+      await onUploadImage(nodeId, file);
+    } catch {
+      setUploadError('Image upload failed');
+    } finally {
+      setUploadingNodeId((current) => (current === nodeId ? null : current));
+    }
   };
 
   const sections = asArray(value.sections);
@@ -268,17 +302,72 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
                             </button>
                           );
                         } else if (type === 'image') {
-                          const src = getText(nodeRecord.src, getText(nodeRecord.url, ''));
+                          const assetRef = getAssetRef(nodeRecord);
+                          const resolvedUrl = assetRef ? getText(assetsById[assetRef], '').trim() : '';
                           const alt = getText(nodeRecord.alt, 'Image');
 
-                          if (!src) {
+                          if (!resolvedUrl) {
                             content = (
-                              <div className="border border-dashed p-3 text-sm">
-                                [Missing image asset]
+                              <div className="space-y-2">
+                                <div className="border border-dashed p-3 text-sm">
+                                  [Missing image asset]
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  debug asset_ref: {assetRef || '(none)'} | resolved url: {resolvedUrl || '(none)'}
+                                </div>
+                                {nodeId && (
+                                  <>
+                                    <input
+                                      ref={(el) => {
+                                        fileInputsRef.current[nodeId] = el;
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => void handleImageFileChange(nodeId, e)}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="border rounded px-2 py-1 text-xs"
+                                      onClick={() => triggerImagePicker(nodeId)}
+                                      disabled={uploadingNodeId === nodeId}
+                                    >
+                                      {uploadingNodeId === nodeId ? 'Uploading...' : 'Upload/Replace'}
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             );
                           } else {
-                            content = <img src={src} alt={alt} className="max-w-full h-auto" />;
+                            content = (
+                              <div className="space-y-2">
+                                <img src={resolvedUrl} alt={alt} className="max-w-full h-auto" />
+                                <div className="text-xs text-muted-foreground">
+                                  debug asset_ref: {assetRef || '(none)'} | resolved url: {resolvedUrl}
+                                </div>
+                                {nodeId && (
+                                  <>
+                                    <input
+                                      ref={(el) => {
+                                        fileInputsRef.current[nodeId] = el;
+                                      }}
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => void handleImageFileChange(nodeId, e)}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="border rounded px-2 py-1 text-xs"
+                                      onClick={() => triggerImagePicker(nodeId)}
+                                      disabled={uploadingNodeId === nodeId}
+                                    >
+                                      {uploadingNodeId === nodeId ? 'Uploading...' : 'Upload/Replace'}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            );
                           }
                         } else {
                           content = (
@@ -313,6 +402,11 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
           </section>
         );
       })}
+      {uploadError && (
+        <div className="text-xs" role="alert">
+          {uploadError}
+        </div>
+      )}
     </div>
   );
 }
