@@ -1,66 +1,33 @@
+Branch: feat/projects-pages-module
 
----
+Goal: Wire frontend to existing JWT-protected Projects + Pages API (no editor refactors, no new backend endpoints)
 
-## ✅ UPDATED `PLAN.md` (explicit branch goal)
+API base: /api/v1 (backend on :4000)
 
-```md
-# Buildaweb — Development Plan
+Response shape: { ok: true, data } / { ok: false, error } (must be used as-is)
 
-## Current Branch
-feat/auth-user-module
+In scope (this branch):
 
-## Branch Goal (DO NOT EXPAND)
-Implement the **User + Auth domain** only.
+Auth: login, store JWT, attach Authorization: Bearer <token> to API
 
-This branch includes:
-- User schema (MongoDB)
-- Email + password signup
-- Login (JWT)
-- Auth guard
-- First protected endpoint
+Projects UI: list, create, select active project
 
-This branch explicitly excludes:
-- Editor logic
-- Projects / pages
-- AI generation
-- Publishing
-- Billing
-- White-label logic
+Pages: open a page, load editorJson, save page via PUT with version
 
-## Completed
-- Frontend scaffold (React + Vite)
-- Backend scaffold (NestJS)
-- Docker setup (MongoDB + MinIO)
-- MongoDB connection verified
-- Health + DB ping endpoints
+Handle 409 VERSION_CONFLICT with a simple UI message + reload option
 
-## Next (After This Branch)
-1) Projects + pages domain
-2) Editor JSON save/load
-3) Asset upload
-4) Preview rendering
-5) Publish flow
+Out of scope (explicit):
 
-## Definitions
-### MVP Functional (must work)
-Auth, Dashboard, Project, Editor save/load, Tokens, Navigation, Assets upload, Preview, Publish, AI generate, Billing.
+AI generation
 
-### UI Present but Limited
-Team/Collab, Analytics, Marketplace, Integrations, Version History — UI only, disabled.
+Publishing/preview renderer
 
-### Out of MVP
-CMS/blog, forms builder, ecommerce, animations, free-drag, advanced grid, AI images, multilingual.
+Assets upload
 
-## Git Workflow
-- `main`: always deployable
-- feature branches: `feat/<area>-<short-name>`
-- bugfix branches: `fix/<area>-<short-name>`
-- PR required before merge to main
-- Squash merge preferred
+Billing
 
-## Coding Standards
-- TypeScript strict
-- Validate input DTOs
-- Never trust frontend input
-- Enforce user scoping in every query
-- Mongo IDs must never be guessable across users
+New backend endpoints / schema changes
+
+Definition of Done:
+
+A user can login -> see projects -> create/select project -> open a page -> save it successfully (with version increment) and see a conflict message on 409
