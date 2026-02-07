@@ -1,8 +1,10 @@
 import { Controller, Get, HttpException, HttpStatus, Param, Req, UseGuards } from '@nestjs/common';
-import { Types } from 'mongoose';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model, Types } from 'mongoose';
 import { fail, ok } from '../../common/api-response';
 import { AssetsService } from '../assets/assets.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
 import { ProjectsService } from '../projects/projects.service';
 import { PagesService } from './pages.service';
 import { PreviewRendererService } from './preview-renderer.service';
@@ -15,6 +17,7 @@ export class PreviewController {
     private readonly pages: PagesService,
     private readonly assets: AssetsService,
     private readonly previewRenderer: PreviewRendererService,
+    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
   ) {}
 
   private asRecord(value: unknown): Record<string, unknown> | null {
@@ -30,6 +33,72 @@ export class PreviewController {
     if (typeof value === 'string') return value;
     if (typeof value === 'number') return String(value);
     return '';
+  }
+
+  private normalizeSlug(slug: string) {
+    return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  }
+
+  private resolveHomePage<T extends { isHome?: boolean; slug?: string }>(pages: T[]): T | null {
+    if (pages.length === 0) return null;
+
+    const explicitHome = pages.find((page) => page.isHome === true);
+    if (explicitHome) return explicitHome;
+
+    const slashHome = pages.find((page) => (page.slug ?? '').trim() === '/');
+    if (slashHome) return slashHome;
+
+    const emptyHome = pages.find((page) => (page.slug ?? '').trim() === '');
+    if (emptyHome) return emptyHome;
+
+    return pages[0];
+  }
+
+  private async loadNavigationLinks(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+    const nav = await this.navigationModel
+      .findOne({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+        ownerUserId: params.ownerUserId,
+      })
+      .select('itemsJson')
+      .lean()
+      .exec();
+
+    const itemsRaw = Array.isArray(nav?.itemsJson) ? nav.itemsJson : [];
+    if (itemsRaw.length === 0) return [];
+
+    const pages = await this.pages.listPages({
+      tenantId: params.tenantId,
+      projectId: params.projectId,
+    });
+    if (pages.length === 0) return [];
+
+    const homePage = this.resolveHomePage(pages);
+    const pageHrefById = Object.fromEntries(
+      pages.map((page) => {
+        const isHome = !!homePage && page.id === homePage.id;
+        const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
+        const href = isHome ? 'index.html' : `${normalizedSlug || `page-${page.id}`}/index.html`;
+        return [page.id, href];
+      }),
+    );
+
+    return itemsRaw
+      .map((item) => {
+        if (typeof item !== 'object' || item === null) return null;
+        const record = item as Record<string, unknown>;
+        const pageId = this.readString(record.pageId).trim();
+        const href = pageHrefById[pageId];
+        if (!href) return null;
+
+        const labelRaw = this.readString(record.label).trim();
+        const page = pages.find((entry) => entry.id === pageId);
+        const label = labelRaw || page?.title || page?.id || href;
+
+        return { label, href };
+      })
+      .filter((item): item is { label: string; href: string } => item !== null);
   }
 
   private collectAssetRefs(editorJson: unknown): string[] {
@@ -86,11 +155,13 @@ export class PreviewController {
       assetIds: validAssetIds,
     });
     const assetUrlById = Object.fromEntries(assets.map((asset) => [String(asset._id), asset.publicUrl]));
+    const navLinks = await this.loadNavigationLinks({ tenantId, projectId, ownerUserId });
 
     const preview = this.previewRenderer.render({
       pageId: String(page._id),
       editorJson: page.editorJson,
       assetUrlById,
+      navLinks,
     });
 
     return ok(preview);
