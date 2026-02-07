@@ -248,6 +248,15 @@ export type UpdateNavigationInput = {
   cta?: NavigationCta;
 };
 
+export type PublishStatus = 'publishing' | 'live' | 'failed';
+
+export type PublishResult = {
+  publishId: string;
+  status: PublishStatus;
+  url: string;
+  errorMessage?: string;
+};
+
 export const authApi = {
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/api/v1/auth/login', {
@@ -364,5 +373,21 @@ export const assetsApi = {
       method: 'POST',
       body,
     });
+  },
+};
+
+export const publishApi = {
+  create(projectId: string) {
+    return apiRequest<PublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish`, {
+      method: 'POST',
+    });
+  },
+  getStatus(projectId: string, publishId: string) {
+    return apiRequest<PublishResult>(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/publish/${encodeURIComponent(publishId)}`,
+      {
+        method: 'GET',
+      },
+    );
   },
 };
