@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, assetsApi, pagesApi } from '../../lib/api';
+import { ApiError, assetsApi, pagesApi, type PageMetaSummary } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
 import { addSection, type SectionPresetType, updateImageNodeAssetRefById } from '../../editor/sectionHelpers';
 
@@ -66,6 +66,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [pageSlugInput, setPageSlugInput] = useState('');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
+  const [projectPages, setProjectPages] = useState<PageMetaSummary[]>([]);
   const [assetsById, setAssetsById] = useState<Record<string, string>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
 
@@ -82,6 +83,15 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   useEffect(() => {
     setPageIdInput(pageId ?? '');
   }, [pageId]);
+
+  const loadProjectPages = async () => {
+    try {
+      const { pages } = await pagesApi.list(projectId);
+      setProjectPages(pages);
+    } catch {
+      setProjectPages([]);
+    }
+  };
 
   const loadPage = async (explicitPageId?: string) => {
     const targetPageId = (explicitPageId ?? pageIdInput).trim();
@@ -264,6 +274,12 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   };
 
   useEffect(() => {
+    void loadProjectPages();
+    // Intentional dependency on projectId to refresh page options on project switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
     if (!pageId) return;
     void loadPage(pageId);
     // Intentional dependency on pageId/projectId only to trigger navigation-based loads.
@@ -380,6 +396,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
             value={editorJson}
             onChange={setEditorJson}
             assetsById={assetsById}
+            projectPages={projectPages}
             onUploadImage={uploadImageForNode}
           />
         </div>
