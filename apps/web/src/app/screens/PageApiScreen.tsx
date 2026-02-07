@@ -4,7 +4,7 @@ import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ApiError, assetsApi, pagesApi } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
-import { addSection, type SectionPresetType } from '../../editor/sectionHelpers';
+import { addSection, type SectionPresetType, updateImageNodeAssetRefById } from '../../editor/sectionHelpers';
 
 interface PageApiScreenProps {
   projectId: string;
@@ -180,9 +180,11 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   };
 
   const uploadImageForNode = async (_nodeId: string, file: File) => {
+    const nodeId = _nodeId;
     try {
       const uploaded = await assetsApi.upload(projectId, file);
       setAssetsById((prev) => ({ ...prev, [uploaded.assetId]: uploaded.publicUrl }));
+      setEditorJson((prev) => updateImageNodeAssetRefById(prev, nodeId, uploaded.assetId, uploaded.publicUrl));
       return uploaded;
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;

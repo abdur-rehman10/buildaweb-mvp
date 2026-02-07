@@ -5,7 +5,6 @@ import {
   duplicateSection,
   insertNodeInFirstBlock,
   moveSection,
-  updateImageNodeAssetRefById,
 } from './sectionHelpers';
 
 type JsonRecord = Record<string, unknown>;
@@ -117,9 +116,7 @@ export function RendererStub({ value, onChange, assetsById, onUploadImage }: Ren
     setUploadError(null);
 
     try {
-      const uploaded = await onUploadImage(nodeId, file);
-      const next = updateImageNodeAssetRefById(value, nodeId, uploaded.assetId);
-      onChange(next);
+      await onUploadImage(nodeId, file);
     } catch {
       setUploadError('Image upload failed');
     } finally {
@@ -306,7 +303,9 @@ export function RendererStub({ value, onChange, assetsById, onUploadImage }: Ren
                           );
                         } else if (type === 'image') {
                           const assetRef = getAssetRef(nodeRecord);
-                          const src = assetRef ? getText(assetsById[assetRef], '') : '';
+                          const mappedSrc = assetRef ? getText(assetsById[assetRef], '') : '';
+                          const fallbackSrc = getText(nodeRecord.src, getText(nodeRecord.url, ''));
+                          const src = mappedSrc || fallbackSrc;
                           const alt = getText(nodeRecord.alt, 'Image');
 
                           if (!src) {
@@ -409,7 +408,11 @@ export function RendererStub({ value, onChange, assetsById, onUploadImage }: Ren
           </section>
         );
       })}
-      {uploadError && <div className="text-xs" role="alert">{uploadError}</div>}
+      {uploadError && (
+        <div className="text-xs" role="alert">
+          {uploadError}
+        </div>
+      )}
     </div>
   );
 }
