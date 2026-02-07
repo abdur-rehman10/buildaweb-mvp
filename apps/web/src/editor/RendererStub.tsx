@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { deleteSection, duplicateSection, moveSection } from './sectionHelpers';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -22,8 +23,8 @@ function getText(value: unknown, fallback = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
-function getNodeId(nodeRecord: JsonRecord): string {
-  const raw = nodeRecord.id;
+function getId(record: JsonRecord): string {
+  const raw = record.id;
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number') return String(raw);
   return '';
@@ -42,7 +43,7 @@ export function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string
         const nodeRecord = asRecord(node);
         if (!nodeRecord) return node;
 
-        if (getNodeId(nodeRecord) !== nodeId || getText(nodeRecord.type) !== 'text') {
+        if (getId(nodeRecord) !== nodeId || getText(nodeRecord.type) !== 'text') {
           return node;
         }
 
@@ -101,10 +102,53 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
           );
         }
 
+        const sectionId = getId(sectionRecord);
+        const sectionType = getText(sectionRecord.type, `section-${sectionIndex + 1}`);
         const blocks = asArray(sectionRecord.blocks);
 
         return (
           <section key={`section-${sectionIndex}`} className="border p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 border-b pb-2">
+              <div className="text-sm font-medium">
+                Section {sectionIndex + 1}: {sectionType}
+                {!sectionId && <span className="text-xs"> [missing id]</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId || sectionIndex === 0}
+                  onClick={() => onChange(moveSection(value, sectionId, 'up'))}
+                >
+                  Up
+                </button>
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId || sectionIndex === sections.length - 1}
+                  onClick={() => onChange(moveSection(value, sectionId, 'down'))}
+                >
+                  Down
+                </button>
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId}
+                  onClick={() => onChange(duplicateSection(value, sectionId))}
+                >
+                  Duplicate
+                </button>
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId}
+                  onClick={() => onChange(deleteSection(value, sectionId))}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+
             {blocks.length === 0 ? (
               <div className="text-sm">[Empty section]</div>
             ) : (
@@ -129,7 +173,10 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
                         const nodeRecord = asRecord(node);
                         if (!nodeRecord) {
                           return (
-                            <div key={`node-${sectionIndex}-${blockIndex}-${nodeIndex}`} className="border border-dashed p-2 text-sm">
+                            <div
+                              key={`node-${sectionIndex}-${blockIndex}-${nodeIndex}`}
+                              className="border border-dashed p-2 text-sm"
+                            >
                               [Invalid node]
                             </div>
                           );
@@ -140,7 +187,7 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
 
                         if (type === 'text') {
                           const text = getText(nodeRecord.text, getText(nodeRecord.content, ''));
-                          const nodeId = getNodeId(nodeRecord);
+                          const nodeId = getId(nodeRecord);
                           const isEditing = nodeId !== '' && editingNodeId === nodeId;
 
                           if (isEditing) {
@@ -167,15 +214,10 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
 
                           return (
                             <div key={key}>
-                              <p
-                                onClick={() => beginEdit(nodeId, text)}
-                                className={nodeId ? 'cursor-text' : ''}
-                              >
+                              <p onClick={() => beginEdit(nodeId, text)} className={nodeId ? 'cursor-text' : ''}>
                                 {text || '[Empty text]'}
                               </p>
-                              {!nodeId && (
-                                <div className="text-xs">[Text node missing id - read only]</div>
-                              )}
+                              {!nodeId && <div className="text-xs">[Text node missing id - read only]</div>}
                             </div>
                           );
                         }
