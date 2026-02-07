@@ -1,33 +1,43 @@
-Branch: feat/projects-pages-module
+Branch: feat/pages-navigation-api
 
-Goal: Wire frontend to existing JWT-protected Projects + Pages API (no editor refactors, no new backend endpoints)
+Goal: Add minimal Pages management + Navigation API for MVP (duplicate/delete/meta + nav JSON). Wire frontend to use these endpoints.
 
-API base: /api/v1 (backend on :4000)
+In scope:
 
-Response shape: { ok: true, data } / { ok: false, error } (must be used as-is)
+Backend:
 
-In scope (this branch):
+PATCH /projects/:projectId/pages/:pageId/meta (title/slug/seoJson)
 
-Auth: login, store JWT, attach Authorization: Bearer <token> to API
+POST /projects/:projectId/pages/:pageId/duplicate
 
-Projects UI: list, create, select active project
+DELETE /projects/:projectId/pages/:pageId
 
-Pages: open a page, load editorJson, save page via PUT with version
+Navigation storage endpoints (project-scoped):
 
-Handle 409 VERSION_CONFLICT with a simple UI message + reload option
+GET /projects/:projectId/navigation
 
-Out of scope (explicit):
+PUT /projects/:projectId/navigation
 
-AI generation
+Auto-generate default nav if none exists (based on pages, home first)
 
-Publishing/preview renderer
+Frontend:
 
-Assets upload
+Page rename + slug edit (via meta PATCH)
 
-Billing
+Duplicate/Delete page buttons
 
-New backend endpoints / schema changes
+Nav editor: rename menu labels + reorder (simple up/down)
 
-Definition of Done:
+Out of scope:
 
-A user can login -> see projects -> create/select project -> open a page -> save it successfully (with version increment) and see a conflict message on 409
+Publish/preview
+
+Assets pipeline
+
+Global tokens UI
+
+AI
+
+DoD:
+
+User can rename/slug-edit a page, duplicate/delete a page, and edit navigation labels/order; all persists via API.
