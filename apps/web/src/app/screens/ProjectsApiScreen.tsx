@@ -27,6 +27,10 @@ type ProjectPageListItem = {
   slug?: string;
 };
 
+function toPublishedHomeUrl(baseUrl: string): string {
+  return `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}index.html`;
+}
+
 function toPageList(value: unknown): ProjectPageListItem[] | null {
   if (value === undefined) return null;
   const rawItems = Array.isArray(value) ? value : [value];
@@ -80,6 +84,8 @@ export function ProjectsApiScreen({
   const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const publishedHomeUrl = publishedUrl ? toPublishedHomeUrl(publishedUrl) : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -174,6 +180,7 @@ export function ProjectsApiScreen({
     setPublishStatus(null);
     setPublishedUrl(null);
     setPublishError(null);
+    setPublishMessage(null);
   }, [activeProjectId]);
 
   useEffect(() => {
@@ -271,6 +278,7 @@ export function ProjectsApiScreen({
 
     setPublishStarting(true);
     setPublishError(null);
+    setPublishMessage(null);
     try {
       const result = await publishApi.create(activeProjectId);
       setPublishId(result.publishId);
@@ -286,6 +294,17 @@ export function ProjectsApiScreen({
       setPublishStatus('failed');
     } finally {
       setPublishStarting(false);
+    }
+  };
+
+  const copyPublishedUrl = async () => {
+    if (!publishedHomeUrl) return;
+
+    try {
+      await window.navigator.clipboard.writeText(publishedHomeUrl);
+      setPublishMessage('URL copied');
+    } catch {
+      setPublishMessage('Failed to copy URL');
     }
   };
 
@@ -433,7 +452,7 @@ export function ProjectsApiScreen({
             </div>
           </div>
 
-          {(publishStatus || publishError || publishedUrl) && (
+          {(publishStatus || publishError || publishedHomeUrl || publishMessage) && (
             <div className="border rounded-md p-3 space-y-1">
               {publishStatus && (
                 <p className="text-sm">
@@ -445,15 +464,25 @@ export function ProjectsApiScreen({
                   {publishError}
                 </p>
               )}
-              {publishStatus === 'live' && publishedUrl && (
-                <a
-                  href={publishedUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm underline text-primary"
-                >
-                  Open published site
-                </a>
+              {publishStatus === 'live' && publishedHomeUrl && (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={publishedHomeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm underline text-primary"
+                  >
+                    Open published site
+                  </a>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void copyPublishedUrl()}>
+                    Copy URL
+                  </Button>
+                </div>
+              )}
+              {publishMessage && (
+                <p className="text-xs text-muted-foreground" role="status">
+                  {publishMessage}
+                </p>
               )}
             </div>
           )}
