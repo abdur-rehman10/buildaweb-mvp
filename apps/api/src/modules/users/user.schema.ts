@@ -11,7 +11,7 @@ export class User {
   @Prop({ required: true })
   passwordHash!: string;
 
-  @Prop({ default: null, trim: true })
+  @Prop({ type: String, default: null, trim: true })
   name?: string | null;
 
   // MVP: keep tenant ready, default single-tenant later
