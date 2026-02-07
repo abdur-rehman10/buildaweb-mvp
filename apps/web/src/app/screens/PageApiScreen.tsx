@@ -3,6 +3,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ApiError, pagesApi } from '../../lib/api';
+import { RendererStub } from '../../editor/RendererStub';
 
 interface PageApiScreenProps {
   projectId: string;
@@ -12,7 +13,7 @@ interface PageApiScreenProps {
 export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProps) {
   const [pageId, setPageId] = useState('');
   const [version, setVersion] = useState(1);
-  const [editorJsonText, setEditorJsonText] = useState('{}');
+  const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,7 +28,12 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
       const res = await pagesApi.get(projectId, pageId.trim());
       const page = res.page;
       setVersion(page.version);
-      setEditorJsonText(JSON.stringify(page.editorJson ?? {}, null, 2));
+      const json = page.editorJson;
+      setEditorJson(
+        typeof json === 'object' && json !== null && !Array.isArray(json)
+          ? (json as Record<string, unknown>)
+          : {},
+      );
       setMessage('Page loaded');
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
@@ -40,24 +46,11 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
   const savePage = async () => {
     if (!pageId.trim()) return;
 
-    let parsed: Record<string, unknown>;
-    try {
-      const value = JSON.parse(editorJsonText) as unknown;
-      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-        setMessage('Editor JSON must be a JSON object');
-        return;
-      }
-      parsed = value as Record<string, unknown>;
-    } catch {
-      setMessage('Editor JSON is not valid JSON');
-      return;
-    }
-
     setSaving(true);
     setMessage(null);
     try {
       const res = await pagesApi.update(projectId, pageId.trim(), {
-        page: parsed,
+        page: editorJson,
         version,
       });
       setVersion(res.version);
@@ -100,13 +93,9 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
           </Button>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-2">editorJson (temporary textarea)</label>
-          <textarea
-            className="w-full min-h-[320px] p-3 rounded-md border border-input bg-input-background font-mono text-sm"
-            value={editorJsonText}
-            onChange={(e) => setEditorJsonText(e.target.value)}
-          />
+        <div className="space-y-2">
+          <label className="block text-sm font-medium">Read-only renderer stub</label>
+          <RendererStub editorJson={editorJson} />
         </div>
 
         <div className="flex items-center gap-3">
