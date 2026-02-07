@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
 type JsonRecord = Record<string, unknown>;
+type RenderNavLink = { label: string; href: string };
 
 const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 
@@ -9,6 +10,9 @@ const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 export class PreviewRendererService {
   private readonly baseCss = `
 .baw-page{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#ffffff;max-width:1200px;margin:0 auto;padding:24px;line-height:1.5}
+.baw-nav{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px;padding:0 0 12px;border-bottom:1px solid #e5e7eb}
+.baw-nav a{color:#111827;text-decoration:none;font-weight:600}
+.baw-nav a:hover{text-decoration:underline}
 .baw-section{margin:0 0 24px}
 .baw-block{display:grid;gap:12px}
 .baw-node-text{margin:0}
@@ -144,15 +148,38 @@ export class PreviewRendererService {
     return JSON.stringify(visit(value));
   }
 
-  render(params: { pageId: string; editorJson: unknown; assetUrlById?: Record<string, string> }) {
+  private renderNavigation(navLinks?: RenderNavLink[]): string {
+    if (!Array.isArray(navLinks) || navLinks.length === 0) return '';
+
+    const links = navLinks
+      .filter((item) => item && typeof item.label === 'string' && typeof item.href === 'string')
+      .map(
+        (item) =>
+          `<a href="${this.escapeHtml(item.href)}">${this.escapeHtml(item.label.trim() || item.href)}</a>`,
+      )
+      .join('');
+
+    if (!links) return '';
+    return `<nav class="baw-nav">${links}</nav>`;
+  }
+
+  render(params: {
+    pageId: string;
+    editorJson: unknown;
+    assetUrlById?: Record<string, string>;
+    navLinks?: RenderNavLink[];
+  }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
+    const navLinks = params.navLinks ?? [];
+    const navHtml = this.renderNavigation(navLinks);
     const sections = this.asArray(pageRecord.sections).map((section) => this.renderSection(section, assetUrlById)).join('');
 
-    const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${sections}</div>`;
+    const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${navHtml}${sections}</div>`;
     const css = this.baseCss;
     const pageJsonString = this.stableStringify(pageRecord);
-    const hash = createHash('sha256').update(pageJsonString + css).digest('hex');
+    const navString = this.stableStringify(navLinks);
+    const hash = createHash('sha256').update(pageJsonString + navString + css).digest('hex');
 
     return { html, css, hash };
   }

@@ -4,6 +4,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AssetsService } from '../assets/assets.service';
 import { MinioService } from '../assets/minio.service';
+import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
 import { Page, PageDocument } from '../pages/page.schema';
 import { PreviewRendererService } from '../pages/preview-renderer.service';
 import { Publish, PublishDocument } from './publish.schema';
@@ -13,6 +14,7 @@ export class PublishService {
   constructor(
     @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
+    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
     private readonly renderer: PreviewRendererService,
     private readonly assets: AssetsService,
     private readonly minio: MinioService,
@@ -79,6 +81,11 @@ export class PublishService {
     return `${'../'.repeat(depth)}styles.css`;
   }
 
+  private navHrefForDepth(href: string, depth: number) {
+    if (depth <= 0) return href;
+    return `${'../'.repeat(depth)}${href}`;
+  }
+
   private staticHtmlDocument(params: { title: string; cssHref: string; bodyHtml: string }) {
     return `<!doctype html>
 <html lang="en">
@@ -107,6 +114,55 @@ ${params.bodyHtml}
     if (emptyHome) return emptyHome;
 
     return pages[0];
+  }
+
+  private async resolveNavigationLinks(params: {
+    tenantId: string;
+    projectId: string;
+    ownerUserId: string;
+    pages: Array<{ _id: unknown; title?: string; slug?: string; isHome?: boolean }>;
+  }) {
+    const nav = await this.navigationModel
+      .findOne({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+        ownerUserId: params.ownerUserId,
+      })
+      .select('itemsJson')
+      .lean()
+      .exec();
+
+    const itemsRaw = Array.isArray(nav?.itemsJson) ? nav.itemsJson : [];
+    if (itemsRaw.length === 0) return [];
+
+    const homePage = this.resolveHomePage(params.pages);
+    const pageById = Object.fromEntries(params.pages.map((page) => [String(page._id), page]));
+
+    const hrefByPageId = Object.fromEntries(
+      params.pages.map((page) => {
+        const pageId = String(page._id);
+        const isHome = !!homePage && pageId === String(homePage._id);
+        const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
+        const href = isHome ? 'index.html' : `${normalizedSlug || `page-${pageId}`}/index.html`;
+        return [pageId, href];
+      }),
+    );
+
+    return itemsRaw
+      .map((item) => {
+        if (typeof item !== 'object' || item === null) return null;
+        const record = item as Record<string, unknown>;
+        const pageId = this.readString(record.pageId).trim();
+        const href = hrefByPageId[pageId];
+        if (!href) return null;
+
+        const labelRaw = this.readString(record.label).trim();
+        const page = pageById[pageId];
+        const label = labelRaw || this.readString(page?.title, pageId);
+
+        return { label, href };
+      })
+      .filter((item): item is { label: string; href: string } => item !== null);
   }
 
   private async resolveAssetUrlById(params: { tenantId: string; projectId: string; pages: Array<{ editorJson: unknown }> }) {
@@ -180,6 +236,12 @@ ${params.bodyHtml}
         projectId: params.projectId,
         pages,
       });
+      const navLinks = await this.resolveNavigationLinks({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+        ownerUserId: params.ownerUserId,
+        pages,
+      });
 
       let sharedCss = '';
       const publishRoot = this.publishRootPath({
@@ -189,20 +251,26 @@ ${params.bodyHtml}
       });
 
       for (const page of pages) {
+        const isHome = String(page._id) === String(homePage._id);
+        const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
+        const relativePath = isHome ? 'index.html' : `${normalizedSlug || `page-${String(page._id)}`}/index.html`;
+        const depth = isHome ? 0 : relativePath.split('/').length - 1;
+        const navLinksForPage = navLinks.map((item) => ({
+          ...item,
+          href: this.navHrefForDepth(item.href, depth),
+        }));
+
         const render = this.renderer.render({
           pageId: String(page._id),
           editorJson: page.editorJson,
           assetUrlById,
+          navLinks: navLinksForPage,
         });
 
         if (!sharedCss) {
           sharedCss = render.css;
         }
 
-        const isHome = String(page._id) === String(homePage._id);
-        const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
-        const relativePath = isHome ? 'index.html' : `${normalizedSlug || `page-${String(page._id)}`}/index.html`;
-        const depth = isHome ? 0 : relativePath.split('/').length - 1;
         const html = this.staticHtmlDocument({
           title: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
           cssHref: this.cssHrefForDepth(depth),
@@ -218,7 +286,11 @@ ${params.bodyHtml}
       }
 
       if (!sharedCss) {
-        sharedCss = this.renderer.render({ pageId: String(homePage._id), editorJson: homePage.editorJson }).css;
+        sharedCss = this.renderer.render({
+          pageId: String(homePage._id),
+          editorJson: homePage.editorJson,
+          navLinks,
+        }).css;
       }
 
       await this.minio.upload({
