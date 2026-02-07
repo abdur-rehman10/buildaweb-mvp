@@ -54,12 +54,11 @@ export class PreviewController {
     return pages[0];
   }
 
-  private async loadNavigationLinks(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+  private async loadNavigationLinks(params: { tenantId: string; projectId: string }) {
     const nav = await this.navigationModel
       .findOne({
         tenantId: params.tenantId,
         projectId: params.projectId,
-        ownerUserId: params.ownerUserId,
       })
       .select('itemsJson')
       .lean()
@@ -75,14 +74,21 @@ export class PreviewController {
     if (pages.length === 0) return [];
 
     const homePage = this.resolveHomePage(pages);
-    const pageHrefById = Object.fromEntries(
-      pages.map((page) => {
-        const isHome = !!homePage && page.id === homePage.id;
-        const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
-        const href = isHome ? 'index.html' : `${normalizedSlug || `page-${page.id}`}/index.html`;
-        return [page.id, href];
-      }),
-    );
+    const pageHrefById: Record<string, string> = {};
+    for (const page of pages) {
+      const isHome = !!homePage && page.id === homePage.id;
+      if (isHome || this.readString(page.slug).trim() === '/') {
+        pageHrefById[page.id] = 'index.html';
+        continue;
+      }
+
+      const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
+      if (!normalizedSlug) {
+        continue;
+      }
+
+      pageHrefById[page.id] = `${normalizedSlug}/index.html`;
+    }
 
     return itemsRaw
       .map((item) => {
@@ -155,7 +161,7 @@ export class PreviewController {
       assetIds: validAssetIds,
     });
     const assetUrlById = Object.fromEntries(assets.map((asset) => [String(asset._id), asset.publicUrl]));
-    const navLinks = await this.loadNavigationLinks({ tenantId, projectId, ownerUserId });
+    const navLinks = await this.loadNavigationLinks({ tenantId, projectId });
 
     const preview = this.previewRenderer.render({
       pageId: String(page._id),
