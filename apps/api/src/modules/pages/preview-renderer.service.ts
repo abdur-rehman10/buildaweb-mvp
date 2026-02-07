@@ -10,9 +10,8 @@ const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 export class PreviewRendererService {
   private readonly baseCss = `
 .baw-page{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#ffffff;max-width:1200px;margin:0 auto;padding:24px;line-height:1.5}
-.baw-nav{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 24px;padding:0 0 12px;border-bottom:1px solid #e5e7eb}
-.baw-nav a{color:#111827;text-decoration:none;font-weight:600}
-.baw-nav a:hover{text-decoration:underline}
+.baw-nav{display:flex;gap:12px;padding:12px 0}
+.baw-nav a{text-decoration:none}
 .baw-section{margin:0 0 24px}
 .baw-block{display:grid;gap:12px}
 .baw-node-text{margin:0}
