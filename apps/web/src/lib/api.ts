@@ -217,6 +217,12 @@ export type DeletePageResult = {
   deleted: boolean;
 };
 
+export type PagePreviewResult = {
+  html: string;
+  css: string;
+  hash: string;
+};
+
 export type NavigationItem = {
   label: string;
   pageId: string;
@@ -317,6 +323,14 @@ export const pagesApi = {
       `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
       {
         method: 'DELETE',
+      },
+    );
+  },
+  preview(projectId: string, pageId: string) {
+    return apiRequest<PagePreviewResult>(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/preview/${encodeURIComponent(pageId)}`,
+      {
+        method: 'GET',
       },
     );
   },
