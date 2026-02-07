@@ -2,7 +2,16 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, navigationApi, pagesApi, projectsApi, type NavigationItem, type ProjectSummary } from '../../lib/api';
+import {
+  ApiError,
+  navigationApi,
+  pagesApi,
+  projectsApi,
+  publishApi,
+  type NavigationItem,
+  type ProjectSummary,
+  type PublishStatus,
+} from '../../lib/api';
 
 interface ProjectsApiScreenProps {
   activeProjectId: string | null;
@@ -66,6 +75,11 @@ export function ProjectsApiScreen({
   const [loadingNavigation, setLoadingNavigation] = useState(false);
   const [savingNavigation, setSavingNavigation] = useState(false);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
+  const [publishStarting, setPublishStarting] = useState(false);
+  const [publishId, setPublishId] = useState<string | null>(null);
+  const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -154,6 +168,53 @@ export function ProjectsApiScreen({
     void loadProjectDetails(activeProjectId);
   }, [activeProjectId, activePageId]);
 
+  useEffect(() => {
+    setPublishStarting(false);
+    setPublishId(null);
+    setPublishStatus(null);
+    setPublishedUrl(null);
+    setPublishError(null);
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId || !publishId || publishStatus !== 'publishing') return;
+
+    let cancelled = false;
+    const pollPublishStatus = async () => {
+      try {
+        const result = await publishApi.getStatus(activeProjectId, publishId);
+        if (cancelled) return;
+
+        setPublishStatus(result.status);
+        setPublishedUrl(result.url);
+
+        if (result.status === 'failed') {
+          setPublishError(result.errorMessage ?? 'Publish failed');
+          return;
+        }
+
+        if (result.status === 'live') {
+          setPublishError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof ApiError ? err.message : 'Failed to check publish status';
+        setPublishError(message);
+        setPublishStatus('failed');
+      }
+    };
+
+    void pollPublishStatus();
+    const interval = window.setInterval(() => {
+      void pollPublishStatus();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeProjectId, publishId, publishStatus]);
+
   const toggleNavigationEditor = () => {
     if (!activeProjectId) return;
 
@@ -202,6 +263,29 @@ export function ProjectsApiScreen({
       setNavigationMessage(message);
     } finally {
       setSavingNavigation(false);
+    }
+  };
+
+  const startPublish = async () => {
+    if (!activeProjectId) return;
+
+    setPublishStarting(true);
+    setPublishError(null);
+    try {
+      const result = await publishApi.create(activeProjectId);
+      setPublishId(result.publishId);
+      setPublishStatus(result.status);
+      setPublishedUrl(result.url);
+
+      if (result.status === 'failed') {
+        setPublishError(result.errorMessage ?? 'Publish failed');
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to publish project';
+      setPublishError(message);
+      setPublishStatus('failed');
+    } finally {
+      setPublishStarting(false);
     }
   };
 
@@ -335,10 +419,44 @@ export function ProjectsApiScreen({
               <h2 className="font-semibold">Active project pages</h2>
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
-            <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
-              {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
+                {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void startPublish()}
+                disabled={publishStarting || publishStatus === 'publishing'}
+              >
+                {publishStarting || publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
+              </Button>
+            </div>
           </div>
+
+          {(publishStatus || publishError || publishedUrl) && (
+            <div className="border rounded-md p-3 space-y-1">
+              {publishStatus && (
+                <p className="text-sm">
+                  Publish status: <strong>{publishStatus}</strong>
+                </p>
+              )}
+              {publishError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {publishError}
+                </p>
+              )}
+              {publishStatus === 'live' && publishedUrl && (
+                <a
+                  href={publishedUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm underline text-primary"
+                >
+                  Open published site
+                </a>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
