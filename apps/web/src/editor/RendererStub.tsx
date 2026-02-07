@@ -30,7 +30,7 @@ function getId(record: JsonRecord): string {
   return '';
 }
 
-export function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string, nextText: string): JsonRecord {
+function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string, nextText: string): JsonRecord {
   const nextSections = asArray(editorJson.sections).map((section) => {
     const sectionRecord = asRecord(section);
     if (!sectionRecord) return section;
