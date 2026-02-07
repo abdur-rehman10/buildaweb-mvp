@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { NavigationModule } from './modules/navigation/navigation.module';
+import { AssetsModule } from './modules/assets/assets.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NavigationModule } from './modules/navigation/navigation.module';
     ProjectsModule,
     PagesModule,
     NavigationModule,
+    AssetsModule,
   ],
   controllers: [AppController],
 })
