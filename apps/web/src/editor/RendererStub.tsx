@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { deleteSection, duplicateSection, insertNodeInFirstBlock, moveSection } from './sectionHelpers';
+import {
+  deleteNodeById,
+  deleteSection,
+  duplicateSection,
+  insertNodeInFirstBlock,
+  moveSection,
+} from './sectionHelpers';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -207,17 +213,27 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
                         }
 
                         const type = getText(nodeRecord.type, 'unknown');
+                        const nodeId = getId(nodeRecord);
+                        const canDelete = nodeId !== '';
                         const key = `node-${sectionIndex}-${blockIndex}-${nodeIndex}`;
+
+                        const handleDelete = () => {
+                          if (!canDelete) return;
+                          onChange(deleteNodeById(value, nodeId));
+                          if (editingNodeId === nodeId) {
+                            setEditingNodeId(null);
+                          }
+                        };
+
+                        let content: React.ReactNode;
 
                         if (type === 'text') {
                           const text = getText(nodeRecord.text, getText(nodeRecord.content, ''));
-                          const nodeId = getId(nodeRecord);
                           const isEditing = nodeId !== '' && editingNodeId === nodeId;
 
                           if (isEditing) {
-                            return (
+                            content = (
                               <textarea
-                                key={key}
                                 value={draftText}
                                 onChange={(e) => setDraftText(e.target.value)}
                                 onBlur={() => commitEdit(nodeId)}
@@ -234,45 +250,58 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
                                 autoFocus
                               />
                             );
+                          } else {
+                            content = (
+                              <div>
+                                <p onClick={() => beginEdit(nodeId, text)} className={nodeId ? 'cursor-text' : ''}>
+                                  {text || '[Empty text]'}
+                                </p>
+                                {!nodeId && <div className="text-xs">[Text node missing id - read only]</div>}
+                              </div>
+                            );
                           }
-
-                          return (
-                            <div key={key}>
-                              <p onClick={() => beginEdit(nodeId, text)} className={nodeId ? 'cursor-text' : ''}>
-                                {text || '[Empty text]'}
-                              </p>
-                              {!nodeId && <div className="text-xs">[Text node missing id - read only]</div>}
-                            </div>
-                          );
-                        }
-
-                        if (type === 'button') {
+                        } else if (type === 'button') {
                           const label = getText(nodeRecord.label, getText(nodeRecord.text, 'Button'));
-                          return (
-                            <button key={key} type="button" disabled>
+                          content = (
+                            <button type="button" disabled>
                               {label}
                             </button>
                           );
-                        }
-
-                        if (type === 'image') {
+                        } else if (type === 'image') {
                           const src = getText(nodeRecord.src, getText(nodeRecord.url, ''));
                           const alt = getText(nodeRecord.alt, 'Image');
 
                           if (!src) {
-                            return (
-                              <div key={key} className="border border-dashed p-3 text-sm">
+                            content = (
+                              <div className="border border-dashed p-3 text-sm">
                                 [Missing image asset]
                               </div>
                             );
+                          } else {
+                            content = <img src={src} alt={alt} className="max-w-full h-auto" />;
                           }
-
-                          return <img key={key} src={src} alt={alt} className="max-w-full h-auto" />;
+                        } else {
+                          content = (
+                            <div className="border border-dashed p-2 text-sm">
+                              [Unknown node type: {type}]
+                            </div>
+                          );
                         }
 
                         return (
-                          <div key={key} className="border border-dashed p-2 text-sm">
-                            [Unknown node type: {type}]
+                          <div key={key} className="border rounded p-2 space-y-2">
+                            <div className="flex justify-end">
+                              <button
+                                type="button"
+                                className="border rounded px-2 py-1 text-xs"
+                                disabled={!canDelete}
+                                onClick={handleDelete}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                            {content}
+                            {!canDelete && <div className="text-xs">[Node missing id - cannot delete]</div>}
                           </div>
                         );
                       })

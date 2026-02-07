@@ -255,3 +255,46 @@ export function insertNodeInFirstBlock(
     sections: nextSections,
   };
 }
+
+export function deleteNodeById(editorJson: JsonRecord, nodeId: string): JsonRecord {
+  const sections = asArray(editorJson.sections);
+
+  const nextSections = sections.map((section) => {
+    const sectionRecord = asRecord(section);
+    if (!sectionRecord) {
+      return section;
+    }
+
+    const blocks = asArray(sectionRecord.blocks);
+    const nextBlocks = blocks.map((block) => {
+      const blockRecord = asRecord(block);
+      if (!blockRecord) {
+        return block;
+      }
+
+      const nodes = asArray(blockRecord.nodes);
+      const nextNodes = nodes.filter((node) => {
+        const nodeRecord = asRecord(node);
+        if (!nodeRecord) {
+          return true;
+        }
+        return getId(nodeRecord) !== nodeId;
+      });
+
+      return {
+        ...blockRecord,
+        nodes: nextNodes,
+      };
+    });
+
+    return {
+      ...sectionRecord,
+      blocks: nextBlocks,
+    };
+  });
+
+  return {
+    ...editorJson,
+    sections: nextSections,
+  };
+}
