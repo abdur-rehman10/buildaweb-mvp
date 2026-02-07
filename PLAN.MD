@@ -7,25 +7,30 @@
 # Buildaweb — Development Plan
 
 ## Current Branch
-feat/auth-user-module
+feat/projects-pages-module
 
 ## Branch Goal (DO NOT EXPAND)
-Implement the **User + Auth domain** only.
+Implement the **Projects + Pages domain** only.
 
 This branch includes:
-- User schema (MongoDB)
-- Email + password signup
-- Login (JWT)
-- Auth guard
-- First protected endpoint
+- Projects schema + service + module
+- Pages schema + service + module
+- Minimal REST endpoints for:
+- `POST /projects`
+- `GET /projects`
+- `GET /projects/:project_id`
+- `POST /projects/:project_id/pages`
+- `GET /projects/:project_id/pages/:page_id`
+- `PUT /projects/:project_id/pages/:page_id` (save `editor_json` + `version`)
+- All routes protected with JWT
+- Enforce `1 user = 1 site` at project creation (or at minimum `1 project per user` for MVP)
 
 This branch explicitly excludes:
-- Editor logic
-- Projects / pages
+- Tokens / navigation APIs
+- Assets upload
+- Preview/publish
 - AI generation
-- Publishing
 - Billing
-- White-label logic
 
 ## Completed
 - Frontend scaffold (React + Vite)
@@ -35,8 +40,8 @@ This branch explicitly excludes:
 - Health + DB ping endpoints
 
 ## Next (After This Branch)
-1) Projects + pages domain
-2) Editor JSON save/load
+1) Editor JSON save/load
+2) Tokens + navigation APIs
 3) Asset upload
 4) Preview rendering
 5) Publish flow
@@ -64,3 +69,4 @@ CMS/blog, forms builder, ecommerce, animations, free-drag, advanced grid, AI ima
 - Never trust frontend input
 - Enforce user scoping in every query
 - Mongo IDs must never be guessable across users
+```
