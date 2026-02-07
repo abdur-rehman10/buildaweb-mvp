@@ -4,6 +4,7 @@ import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ApiError, pagesApi } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
+import { addSection, type SectionPresetType } from '../../editor/sectionHelpers';
 
 interface PageApiScreenProps {
   projectId: string;
@@ -16,6 +17,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
+  const [presetType, setPresetType] = useState<SectionPresetType>('hero');
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -111,6 +113,30 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
         </div>
 
         <div className="space-y-2">
+          <div className="flex items-end gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Add section preset</label>
+              <select
+                className="h-10 px-3 border rounded-md bg-background"
+                value={presetType}
+                onChange={(e) => setPresetType(e.target.value as SectionPresetType)}
+              >
+                <option value="hero">hero</option>
+                <option value="features">features</option>
+                <option value="cta">cta</option>
+                <option value="pricing">pricing</option>
+                <option value="contact">contact</option>
+                <option value="footer">footer</option>
+              </select>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditorJson((prev) => addSection(prev, presetType))}
+            >
+              Add Section
+            </Button>
+          </div>
           <label className="block text-sm font-medium">Renderer stub (click text nodes to edit)</label>
           <RendererStub value={editorJson} onChange={setEditorJson} />
         </div>
