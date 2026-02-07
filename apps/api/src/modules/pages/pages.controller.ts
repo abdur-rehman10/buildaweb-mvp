@@ -60,6 +60,20 @@ export class PagesController {
     }
   }
 
+  @Get()
+  async listPages(@Param('projectId') projectId: string, @Req() req: any) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    if (!project) {
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+    }
+
+    const pages = await this.pages.listPages({ tenantId, projectId });
+    return ok({ pages });
+  }
+
   @Get(':pageId')
   async getPage(@Param('projectId') projectId: string, @Param('pageId') pageId: string, @Req() req: any) {
     const ownerUserId = req.user?.sub as string;
