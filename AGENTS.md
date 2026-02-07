@@ -35,3 +35,9 @@ Goal: a non-designer can create, edit, and publish a professional website in und
   ```json
   { "ok": true, "data": {} }
   { "ok": false, "error": { "code": "", "message": "" } }
+  ```
+
+## Projects & Pages Rules
+- Projects and pages must be user-scoped
+- Page save must enforce optimistic concurrency via `version` (`409` on mismatch)
+- Store `editor_json` and `seo_json` as JSON fields (no rendering here)
