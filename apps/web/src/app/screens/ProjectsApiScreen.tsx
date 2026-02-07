@@ -6,6 +6,8 @@ import { ApiError, navigationApi, pagesApi, projectsApi, type NavigationItem, ty
 
 interface ProjectsApiScreenProps {
   activeProjectId: string | null;
+  activePageId: string | null;
+  onSelectActivePageId: (pageId: string | null) => void;
   onSelectProject: (projectId: string) => void;
   onOpenPage: (projectId: string, pageId: string) => void;
 }
@@ -17,9 +19,10 @@ type ProjectPageListItem = {
 };
 
 function toPageList(value: unknown): ProjectPageListItem[] | null {
-  if (!Array.isArray(value)) return null;
+  if (value === undefined) return null;
+  const rawItems = Array.isArray(value) ? value : [value];
 
-  return value
+  return rawItems
     .map((item) => {
       if (typeof item !== 'object' || item === null) return null;
       const record = item as Record<string, unknown>;
@@ -36,7 +39,13 @@ function toPageList(value: unknown): ProjectPageListItem[] | null {
     .filter((item): item is ProjectPageListItem => item !== null);
 }
 
-export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage }: ProjectsApiScreenProps) {
+export function ProjectsApiScreen({
+  activeProjectId,
+  activePageId,
+  onSelectActivePageId,
+  onSelectProject,
+  onOpenPage,
+}: ProjectsApiScreenProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -92,7 +101,15 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
     try {
       const detail = await projectsApi.get(projectId);
       const detailRecord = detail.project as unknown as Record<string, unknown>;
-      setProjectPages(toPageList(detailRecord.pages));
+      const pages = toPageList(detailRecord.pages);
+      setProjectPages(pages);
+
+      if (pages && pages.length > 0 && !activePageId) {
+        const firstPageId = pages[0].id;
+        window.localStorage.setItem(`baw_last_page_${projectId}`, firstPageId);
+        setLastPageId(firstPageId);
+        onSelectActivePageId(firstPageId);
+      }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to load project details';
       setError(message);
@@ -134,7 +151,7 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
     setLastPageId(stored);
     void loadProjectDetails(activeProjectId);
     void loadNavigation(activeProjectId);
-  }, [activeProjectId]);
+  }, [activeProjectId, activePageId]);
 
   const updateNavigationLabel = (index: number, label: string) => {
     setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, label } : item)));
