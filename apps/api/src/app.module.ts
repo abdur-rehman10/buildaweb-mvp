@@ -5,6 +5,12 @@ import { AppController } from './app.controller';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    MongooseModule.forRoot(process.env.MONGO_URI as string),
+  ],
+})
+@Module({
+  imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
