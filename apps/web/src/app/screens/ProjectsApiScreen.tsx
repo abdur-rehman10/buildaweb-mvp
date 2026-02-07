@@ -61,6 +61,7 @@ export function ProjectsApiScreen({
 
   const [lastPageId, setLastPageId] = useState<string | null>(null);
   const [projectPages, setProjectPages] = useState<ProjectPageListItem[] | null>(null);
+  const [isNavigationEditorOpen, setIsNavigationEditorOpen] = useState(false);
   const [navigationItems, setNavigationItems] = useState<NavigationItem[]>([]);
   const [loadingNavigation, setLoadingNavigation] = useState(false);
   const [savingNavigation, setSavingNavigation] = useState(false);
@@ -142,6 +143,7 @@ export function ProjectsApiScreen({
     if (!activeProjectId) {
       setLastPageId(null);
       setProjectPages(null);
+      setIsNavigationEditorOpen(false);
       setNavigationItems([]);
       setNavigationMessage(null);
       return;
@@ -150,8 +152,17 @@ export function ProjectsApiScreen({
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
     void loadProjectDetails(activeProjectId);
-    void loadNavigation(activeProjectId);
   }, [activeProjectId, activePageId]);
+
+  const toggleNavigationEditor = () => {
+    if (!activeProjectId) return;
+
+    const nextOpen = !isNavigationEditorOpen;
+    setIsNavigationEditorOpen(nextOpen);
+    if (nextOpen) {
+      void loadNavigation(activeProjectId);
+    }
+  };
 
   const updateNavigationLabel = (index: number, label: string) => {
     setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, label } : item)));
@@ -319,9 +330,14 @@ export function ProjectsApiScreen({
 
       {activeProjectId && (
         <Card className="p-4 space-y-4">
-          <div>
-            <h2 className="font-semibold">Active project pages</h2>
-            <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Active project pages</h2>
+              <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
+            </div>
+            <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
+              {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -381,71 +397,77 @@ export function ProjectsApiScreen({
             )}
           </div>
 
-          <div className="border rounded-md p-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">Navigation</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void loadNavigation(activeProjectId)}
-                disabled={loadingNavigation}
-              >
-                {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
-              </Button>
-            </div>
+          {isNavigationEditorOpen && (
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Navigation</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadNavigation(activeProjectId)}
+                  disabled={loadingNavigation}
+                >
+                  {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
+                </Button>
+              </div>
 
-            {navigationItems.length === 0 && !loadingNavigation && (
-              <p className="text-sm text-muted-foreground">No navigation items.</p>
-            )}
-
-            <div className="space-y-2">
-              {navigationItems.map((item, index) => (
-                <div key={`${item.pageId}-${index}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-                  <div className="md:col-span-7">
-                    <Input
-                      label={`Label ${index + 1}`}
-                      value={item.label}
-                      onChange={(e) => updateNavigationLabel(index, e.target.value)}
-                    />
-                  </div>
-                  <div className="md:col-span-3">
-                    <Input label="Page ID" value={item.pageId} disabled />
-                  </div>
-                  <div className="md:col-span-2 flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => moveNavigationItem(index, 'up')}
-                      disabled={index === 0}
-                    >
-                      Up
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => moveNavigationItem(index, 'down')}
-                      disabled={index === navigationItems.length - 1}
-                    >
-                      Down
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Button type="button" onClick={() => void saveNavigation()} disabled={savingNavigation || loadingNavigation}>
-                {savingNavigation ? 'Saving...' : 'Save Navigation'}
-              </Button>
-              {navigationMessage && (
-                <p className="text-sm" role="alert">
-                  {navigationMessage}
-                </p>
+              {navigationItems.length === 0 && !loadingNavigation && (
+                <p className="text-sm text-muted-foreground">No navigation items.</p>
               )}
+
+              <div className="space-y-2">
+                {navigationItems.map((item, index) => (
+                  <div key={`${item.pageId}-${index}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                    <div className="md:col-span-7">
+                      <Input
+                        label={`Label ${index + 1}`}
+                        value={item.label}
+                        onChange={(e) => updateNavigationLabel(index, e.target.value)}
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <Input label="Page ID" value={item.pageId} disabled />
+                    </div>
+                    <div className="md:col-span-2 flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => moveNavigationItem(index, 'up')}
+                        disabled={index === 0}
+                      >
+                        Up
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => moveNavigationItem(index, 'down')}
+                        disabled={index === navigationItems.length - 1}
+                      >
+                        Down
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  onClick={() => void saveNavigation()}
+                  disabled={savingNavigation || loadingNavigation}
+                >
+                  {savingNavigation ? 'Saving...' : 'Save Navigation'}
+                </Button>
+                {navigationMessage && (
+                  <p className="text-sm" role="alert">
+                    {navigationMessage}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </Card>
       )}
     </div>
