@@ -355,7 +355,7 @@ export function updateImageNodeAssetRefById(
   };
 }
 
-export function updateButtonHrefById(
+export function updateButtonNodeHrefById(
   editorJson: JsonRecord,
   nodeId: string,
   nextHref: string,
@@ -409,4 +409,13 @@ export function updateButtonHrefById(
     ...editorJson,
     sections: nextSections,
   };
+}
+
+// Backward-compatible alias; prefer updateButtonNodeHrefById.
+export function updateButtonHrefById(
+  editorJson: JsonRecord,
+  nodeId: string,
+  nextHref: string,
+): JsonRecord {
+  return updateButtonNodeHrefById(editorJson, nodeId, nextHref);
 }

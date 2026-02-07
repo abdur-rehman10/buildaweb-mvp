@@ -5,7 +5,7 @@ import {
   duplicateSection,
   insertNodeInFirstBlock,
   moveSection,
-  updateButtonHrefById,
+  updateButtonNodeHrefById,
 } from './sectionHelpers';
 
 type JsonRecord = Record<string, unknown>;
@@ -332,11 +332,11 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                                       if (mode === 'internal') {
                                         const firstSlug = projectPages[0]?.slug ?? '/';
                                         onChange(
-                                          updateButtonHrefById(value, nodeId, normalizeInternalHref(firstSlug)),
+                                          updateButtonNodeHrefById(value, nodeId, normalizeInternalHref(firstSlug)),
                                         );
                                         return;
                                       }
-                                      onChange(updateButtonHrefById(value, nodeId, '#'));
+                                      onChange(updateButtonNodeHrefById(value, nodeId, '#'));
                                     }}
                                     disabled={!nodeId}
                                   >
@@ -353,7 +353,7 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                                       value={href}
                                       onChange={(e) => {
                                         if (!nodeId) return;
-                                        onChange(updateButtonHrefById(value, nodeId, e.target.value));
+                                        onChange(updateButtonNodeHrefById(value, nodeId, e.target.value));
                                       }}
                                       placeholder="https://example.com"
                                       disabled={!nodeId}
@@ -368,7 +368,7 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                                       onChange={(e) => {
                                         if (!nodeId) return;
                                         onChange(
-                                          updateButtonHrefById(
+                                          updateButtonNodeHrefById(
                                             value,
                                             nodeId,
                                             normalizeInternalHref(e.target.value),
