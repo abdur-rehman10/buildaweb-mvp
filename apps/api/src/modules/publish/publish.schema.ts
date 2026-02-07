@@ -20,7 +20,7 @@ export class Publish {
   @Prop({ required: true })
   baseUrl!: string;
 
-  @Prop({ default: null })
+  @Prop({ type: String, default: null })
   errorMessage?: string | null;
 
   createdAt?: Date;
