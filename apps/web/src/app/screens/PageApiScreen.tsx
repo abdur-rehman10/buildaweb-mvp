@@ -94,8 +94,8 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm font-medium">Read-only renderer stub</label>
-          <RendererStub editorJson={editorJson} />
+          <label className="block text-sm font-medium">Renderer stub (click text nodes to edit)</label>
+          <RendererStub value={editorJson} onChange={setEditorJson} />
         </div>
 
         <div className="flex items-center gap-3">
