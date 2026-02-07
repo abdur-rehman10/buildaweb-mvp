@@ -223,6 +223,11 @@ export type PagePreviewResult = {
   hash: string;
 };
 
+export type UploadAssetResult = {
+  assetId: string;
+  publicUrl: string;
+};
+
 export type NavigationItem = {
   label: string;
   pageId: string;
@@ -346,6 +351,18 @@ export const navigationApi = {
     return apiRequest<NavigationResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
       method: 'PUT',
       body: JSON.stringify(input),
+    });
+  },
+};
+
+export const assetsApi = {
+  upload(projectId: string, file: File) {
+    const body = new FormData();
+    body.append('file', file);
+
+    return apiRequest<UploadAssetResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets/upload`, {
+      method: 'POST',
+      body,
     });
   },
 };
