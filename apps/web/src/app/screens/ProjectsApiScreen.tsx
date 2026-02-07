@@ -229,58 +229,62 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
             <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
           </div>
 
-          <form onSubmit={handleCreatePage} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-            <Input
-              label="Page title"
-              value={newPageTitle}
-              onChange={(e) => setNewPageTitle(e.target.value)}
-              placeholder="Home"
-              required
-            />
-            <Input
-              label="Slug"
-              value={newPageSlug}
-              onChange={(e) => setNewPageSlug(e.target.value)}
-              placeholder="home"
-              required
-            />
-            <Button type="submit" disabled={creatingPage}>
-              {creatingPage ? 'Creating...' : 'Create Page'}
-            </Button>
-          </form>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 space-y-4">
+              <form onSubmit={handleCreatePage} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                <Input
+                  label="Page title"
+                  value={newPageTitle}
+                  onChange={(e) => setNewPageTitle(e.target.value)}
+                  placeholder="Home"
+                  required
+                />
+                <Input
+                  label="Slug"
+                  value={newPageSlug}
+                  onChange={(e) => setNewPageSlug(e.target.value)}
+                  placeholder="home"
+                  required
+                />
+                <Button type="submit" disabled={creatingPage}>
+                  {creatingPage ? 'Creating...' : 'Create Page'}
+                </Button>
+              </form>
 
-          {lastPageId && (
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={() => onOpenPage(activeProjectId, lastPageId)}>
-                Open last page
-              </Button>
-              <span className="text-xs text-muted-foreground">Last page: {lastPageId}</span>
-            </div>
-          )}
-
-          {loadingProjectDetails && (
-            <p className="text-sm text-muted-foreground">Loading project details...</p>
-          )}
-
-          {projectPages && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Pages from project response</h3>
-              {projectPages.length === 0 && (
-                <p className="text-sm text-muted-foreground">No pages returned.</p>
+              {lastPageId && (
+                <div className="flex items-center gap-3">
+                  <Button variant="outline" onClick={() => onOpenPage(activeProjectId, lastPageId)}>
+                    Open last page
+                  </Button>
+                  <span className="text-xs text-muted-foreground">Last page: {lastPageId}</span>
+                </div>
               )}
-              {projectPages.map((page) => (
-                <div key={page.id} className="border rounded-md p-2 flex items-center justify-between">
-                  <div>
+
+              {loadingProjectDetails && (
+                <p className="text-sm text-muted-foreground">Loading project details...</p>
+              )}
+            </div>
+
+            {projectPages && (
+              <aside className="border rounded-md p-3 space-y-2">
+                <h3 className="text-sm font-medium">Pages</h3>
+                {projectPages.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No pages returned.</p>
+                )}
+                {projectPages.map((page) => (
+                  <button
+                    key={page.id}
+                    type="button"
+                    className="w-full text-left border rounded-md p-2 hover:border-primary"
+                    onClick={() => onOpenPage(activeProjectId, page.id)}
+                  >
                     <div className="text-sm font-medium">{page.title ?? page.id}</div>
                     {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
-                  </div>
-                  <Button size="sm" onClick={() => onOpenPage(activeProjectId, page.id)}>
-                    Open
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+                  </button>
+                ))}
+              </aside>
+            )}
+          </div>
         </Card>
       )}
     </div>

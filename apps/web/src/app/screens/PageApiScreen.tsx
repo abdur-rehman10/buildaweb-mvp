@@ -15,6 +15,8 @@ interface PageApiScreenProps {
 
 export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProjects }: PageApiScreenProps) {
   const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
+  const [pageSlug, setPageSlug] = useState<string | null>(null);
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
@@ -37,6 +39,8 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       const res = await pagesApi.get(projectId, targetPageId);
       const page = res.page;
       setVersion(page.version);
+      setPageTitle(typeof page.title === 'string' ? page.title : null);
+      setPageSlug(typeof page.slug === 'string' ? page.slug : null);
       const json = page.editorJson;
       setEditorJson(
         typeof json === 'object' && json !== null && !Array.isArray(json)
@@ -50,6 +54,18 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setMessage(apiError?.message ?? 'Failed to load page');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const copyPageId = async () => {
+    const targetPageId = pageIdInput.trim();
+    if (!targetPageId) return;
+
+    try {
+      await navigator.clipboard.writeText(targetPageId);
+      setMessage('Page ID copied');
+    } catch {
+      setMessage('Failed to copy page ID');
     }
   };
 
@@ -93,12 +109,29 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           <h1 className="text-2xl font-bold">Page JSON</h1>
           <p className="text-muted-foreground">Project ID: {projectId}</p>
         </div>
-        <Button variant="outline" onClick={onBackToProjects}>
-          Back to Projects
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={copyPageId} disabled={!pageIdInput.trim()}>
+            Copy pageId
+          </Button>
+          <Button variant="outline" onClick={onBackToProjects}>
+            Back to Projects
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+          <div>
+            <span className="font-medium">Title:</span> {pageTitle ?? '-'}
+          </div>
+          <div>
+            <span className="font-medium">Slug:</span> {pageSlug ?? '-'}
+          </div>
+          <div>
+            <span className="font-medium">Version:</span> {version}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <Input
             label="Page ID"
