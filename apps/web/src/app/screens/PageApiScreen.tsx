@@ -184,7 +184,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     try {
       const uploaded = await assetsApi.upload(projectId, file);
       setAssetsById((prev) => ({ ...prev, [uploaded.assetId]: uploaded.publicUrl }));
-      setEditorJson((prev) => updateImageNodeAssetRefById(prev, nodeId, uploaded.assetId, uploaded.publicUrl));
+      setEditorJson((prev) => updateImageNodeAssetRefById(prev, nodeId, uploaded.assetId));
       return uploaded;
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;

@@ -303,22 +303,18 @@ export function RendererStub({ value, onChange, assetsById, onUploadImage }: Ren
                           );
                         } else if (type === 'image') {
                           const assetRef = getAssetRef(nodeRecord);
-                          const mappedSrc = assetRef ? getText(assetsById[assetRef], '') : '';
-                          const fallbackSrc = getText(nodeRecord.src, getText(nodeRecord.url, ''));
-                          const src = mappedSrc || fallbackSrc;
+                          const resolvedUrl = assetRef ? getText(assetsById[assetRef], '').trim() : '';
                           const alt = getText(nodeRecord.alt, 'Image');
 
-                          if (!src) {
+                          if (!resolvedUrl) {
                             content = (
                               <div className="space-y-2">
                                 <div className="border border-dashed p-3 text-sm">
                                   [Missing image asset]
                                 </div>
-                                {assetRef && (
-                                  <div className="text-xs text-muted-foreground">
-                                    asset_ref: {assetRef}
-                                  </div>
-                                )}
+                                <div className="text-xs text-muted-foreground">
+                                  debug asset_ref: {assetRef || '(none)'} | resolved url: {resolvedUrl || '(none)'}
+                                </div>
                                 {nodeId && (
                                   <>
                                     <input
@@ -345,12 +341,10 @@ export function RendererStub({ value, onChange, assetsById, onUploadImage }: Ren
                           } else {
                             content = (
                               <div className="space-y-2">
-                                <img src={src} alt={alt} className="max-w-full h-auto" />
-                                {assetRef && (
-                                  <div className="text-xs text-muted-foreground">
-                                    asset_ref: {assetRef}
-                                  </div>
-                                )}
+                                <img src={resolvedUrl} alt={alt} className="max-w-full h-auto" />
+                                <div className="text-xs text-muted-foreground">
+                                  debug asset_ref: {assetRef || '(none)'} | resolved url: {resolvedUrl}
+                                </div>
                                 {nodeId && (
                                   <>
                                     <input
