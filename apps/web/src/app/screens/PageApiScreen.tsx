@@ -15,14 +15,17 @@ interface PageApiScreenProps {
 
 export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProjects }: PageApiScreenProps) {
   const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
-  const [pageTitle, setPageTitle] = useState<string | null>(null);
-  const [pageSlug, setPageSlug] = useState<string | null>(null);
+  const [pageTitleInput, setPageTitleInput] = useState('');
+  const [pageSlugInput, setPageSlugInput] = useState('');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [metaSaving, setMetaSaving] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,8 +42,8 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       const res = await pagesApi.get(projectId, targetPageId);
       const page = res.page;
       setVersion(page.version);
-      setPageTitle(typeof page.title === 'string' ? page.title : null);
-      setPageSlug(typeof page.slug === 'string' ? page.slug : null);
+      setPageTitleInput(typeof page.title === 'string' ? page.title : '');
+      setPageSlugInput(typeof page.slug === 'string' ? page.slug : '');
       const json = page.editorJson;
       setEditorJson(
         typeof json === 'object' && json !== null && !Array.isArray(json)
@@ -66,6 +69,90 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setMessage('Page ID copied');
     } catch {
       setMessage('Failed to copy page ID');
+    }
+  };
+
+  const saveMeta = async () => {
+    const targetPageId = pageIdInput.trim();
+    const title = pageTitleInput.trim();
+    const slug = pageSlugInput.trim();
+
+    if (!targetPageId || !title || !slug) {
+      setMessage('Title and slug are required');
+      return;
+    }
+
+    setMetaSaving(true);
+    setMessage(null);
+    try {
+      const res = await pagesApi.updateMeta(projectId, targetPageId, { title, slug });
+      setPageTitleInput(res.page.title);
+      setPageSlugInput(res.page.slug);
+      setVersion(res.page.version);
+      setMessage('Page metadata saved');
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to save page metadata');
+    } finally {
+      setMetaSaving(false);
+    }
+  };
+
+  const duplicatePage = async () => {
+    const targetPageId = pageIdInput.trim();
+    if (!targetPageId) return;
+
+    const duplicateTitle = window.prompt('New page title', `${pageTitleInput || 'Untitled'} Copy`);
+    if (duplicateTitle === null) return;
+
+    const duplicateSlug = window.prompt('New page slug', `${pageSlugInput || 'page'}-copy`);
+    if (duplicateSlug === null) return;
+
+    const title = duplicateTitle.trim();
+    const slug = duplicateSlug.trim();
+    if (!title || !slug) {
+      setMessage('Duplicate requires title and slug');
+      return;
+    }
+
+    setDuplicating(true);
+    setMessage(null);
+    try {
+      const res = await pagesApi.duplicate(projectId, targetPageId, { title, slug });
+      onPageIdChange(res.page_id);
+      setPageIdInput(res.page_id);
+      await loadPage(res.page_id);
+      setMessage('Page duplicated');
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to duplicate page');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
+  const deletePage = async () => {
+    const targetPageId = pageIdInput.trim();
+    if (!targetPageId) return;
+
+    const confirmed = window.confirm('Delete this page?');
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setMessage(null);
+    try {
+      await pagesApi.remove(projectId, targetPageId);
+      const lastKey = `baw_last_page_${projectId}`;
+      if (window.localStorage.getItem(lastKey) === targetPageId) {
+        window.localStorage.removeItem(lastKey);
+      }
+      onPageIdChange(null);
+      onBackToProjects();
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to delete page');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -120,16 +207,27 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       </div>
 
       <Card className="p-4 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <div>
-            <span className="font-medium">Title:</span> {pageTitle ?? '-'}
-          </div>
-          <div>
-            <span className="font-medium">Slug:</span> {pageSlug ?? '-'}
-          </div>
-          <div>
-            <span className="font-medium">Version:</span> {version}
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <Input
+            label="Title"
+            value={pageTitleInput}
+            onChange={(e) => setPageTitleInput(e.target.value)}
+            placeholder="Page title"
+          />
+          <Input
+            label="Slug"
+            value={pageSlugInput}
+            onChange={(e) => setPageSlugInput(e.target.value)}
+            placeholder="page-slug"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void saveMeta()}
+            disabled={metaSaving || !pageIdInput.trim()}
+          >
+            {metaSaving ? 'Saving...' : 'Save Meta'}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
@@ -180,6 +278,12 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           </Button>
           <Button variant="outline" onClick={() => void loadPage()} disabled={loading || !pageIdInput.trim()}>
             Reload
+          </Button>
+          <Button variant="outline" onClick={() => void duplicatePage()} disabled={duplicating || !pageIdInput.trim()}>
+            {duplicating ? 'Duplicating...' : 'Duplicate Page'}
+          </Button>
+          <Button variant="destructive" onClick={() => void deletePage()} disabled={deleting || !pageIdInput.trim()}>
+            {deleting ? 'Deleting...' : 'Delete Page'}
           </Button>
         </div>
 

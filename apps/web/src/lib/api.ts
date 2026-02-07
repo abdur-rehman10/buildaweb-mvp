@@ -185,6 +185,38 @@ export type UpdatePageResult = {
   version: number;
 };
 
+export type PageMetaSummary = {
+  id: string;
+  title: string;
+  slug: string;
+  isHome: boolean;
+  updatedAt?: string;
+  version: number;
+};
+
+export type UpdatePageMetaInput = {
+  title?: string;
+  slug?: string;
+  seoJson?: Record<string, unknown>;
+};
+
+export type UpdatePageMetaResult = {
+  page: PageMetaSummary;
+};
+
+export type DuplicatePageInput = {
+  title: string;
+  slug: string;
+};
+
+export type DuplicatePageResult = {
+  page_id: string;
+};
+
+export type DeletePageResult = {
+  deleted: boolean;
+};
+
 export const authApi = {
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/auth/login', {
@@ -239,6 +271,32 @@ export const pagesApi = {
       {
         method: 'PUT',
         body: JSON.stringify(input),
+      },
+    );
+  },
+  updateMeta(projectId: string, pageId: string, input: UpdatePageMetaInput) {
+    return apiRequest<UpdatePageMetaResult>(
+      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/meta`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+  duplicate(projectId: string, pageId: string, input: DuplicatePageInput) {
+    return apiRequest<DuplicatePageResult>(
+      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/duplicate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      },
+    );
+  },
+  remove(projectId: string, pageId: string) {
+    return apiRequest<DeletePageResult>(
+      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      {
+        method: 'DELETE',
       },
     );
   },
