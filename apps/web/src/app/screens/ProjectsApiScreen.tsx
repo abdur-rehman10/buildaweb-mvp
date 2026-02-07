@@ -8,6 +8,7 @@ import {
   pagesApi,
   projectsApi,
   publishApi,
+  type PageMetaSummary,
   type NavigationItem,
   type ProjectSummary,
   type PublishStatus,
@@ -21,35 +22,8 @@ interface ProjectsApiScreenProps {
   onOpenPage: (projectId: string, pageId: string) => void;
 }
 
-type ProjectPageListItem = {
-  id: string;
-  title?: string;
-  slug?: string;
-};
-
 function toPublishedHomeUrl(baseUrl: string): string {
   return `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}index.html`;
-}
-
-function toPageList(value: unknown): ProjectPageListItem[] | null {
-  if (value === undefined) return null;
-  const rawItems = Array.isArray(value) ? value : [value];
-
-  return rawItems
-    .map((item) => {
-      if (typeof item !== 'object' || item === null) return null;
-      const record = item as Record<string, unknown>;
-      const idRaw = record.id ?? record._id;
-      const id = typeof idRaw === 'string' ? idRaw : typeof idRaw === 'number' ? String(idRaw) : '';
-      if (!id) return null;
-
-      return {
-        id,
-        title: typeof record.title === 'string' ? record.title : undefined,
-        slug: typeof record.slug === 'string' ? record.slug : undefined,
-      };
-    })
-    .filter((item): item is ProjectPageListItem => item !== null);
 }
 
 export function ProjectsApiScreen({
@@ -73,7 +47,7 @@ export function ProjectsApiScreen({
   const [newPageSlug, setNewPageSlug] = useState('');
 
   const [lastPageId, setLastPageId] = useState<string | null>(null);
-  const [projectPages, setProjectPages] = useState<ProjectPageListItem[] | null>(null);
+  const [projectPages, setProjectPages] = useState<PageMetaSummary[]>([]);
   const [isNavigationEditorOpen, setIsNavigationEditorOpen] = useState(false);
   const [navigationItems, setNavigationItems] = useState<NavigationItem[]>([]);
   const [loadingNavigation, setLoadingNavigation] = useState(false);
@@ -116,25 +90,23 @@ export function ProjectsApiScreen({
     }
   };
 
-  const loadProjectDetails = async (projectId: string) => {
+  const loadProjectPages = async (projectId: string) => {
     setLoadingProjectDetails(true);
     setError(null);
     try {
-      const detail = await projectsApi.get(projectId);
-      const detailRecord = detail.project as unknown as Record<string, unknown>;
-      const pages = toPageList(detailRecord.pages);
+      const { pages } = await pagesApi.list(projectId);
       setProjectPages(pages);
 
-      if (pages && pages.length > 0 && !activePageId) {
+      if (pages.length > 0 && !activePageId) {
         const firstPageId = pages[0].id;
         window.localStorage.setItem(`baw_last_page_${projectId}`, firstPageId);
         setLastPageId(firstPageId);
         onSelectActivePageId(firstPageId);
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load project details';
+      const message = err instanceof ApiError ? err.message : 'Failed to load project pages';
       setError(message);
-      setProjectPages(null);
+      setProjectPages([]);
     } finally {
       setLoadingProjectDetails(false);
     }
@@ -162,7 +134,7 @@ export function ProjectsApiScreen({
   useEffect(() => {
     if (!activeProjectId) {
       setLastPageId(null);
-      setProjectPages(null);
+      setProjectPages([]);
       setIsNavigationEditorOpen(false);
       setNavigationItems([]);
       setNavigationMessage(null);
@@ -171,7 +143,7 @@ export function ProjectsApiScreen({
 
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
-    void loadProjectDetails(activeProjectId);
+    void loadProjectPages(activeProjectId);
   }, [activeProjectId, activePageId]);
 
   useEffect(() => {
@@ -347,12 +319,10 @@ export function ProjectsApiScreen({
       setNewPageTitle('');
       setNewPageSlug('');
 
-      if (projectPages) {
-        setProjectPages([
-          ...projectPages,
-          { id: res.page_id, title: newPageTitle.trim(), slug: newPageSlug.trim() },
-        ]);
-      }
+      setProjectPages([
+        ...projectPages,
+        { id: res.page_id, title: newPageTitle.trim(), slug: newPageSlug.trim(), isHome: false, version: 1 },
+      ]);
 
       onOpenPage(activeProjectId, res.page_id);
     } catch (err) {
@@ -523,25 +493,23 @@ export function ProjectsApiScreen({
               )}
             </div>
 
-            {projectPages && (
-              <aside className="border rounded-md p-3 space-y-2">
-                <h3 className="text-sm font-medium">Pages</h3>
-                {projectPages.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No pages returned.</p>
-                )}
-                {projectPages.map((page) => (
-                  <button
-                    key={page.id}
-                    type="button"
-                    className="w-full text-left border rounded-md p-2 hover:border-primary"
-                    onClick={() => onOpenPage(activeProjectId, page.id)}
-                  >
-                    <div className="text-sm font-medium">{page.title ?? page.id}</div>
-                    {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
-                  </button>
-                ))}
-              </aside>
-            )}
+            <aside className="border rounded-md p-3 space-y-2">
+              <h3 className="text-sm font-medium">Pages</h3>
+              {projectPages.length === 0 && (
+                <p className="text-sm text-muted-foreground">No pages returned.</p>
+              )}
+              {projectPages.map((page) => (
+                <button
+                  key={page.id}
+                  type="button"
+                  className="w-full text-left border rounded-md p-2 hover:border-primary"
+                  onClick={() => onOpenPage(activeProjectId, page.id)}
+                >
+                  <div className="text-sm font-medium">{page.title ?? page.id}</div>
+                  {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
+                </button>
+              ))}
+            </aside>
           </div>
 
           {isNavigationEditorOpen && (
