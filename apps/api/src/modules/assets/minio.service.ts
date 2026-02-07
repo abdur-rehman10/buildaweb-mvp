@@ -7,6 +7,8 @@ export class MinioService {
   private readonly client: MinioClient;
   private readonly bucketName: string;
   private readonly publicBaseUrl: string;
+  private readonly presignedExpirySeconds: number;
+  private bucketReadyPromise: Promise<void> | null = null;
 
   constructor(private readonly config: ConfigService) {
     const endPoint = this.config.get<string>('MINIO_ENDPOINT') ?? 'localhost';
@@ -18,6 +20,7 @@ export class MinioService {
     this.bucketName = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
     this.publicBaseUrl =
       this.config.get<string>('MINIO_PUBLIC_BASE_URL') ?? `${useSSL ? 'https' : 'http'}://${endPoint}:${port}`;
+    this.presignedExpirySeconds = Number(this.config.get<string>('MINIO_PRESIGNED_EXPIRES_SECONDS') ?? 60 * 60 * 24);
 
     this.client = new MinioClient({
       endPoint,
@@ -35,13 +38,46 @@ export class MinioService {
       .join('/');
   }
 
+  private async ensureBucketReady() {
+    if (!this.bucketReadyPromise) {
+      this.bucketReadyPromise = (async () => {
+        const exists = await this.client.bucketExists(this.bucketName);
+        if (!exists) {
+          await this.client.makeBucket(this.bucketName, 'us-east-1');
+        }
+
+        const publicReadPolicy = JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: { AWS: ['*'] },
+              Action: ['s3:GetObject'],
+              Resource: [`arn:aws:s3:::${this.bucketName}/*`],
+            },
+          ],
+        });
+
+        await this.client.setBucketPolicy(this.bucketName, publicReadPolicy);
+      })();
+    }
+
+    return this.bucketReadyPromise;
+  }
+
   async upload(params: { objectPath: string; buffer: Buffer; mimeType: string; sizeBytes: number }) {
+    await this.ensureBucketReady();
+
     await this.client.putObject(this.bucketName, params.objectPath, params.buffer, params.sizeBytes, {
       'Content-Type': params.mimeType,
     });
 
-    const base = this.publicBaseUrl.replace(/\/$/, '');
-    const objectPath = this.encodedPath(params.objectPath);
-    return `${base}/${this.bucketName}/${objectPath}`;
+    try {
+      return await this.client.presignedGetObject(this.bucketName, params.objectPath, this.presignedExpirySeconds);
+    } catch {
+      const base = this.publicBaseUrl.replace(/\/$/, '');
+      const objectPath = this.encodedPath(params.objectPath);
+      return `${base}/${this.bucketName}/${objectPath}`;
+    }
   }
 }
