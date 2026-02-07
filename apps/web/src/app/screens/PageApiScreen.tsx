@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
@@ -7,11 +7,13 @@ import { RendererStub } from '../../editor/RendererStub';
 
 interface PageApiScreenProps {
   projectId: string;
+  pageId: string | null;
+  onPageIdChange: (pageId: string | null) => void;
   onBackToProjects: () => void;
 }
 
-export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProps) {
-  const [pageId, setPageId] = useState('');
+export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProjects }: PageApiScreenProps) {
+  const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
 
@@ -19,13 +21,18 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const loadPage = async () => {
-    if (!pageId.trim()) return;
+  useEffect(() => {
+    setPageIdInput(pageId ?? '');
+  }, [pageId]);
+
+  const loadPage = async (explicitPageId?: string) => {
+    const targetPageId = (explicitPageId ?? pageIdInput).trim();
+    if (!targetPageId) return;
 
     setLoading(true);
     setMessage(null);
     try {
-      const res = await pagesApi.get(projectId, pageId.trim());
+      const res = await pagesApi.get(projectId, targetPageId);
       const page = res.page;
       setVersion(page.version);
       const json = page.editorJson;
@@ -34,6 +41,7 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
           ? (json as Record<string, unknown>)
           : {},
       );
+      onPageIdChange(targetPageId);
       setMessage('Page loaded');
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
@@ -43,17 +51,26 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
     }
   };
 
+  useEffect(() => {
+    if (!pageId) return;
+    void loadPage(pageId);
+    // Intentional dependency on pageId/projectId only to trigger navigation-based loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageId, projectId]);
+
   const savePage = async () => {
-    if (!pageId.trim()) return;
+    const targetPageId = pageIdInput.trim();
+    if (!targetPageId) return;
 
     setSaving(true);
     setMessage(null);
     try {
-      const res = await pagesApi.update(projectId, pageId.trim(), {
+      const res = await pagesApi.update(projectId, targetPageId, {
         page: editorJson,
         version,
       });
       setVersion(res.version);
+      onPageIdChange(targetPageId);
       setMessage('Page saved');
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
@@ -83,12 +100,12 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <Input
             label="Page ID"
-            value={pageId}
-            onChange={(e) => setPageId(e.target.value)}
+            value={pageIdInput}
+            onChange={(e) => setPageIdInput(e.target.value)}
             placeholder="Paste page id"
           />
           <Input label="Version" value={String(version)} disabled />
-          <Button onClick={() => void loadPage()} disabled={loading || !pageId.trim()}>
+          <Button onClick={() => void loadPage()} disabled={loading || !pageIdInput.trim()}>
             {loading ? 'Loading...' : 'Load Page'}
           </Button>
         </div>
@@ -99,10 +116,10 @@ export function PageApiScreen({ projectId, onBackToProjects }: PageApiScreenProp
         </div>
 
         <div className="flex items-center gap-3">
-          <Button onClick={() => void savePage()} disabled={saving || !pageId.trim()}>
+          <Button onClick={() => void savePage()} disabled={saving || !pageIdInput.trim()}>
             {saving ? 'Saving...' : 'Save Page'}
           </Button>
-          <Button variant="outline" onClick={() => void loadPage()} disabled={loading || !pageId.trim()}>
+          <Button variant="outline" onClick={() => void loadPage()} disabled={loading || !pageIdInput.trim()}>
             Reload
           </Button>
         </div>
