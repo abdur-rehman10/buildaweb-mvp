@@ -39,6 +39,13 @@ export class PreviewController {
     return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
   }
 
+  private toPageSlug(params: { slug: string; isHome?: boolean }) {
+    if (params.isHome || params.slug.trim() === '/') return '/';
+    const normalized = this.normalizeSlug(params.slug);
+    if (!normalized) return null;
+    return `/${normalized}`;
+  }
+
   private resolveHomePage<T extends { isHome?: boolean; slug?: string }>(pages: T[]): T | null {
     if (pages.length === 0) return null;
 
@@ -74,20 +81,14 @@ export class PreviewController {
     if (pages.length === 0) return [];
 
     const homePage = this.resolveHomePage(pages);
-    const pageHrefById: Record<string, string> = {};
+    const pageSlugById: Record<string, string> = {};
     for (const page of pages) {
-      const isHome = !!homePage && page.id === homePage.id;
-      if (isHome || this.readString(page.slug).trim() === '/') {
-        pageHrefById[page.id] = 'index.html';
-        continue;
-      }
-
-      const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
-      if (!normalizedSlug) {
-        continue;
-      }
-
-      pageHrefById[page.id] = `${normalizedSlug}/index.html`;
+      const targetSlug = this.toPageSlug({
+        slug: this.readString(page.slug),
+        isHome: !!homePage && page.id === homePage.id,
+      });
+      if (!targetSlug) continue;
+      pageSlugById[page.id] = targetSlug;
     }
 
     return itemsRaw
@@ -95,16 +96,16 @@ export class PreviewController {
         if (typeof item !== 'object' || item === null) return null;
         const record = item as Record<string, unknown>;
         const pageId = this.readString(record.pageId).trim();
-        const href = pageHrefById[pageId];
-        if (!href) return null;
+        const targetSlug = pageSlugById[pageId];
+        if (!targetSlug) return null;
 
         const labelRaw = this.readString(record.label).trim();
         const page = pages.find((entry) => entry.id === pageId);
-        const label = labelRaw || page?.title || page?.id || href;
+        const label = labelRaw || page?.title || page?.id || targetSlug;
 
-        return { label, href };
+        return { label, targetSlug };
       })
-      .filter((item): item is { label: string; href: string } => item !== null);
+      .filter((item): item is { label: string; targetSlug: string } => item !== null);
   }
 
   private collectAssetRefs(editorJson: unknown): string[] {
@@ -162,12 +163,17 @@ export class PreviewController {
     });
     const assetUrlById = Object.fromEntries(assets.map((asset) => [String(asset._id), asset.publicUrl]));
     const navLinks = await this.loadNavigationLinks({ tenantId, projectId });
+    const currentSlug = this.toPageSlug({
+      slug: this.readString(page.slug),
+      isHome: page.isHome,
+    }) ?? '/';
 
     const preview = this.previewRenderer.render({
       pageId: String(page._id),
       editorJson: page.editorJson,
       assetUrlById,
       navLinks,
+      currentSlug,
     });
 
     return ok(preview);
