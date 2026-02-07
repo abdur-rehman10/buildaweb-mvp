@@ -175,6 +175,10 @@ export type GetPageResult = {
   page: PageRecord;
 };
 
+export type ListPagesResult = {
+  pages: PageMetaSummary[];
+};
+
 export type UpdatePageInput = {
   page: Record<string, unknown>;
   version: number;
@@ -304,6 +308,11 @@ export const pagesApi = {
     return apiRequest<CreatePageResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
       method: 'POST',
       body: JSON.stringify(input),
+    });
+  },
+  list(projectId: string) {
+    return apiRequest<ListPagesResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
+      method: 'GET',
     });
   },
   get(projectId: string, pageId: string) {
