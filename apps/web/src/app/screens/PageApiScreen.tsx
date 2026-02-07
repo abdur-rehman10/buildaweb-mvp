@@ -26,6 +26,9 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [metaSaving, setMetaSaving] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewSrcDoc, setPreviewSrcDoc] = useState<string | null>(null);
+  const [previewHash, setPreviewHash] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -156,6 +159,24 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     }
   };
 
+  const previewPage = async () => {
+    const targetPageId = pageIdInput.trim();
+    if (!targetPageId) return;
+
+    setPreviewLoading(true);
+    setMessage(null);
+    try {
+      const preview = await pagesApi.preview(projectId, targetPageId);
+      setPreviewHash(preview.hash);
+      setPreviewSrcDoc(`<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`);
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      setMessage(apiError?.message ?? 'Failed to load preview');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!pageId) return;
     void loadPage(pageId);
@@ -276,6 +297,9 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           <Button onClick={() => void savePage()} disabled={saving || !pageIdInput.trim()}>
             {saving ? 'Saving...' : 'Save Page'}
           </Button>
+          <Button variant="outline" onClick={() => void previewPage()} disabled={previewLoading || !pageIdInput.trim()}>
+            {previewLoading ? 'Loading Preview...' : 'Preview'}
+          </Button>
           <Button variant="outline" onClick={() => void loadPage()} disabled={loading || !pageIdInput.trim()}>
             Reload
           </Button>
@@ -291,6 +315,23 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           <p className="text-sm" role="alert">
             {message}
           </p>
+        )}
+
+        {previewHash && (
+          <p className="text-xs text-muted-foreground">
+            Preview hash: {previewHash}
+          </p>
+        )}
+
+        {previewSrcDoc && (
+          <div className="space-y-2">
+            <label className="block text-sm font-medium">Preview</label>
+            <iframe
+              title="Page Preview"
+              srcDoc={previewSrcDoc}
+              className="w-full min-h-[420px] border rounded-md bg-white"
+            />
+          </div>
         )}
       </Card>
     </div>
