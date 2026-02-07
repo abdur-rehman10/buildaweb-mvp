@@ -4,6 +4,8 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Logo } from '../components/Logo';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { ApiError, authApi } from '../../lib/api';
+import { setAuthToken } from '../../lib/auth';
 
 interface LoginProps {
   onNavigateToSignUp: () => void;
@@ -16,8 +18,9 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: typeof errors = {};
 
@@ -36,13 +39,18 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
       return;
     }
 
-    toast.success('Logged in successfully!');
-    setTimeout(() => onLogin(), 500);
-  };
-
-  const handleGoogleLogin = () => {
-    toast.success('Logging in with Google...');
-    setTimeout(() => onLogin(), 1000);
+    setIsSubmitting(true);
+    try {
+      const res = await authApi.login({ email, password });
+      setAuthToken(res.accessToken);
+      toast.success('Logged in successfully!');
+      onLogin();
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Login failed';
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -123,8 +131,8 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
               </button>
             </div>
 
-            <Button type="submit" fullWidth size="lg">
-              Log in
+            <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
+              {isSubmitting ? 'Logging in...' : 'Log in'}
             </Button>
 
             <div className="relative">
@@ -136,12 +144,12 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
               </div>
             </div>
 
-            <Button 
-              type="button" 
-              variant="outline" 
-              fullWidth 
+            <Button
+              type="button"
+              variant="outline"
+              fullWidth
               size="lg"
-              onClick={handleGoogleLogin}
+              onClick={() => toast.info('Google login is not available in MVP')}
             >
               <svg className="h-5 w-5" viewBox="0 0 24 24">
                 <path
