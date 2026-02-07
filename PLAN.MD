@@ -1,29 +1,66 @@
+
+---
+
+## ✅ UPDATED `PLAN.md` (explicit branch goal)
+
+```md
 # Buildaweb — Development Plan
 
-## Now (Next 3 Steps)
-1) Repo standards: Codex context + agent memory files + branching workflow (current step)
-2) Add backend scaffold (NestJS) + local Docker (Mongo + MinIO)
-3) Connect frontend to backend (auth + projects + pages)
+## Current Branch
+feat/auth-user-module
+
+## Branch Goal (DO NOT EXPAND)
+Implement the **User + Auth domain** only.
+
+This branch includes:
+- User schema (MongoDB)
+- Email + password signup
+- Login (JWT)
+- Auth guard
+- First protected endpoint
+
+This branch explicitly excludes:
+- Editor logic
+- Projects / pages
+- AI generation
+- Publishing
+- Billing
+- White-label logic
+
+## Completed
+- Frontend scaffold (React + Vite)
+- Backend scaffold (NestJS)
+- Docker setup (MongoDB + MinIO)
+- MongoDB connection verified
+- Health + DB ping endpoints
+
+## Next (After This Branch)
+1) Projects + pages domain
+2) Editor JSON save/load
+3) Asset upload
+4) Preview rendering
+5) Publish flow
 
 ## Definitions
 ### MVP Functional (must work)
 Auth, Dashboard, Project, Editor save/load, Tokens, Navigation, Assets upload, Preview, Publish, AI generate, Billing.
 
 ### UI Present but Limited
-Team/Collab, Analytics, Marketplace, Integrations, Version History — show UI but disable/coming soon.
+Team/Collab, Analytics, Marketplace, Integrations, Version History — UI only, disabled.
 
 ### Out of MVP
 CMS/blog, forms builder, ecommerce, animations, free-drag, advanced grid, AI images, multilingual.
 
 ## Git Workflow
-- main: always deployable
-- feature branches: feat/<area>-<short-name>
-- bugfix branches: fix/<area>-<short-name>
+- `main`: always deployable
+- feature branches: `feat/<area>-<short-name>`
+- bugfix branches: `fix/<area>-<short-name>`
 - PR required before merge to main
-- squash merge preferred
+- Squash merge preferred
 
 ## Coding Standards
 - TypeScript strict
-- No breaking API contracts
-- Validate editor JSON on backend
-- Enforce tenant + user scoping everywhere
+- Validate input DTOs
+- Never trust frontend input
+- Enforce user scoping in every query
+- Mongo IDs must never be guessable across users
