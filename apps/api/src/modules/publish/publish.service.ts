@@ -76,6 +76,13 @@ export class PublishService {
     return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
   }
 
+  private toPageSlug(params: { slug: string; isHome?: boolean }) {
+    if (params.isHome || params.slug.trim() === '/') return '/';
+    const normalized = this.normalizeSlug(params.slug);
+    if (!normalized) return null;
+    return `/${normalized}`;
+  }
+
   private cssHrefForDepth(depth: number) {
     if (depth <= 0) return 'styles.css';
     return `${'../'.repeat(depth)}styles.css`;
@@ -131,21 +138,15 @@ ${params.bodyHtml}
     const homePage = this.resolveHomePage(params.pages);
     const pageById = Object.fromEntries(params.pages.map((page) => [String(page._id), page]));
 
-    const hrefByPageId: Record<string, string> = {};
+    const targetSlugByPageId: Record<string, string> = {};
     for (const page of params.pages) {
       const pageId = String(page._id);
-      const isHome = !!homePage && pageId === String(homePage._id);
-      if (isHome || this.readString(page.slug).trim() === '/') {
-        hrefByPageId[pageId] = 'index.html';
-        continue;
-      }
-
-      const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
-      if (!normalizedSlug) {
-        continue;
-      }
-
-      hrefByPageId[pageId] = `${normalizedSlug}/index.html`;
+      const targetSlug = this.toPageSlug({
+        slug: this.readString(page.slug),
+        isHome: !!homePage && pageId === String(homePage._id),
+      });
+      if (!targetSlug) continue;
+      targetSlugByPageId[pageId] = targetSlug;
     }
 
     return itemsRaw
@@ -153,16 +154,16 @@ ${params.bodyHtml}
         if (typeof item !== 'object' || item === null) return null;
         const record = item as Record<string, unknown>;
         const pageId = this.readString(record.pageId).trim();
-        const href = hrefByPageId[pageId];
-        if (!href) return null;
+        const targetSlug = targetSlugByPageId[pageId];
+        if (!targetSlug) return null;
 
         const labelRaw = this.readString(record.label).trim();
         const page = pageById[pageId];
         const label = labelRaw || this.readString(page?.title, pageId);
 
-        return { label, href };
+        return { label, targetSlug };
       })
-      .filter((item): item is { label: string; href: string } => item !== null);
+      .filter((item): item is { label: string; targetSlug: string } => item !== null);
   }
 
   private async resolveAssetUrlById(params: { tenantId: string; projectId: string; pages: Array<{ editorJson: unknown }> }) {
@@ -254,11 +255,18 @@ ${params.bodyHtml}
         const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
         const relativePath = isHome ? 'index.html' : `${normalizedSlug || `page-${String(page._id)}`}/index.html`;
         const depth = isHome ? 0 : relativePath.split('/').length - 1;
+        const currentSlug =
+          this.toPageSlug({
+            slug: this.readString(page.slug),
+            isHome,
+          }) ?? `/${normalizedSlug || `page-${String(page._id)}`}`;
+
         const render = this.renderer.render({
           pageId: String(page._id),
           editorJson: page.editorJson,
           assetUrlById,
           navLinks,
+          currentSlug,
         });
 
         if (!sharedCss) {
@@ -284,6 +292,7 @@ ${params.bodyHtml}
           pageId: String(homePage._id),
           editorJson: homePage.editorJson,
           navLinks,
+          currentSlug: '/',
         }).css;
       }
 
