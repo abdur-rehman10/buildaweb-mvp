@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   HttpException,
   HttpStatus,
@@ -14,6 +15,7 @@ import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
 import { AssetsService, MAX_UPLOAD_SIZE_BYTES } from './assets.service';
+import { ResolveAssetsDto } from './dto/resolve-assets.dto';
 
 type UploadedImageFile = {
   buffer: Buffer;
@@ -68,5 +70,33 @@ export class AssetsController {
     } catch {
       throw new HttpException(fail('UPLOAD_FAILED', 'Failed to upload asset'), HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  @Post('resolve')
+  async resolve(
+    @Param('projectId') projectId: string,
+    @Body() dto: ResolveAssetsDto,
+    @Req() req: any,
+  ) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    if (!project) {
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+    }
+
+    const assets = await this.assets.getByIdsScoped({
+      tenantId,
+      projectId,
+      assetIds: dto.assetIds,
+    });
+
+    return ok({
+      items: assets.map((asset) => ({
+        assetId: String(asset._id),
+        publicUrl: asset.publicUrl,
+      })),
+    });
   }
 }
