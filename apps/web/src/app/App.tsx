@@ -19,6 +19,10 @@ import { Billing } from './screens/Billing';
 import { AccountSettings } from './screens/AccountSettings';
 import { Help } from './screens/Help';
 import { Notifications } from './screens/Notifications';
+import { ProjectsApiScreen } from './screens/ProjectsApiScreen';
+import { PageApiScreen } from './screens/PageApiScreen';
+import { clearAuthToken, getAuthToken } from '../lib/auth';
+import { authApi } from '../lib/api';
 
 type Screen = 
   | 'signup' 
@@ -32,13 +36,17 @@ type Screen =
   | 'billing'
   | 'account-settings'
   | 'help'
-  | 'notifications';
+  | 'notifications'
+  | 'page-api';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<Screen>('signup');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('login');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showAccessibilitySettings, setShowAccessibilitySettings] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activePageId, setActivePageId] = useState<string | null>(null);
 
   // Announce route changes to screen readers
   useRouteAnnouncer(currentScreen);
@@ -66,14 +74,41 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!activeProjectId || !activePageId) return;
+    window.localStorage.setItem(`baw_last_page_${activeProjectId}`, activePageId);
+  }, [activeProjectId, activePageId]);
+
+  useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      setAuthChecking(false);
+      return;
+    }
+
+    authApi
+      .me()
+      .then(() => {
+        setIsAuthenticated(true);
+        setCurrentScreen('dashboard');
+      })
+      .catch(() => {
+        clearAuthToken();
+        setIsAuthenticated(false);
+        setCurrentScreen('login');
+      })
+      .finally(() => {
+        setAuthChecking(false);
+      });
+  }, []);
+
   const navigate = (screen: Screen) => {
     setCurrentScreen(screen);
   };
 
   const handleSignUp = () => {
-    setIsAuthenticated(true);
-    setShowOnboarding(true);
-    navigate('onboarding');
+    toast.info('Sign up is not wired in this MVP flow. Please log in.');
+    navigate('login');
   };
 
   const handleLogin = () => {
@@ -87,10 +122,17 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    clearAuthToken();
     setIsAuthenticated(false);
     setShowOnboarding(false);
+    setActiveProjectId(null);
+    setActivePageId(null);
     navigate('login');
   };
+
+  if (authChecking) {
+    return <div className="min-h-screen flex items-center justify-center">Checking session...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -175,9 +217,32 @@ export default function App() {
           )}
           
           {currentScreen === 'dashboard' && (
+            <ProjectsApiScreen
+              activeProjectId={activeProjectId}
+              onSelectProject={(projectId) => {
+                setActiveProjectId(projectId);
+              }}
+              onOpenPage={(projectId, pageId) => {
+                setActiveProjectId(projectId);
+                setActivePageId(pageId);
+                navigate('page-api');
+              }}
+            />
+          )}
+
+          {currentScreen === 'page-api' && activeProjectId && (
+            <PageApiScreen
+              projectId={activeProjectId}
+              pageId={activePageId}
+              onPageIdChange={setActivePageId}
+              onBackToProjects={() => navigate('dashboard')}
+            />
+          )}
+
+          {currentScreen === 'page-api' && !activeProjectId && (
             <Dashboard 
-              onSelectProject={() => {}}
-              onCreateProject={() => {}}
+              onSelectProject={() => navigate('dashboard')}
+              onCreateProject={() => navigate('dashboard')}
               onLogout={handleLogout}
             />
           )}
