@@ -201,11 +201,22 @@ export function ProjectsApiScreen({
     setIsNavigationEditorOpen(nextOpen);
     if (nextOpen) {
       void loadNavigation(activeProjectId);
+      void loadProjectPages(activeProjectId);
     }
   };
 
   const updateNavigationLabel = (index: number, label: string) => {
     setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, label } : item)));
+  };
+
+  const updateNavigationPageId = (index: number, pageId: string) => {
+    setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, pageId } : item)));
+  };
+
+  const getPageDisplay = (pageId: string) => {
+    const page = projectPages.find((item) => item.id === pageId);
+    if (!page) return null;
+    return `${page.title || page.id}${page.slug ? ` /${page.slug}` : ''}`;
   };
 
   const moveNavigationItem = (index: number, direction: 'up' | 'down') => {
@@ -319,8 +330,8 @@ export function ProjectsApiScreen({
       setNewPageTitle('');
       setNewPageSlug('');
 
-      setProjectPages([
-        ...projectPages,
+      setProjectPages((prev) => [
+        ...prev,
         { id: res.page_id, title: newPageTitle.trim(), slug: newPageSlug.trim(), isHome: false, version: 1 },
       ]);
 
@@ -519,7 +530,10 @@ export function ProjectsApiScreen({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void loadNavigation(activeProjectId)}
+                  onClick={() => {
+                    void loadNavigation(activeProjectId);
+                    void loadProjectPages(activeProjectId);
+                  }}
                   disabled={loadingNavigation}
                 >
                   {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
@@ -541,7 +555,31 @@ export function ProjectsApiScreen({
                       />
                     </div>
                     <div className="md:col-span-3">
-                      <Input label="Page ID" value={item.pageId} disabled />
+                      <label className="block text-sm font-medium mb-1">Target page</label>
+                      <select
+                        className="h-10 px-3 border rounded-md bg-background w-full"
+                        value={item.pageId}
+                        onChange={(e) => updateNavigationPageId(index, e.target.value)}
+                      >
+                        {projectPages.length === 0 && (
+                          <option value={item.pageId || ''} disabled>
+                            No pages available
+                          </option>
+                        )}
+                        {projectPages.map((page) => (
+                          <option key={page.id} value={page.id}>
+                            {(page.title || page.id) + (page.slug ? ` (/` + page.slug + ')' : '')}
+                          </option>
+                        ))}
+                        {!projectPages.some((page) => page.id === item.pageId) && item.pageId && (
+                          <option value={item.pageId}>
+                            Missing page ({item.pageId})
+                          </option>
+                        )}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {`Linked: ${getPageDisplay(item.pageId) ?? `missing page (${item.pageId})`}`}
+                      </p>
                     </div>
                     <div className="md:col-span-2 flex gap-2">
                       <Button
