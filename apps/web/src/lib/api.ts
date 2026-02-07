@@ -6,7 +6,7 @@ type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
 
 type JsonRecord = Record<string, unknown>;
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:4000/api/v1';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '';
 
 function isObject(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null;
@@ -239,13 +239,13 @@ export type UpdateNavigationInput = {
 
 export const authApi = {
   login(input: LoginInput) {
-    return apiRequest<LoginResult>('/auth/login', {
+    return apiRequest<LoginResult>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   me() {
-    return apiRequest<MeResult>('/auth/me', {
+    return apiRequest<MeResult>('/api/v1/auth/me', {
       method: 'GET',
     });
   },
@@ -253,18 +253,18 @@ export const authApi = {
 
 export const projectsApi = {
   list() {
-    return apiRequest<ListProjectsResult>('/projects', {
+    return apiRequest<ListProjectsResult>('/api/v1/projects', {
       method: 'GET',
     });
   },
   create(input: CreateProjectInput) {
-    return apiRequest<CreateProjectResult>('/projects', {
+    return apiRequest<CreateProjectResult>('/api/v1/projects', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   get(projectId: string) {
-    return apiRequest<GetProjectResult>(`/projects/${encodeURIComponent(projectId)}`, {
+    return apiRequest<GetProjectResult>(`/api/v1/projects/${encodeURIComponent(projectId)}`, {
       method: 'GET',
     });
   },
@@ -272,14 +272,14 @@ export const projectsApi = {
 
 export const pagesApi = {
   create(projectId: string, input: CreatePageInput) {
-    return apiRequest<CreatePageResult>(`/projects/${encodeURIComponent(projectId)}/pages`, {
+    return apiRequest<CreatePageResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   get(projectId: string, pageId: string) {
     return apiRequest<GetPageResult>(
-      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
       {
         method: 'GET',
       },
@@ -287,7 +287,7 @@ export const pagesApi = {
   },
   update(projectId: string, pageId: string, input: UpdatePageInput) {
     return apiRequest<UpdatePageResult>(
-      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
       {
         method: 'PUT',
         body: JSON.stringify(input),
@@ -296,7 +296,7 @@ export const pagesApi = {
   },
   updateMeta(projectId: string, pageId: string, input: UpdatePageMetaInput) {
     return apiRequest<UpdatePageMetaResult>(
-      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/meta`,
+      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/meta`,
       {
         method: 'PATCH',
         body: JSON.stringify(input),
@@ -305,7 +305,7 @@ export const pagesApi = {
   },
   duplicate(projectId: string, pageId: string, input: DuplicatePageInput) {
     return apiRequest<DuplicatePageResult>(
-      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/duplicate`,
+      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/duplicate`,
       {
         method: 'POST',
         body: JSON.stringify(input),
@@ -314,7 +314,7 @@ export const pagesApi = {
   },
   remove(projectId: string, pageId: string) {
     return apiRequest<DeletePageResult>(
-      `/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
       {
         method: 'DELETE',
       },
@@ -324,12 +324,12 @@ export const pagesApi = {
 
 export const navigationApi = {
   get(projectId: string) {
-    return apiRequest<NavigationResult>(`/projects/${encodeURIComponent(projectId)}/navigation`, {
+    return apiRequest<NavigationResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
       method: 'GET',
     });
   },
   update(projectId: string, input: UpdateNavigationInput) {
-    return apiRequest<NavigationResult>(`/projects/${encodeURIComponent(projectId)}/navigation`, {
+    return apiRequest<NavigationResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
