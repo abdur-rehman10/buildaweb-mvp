@@ -81,11 +81,6 @@ export class PublishService {
     return `${'../'.repeat(depth)}styles.css`;
   }
 
-  private navHrefForDepth(href: string, depth: number) {
-    if (depth <= 0) return href;
-    return `${'../'.repeat(depth)}${href}`;
-  }
-
   private staticHtmlDocument(params: { title: string; cssHref: string; bodyHtml: string }) {
     return `<!doctype html>
 <html lang="en">
@@ -119,14 +114,12 @@ ${params.bodyHtml}
   private async resolveNavigationLinks(params: {
     tenantId: string;
     projectId: string;
-    ownerUserId: string;
     pages: Array<{ _id: unknown; title?: string; slug?: string; isHome?: boolean }>;
   }) {
     const nav = await this.navigationModel
       .findOne({
         tenantId: params.tenantId,
         projectId: params.projectId,
-        ownerUserId: params.ownerUserId,
       })
       .select('itemsJson')
       .lean()
@@ -138,15 +131,22 @@ ${params.bodyHtml}
     const homePage = this.resolveHomePage(params.pages);
     const pageById = Object.fromEntries(params.pages.map((page) => [String(page._id), page]));
 
-    const hrefByPageId = Object.fromEntries(
-      params.pages.map((page) => {
-        const pageId = String(page._id);
-        const isHome = !!homePage && pageId === String(homePage._id);
-        const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
-        const href = isHome ? 'index.html' : `${normalizedSlug || `page-${pageId}`}/index.html`;
-        return [pageId, href];
-      }),
-    );
+    const hrefByPageId: Record<string, string> = {};
+    for (const page of params.pages) {
+      const pageId = String(page._id);
+      const isHome = !!homePage && pageId === String(homePage._id);
+      if (isHome || this.readString(page.slug).trim() === '/') {
+        hrefByPageId[pageId] = 'index.html';
+        continue;
+      }
+
+      const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
+      if (!normalizedSlug) {
+        continue;
+      }
+
+      hrefByPageId[pageId] = `${normalizedSlug}/index.html`;
+    }
 
     return itemsRaw
       .map((item) => {
@@ -239,7 +239,6 @@ ${params.bodyHtml}
       const navLinks = await this.resolveNavigationLinks({
         tenantId: params.tenantId,
         projectId: params.projectId,
-        ownerUserId: params.ownerUserId,
         pages,
       });
 
@@ -255,16 +254,11 @@ ${params.bodyHtml}
         const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
         const relativePath = isHome ? 'index.html' : `${normalizedSlug || `page-${String(page._id)}`}/index.html`;
         const depth = isHome ? 0 : relativePath.split('/').length - 1;
-        const navLinksForPage = navLinks.map((item) => ({
-          ...item,
-          href: this.navHrefForDepth(item.href, depth),
-        }));
-
         const render = this.renderer.render({
           pageId: String(page._id),
           editorJson: page.editorJson,
           assetUrlById,
-          navLinks: navLinksForPage,
+          navLinks,
         });
 
         if (!sharedCss) {
