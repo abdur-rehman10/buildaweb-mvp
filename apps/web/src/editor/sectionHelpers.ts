@@ -299,7 +299,12 @@ export function deleteNodeById(editorJson: JsonRecord, nodeId: string): JsonReco
   };
 }
 
-export function updateImageNodeAssetRefById(editorJson: JsonRecord, nodeId: string, assetId: string): JsonRecord {
+export function updateImageNodeAssetRefById(
+  editorJson: JsonRecord,
+  nodeId: string,
+  assetId: string,
+  publicUrl?: string,
+): JsonRecord {
   const sections = asArray(editorJson.sections);
 
   const nextSections = sections.map((section) => {
@@ -330,6 +335,7 @@ export function updateImageNodeAssetRefById(editorJson: JsonRecord, nodeId: stri
         return {
           ...nodeRecord,
           asset_ref: assetId,
+          ...(publicUrl ? { src: publicUrl, url: publicUrl } : {}),
         };
       });
 
