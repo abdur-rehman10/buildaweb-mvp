@@ -90,6 +90,13 @@ export function ProjectsApiScreen({
     }
   };
 
+  const formatPageOptionLabel = (page: PageMetaSummary) => {
+    const title = (page.title || page.id).trim();
+    const slug = (page.slug || '').trim();
+    if (!slug) return title;
+    return `${title} (${slug})`;
+  };
+
   const loadProjectPages = async (projectId: string) => {
     setLoadingProjectDetails(true);
     setError(null);
@@ -209,14 +216,37 @@ export function ProjectsApiScreen({
     setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, label } : item)));
   };
 
+  const addNavigationItem = () => {
+    setNavigationItems((prev) => [...prev, { label: '', pageId: '' }]);
+  };
+
+  const removeNavigationItem = (index: number) => {
+    setNavigationItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
   const updateNavigationPageId = (index: number, pageId: string) => {
-    setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, pageId } : item)));
+    setNavigationItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item;
+
+        const selectedPage = projectPages.find((page) => page.id === pageId);
+        const nextLabel = item.label.trim()
+          ? item.label
+          : (selectedPage?.title || selectedPage?.id || '');
+
+        return {
+          ...item,
+          pageId,
+          label: nextLabel,
+        };
+      }),
+    );
   };
 
   const getPageDisplay = (pageId: string) => {
     const page = projectPages.find((item) => item.id === pageId);
     if (!page) return null;
-    return `${page.title || page.id}${page.slug ? ` /${page.slug}` : ''}`;
+    return formatPageOptionLabel(page);
   };
 
   const moveNavigationItem = (index: number, direction: 'up' | 'down') => {
@@ -234,9 +264,22 @@ export function ProjectsApiScreen({
   const saveNavigation = async () => {
     if (!activeProjectId) return;
 
-    const invalid = navigationItems.some((item) => !item.label.trim() || !item.pageId.trim());
-    if (invalid) {
-      setNavigationMessage('Navigation labels and page IDs are required');
+    const missingPage = navigationItems.some((item) => !item.pageId.trim());
+    if (missingPage) {
+      setNavigationMessage('Each navigation item must have a target page');
+      return;
+    }
+
+    const missingLabel = navigationItems.some((item) => !item.label.trim());
+    if (missingLabel) {
+      setNavigationMessage('Navigation labels are required');
+      return;
+    }
+
+    const pageIds = navigationItems.map((item) => item.pageId.trim());
+    const hasDuplicates = new Set(pageIds).size !== pageIds.length;
+    if (hasDuplicates) {
+      setNavigationMessage('Duplicate target pages are not allowed in navigation');
       return;
     }
 
@@ -329,11 +372,7 @@ export function ProjectsApiScreen({
       setLastPageId(res.page_id);
       setNewPageTitle('');
       setNewPageSlug('');
-
-      setProjectPages((prev) => [
-        ...prev,
-        { id: res.page_id, title: newPageTitle.trim(), slug: newPageSlug.trim(), isHome: false, version: 1 },
-      ]);
+      await loadProjectPages(activeProjectId);
 
       onOpenPage(activeProjectId, res.page_id);
     } catch (err) {
@@ -375,7 +414,17 @@ export function ProjectsApiScreen({
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Your projects</h2>
-          <Button variant="outline" size="sm" onClick={() => void loadProjects()} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void loadProjects();
+              if (activeProjectId) {
+                void loadProjectPages(activeProjectId);
+              }
+            }}
+            disabled={loading}
+          >
             {loading ? 'Loading...' : 'Refresh'}
           </Button>
         </div>
@@ -527,17 +576,27 @@ export function ProjectsApiScreen({
             <div className="border rounded-md p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Navigation</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    void loadNavigation(activeProjectId);
-                    void loadProjectPages(activeProjectId);
-                  }}
-                  disabled={loadingNavigation}
-                >
-                  {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNavigationItem()}
+                    disabled={loadingNavigation}
+                  >
+                    Add Navigation Item
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void loadNavigation(activeProjectId);
+                      void loadProjectPages(activeProjectId);
+                    }}
+                    disabled={loadingNavigation}
+                  >
+                    {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
+                  </Button>
+                </div>
               </div>
 
               {navigationItems.length === 0 && !loadingNavigation && (
@@ -561,6 +620,7 @@ export function ProjectsApiScreen({
                         value={item.pageId}
                         onChange={(e) => updateNavigationPageId(index, e.target.value)}
                       >
+                        <option value="">Select page</option>
                         {projectPages.length === 0 && (
                           <option value={item.pageId || ''} disabled>
                             No pages available
@@ -568,7 +628,7 @@ export function ProjectsApiScreen({
                         )}
                         {projectPages.map((page) => (
                           <option key={page.id} value={page.id}>
-                            {(page.title || page.id) + (page.slug ? ` (/` + page.slug + ')' : '')}
+                            {formatPageOptionLabel(page)}
                           </option>
                         ))}
                         {!projectPages.some((page) => page.id === item.pageId) && item.pageId && (
@@ -599,6 +659,14 @@ export function ProjectsApiScreen({
                         disabled={index === navigationItems.length - 1}
                       >
                         Down
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeNavigationItem(index)}
+                      >
+                        Remove
                       </Button>
                     </div>
                   </div>
