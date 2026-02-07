@@ -1,43 +1,40 @@
-Branch: feat/pages-navigation-api
+# PLAN.md
 
-Goal: Add minimal Pages management + Navigation API for MVP (duplicate/delete/meta + nav JSON). Wire frontend to use these endpoints.
+## Branch
+feat/preview-renderer-api
 
-In scope:
+## Goal
+Add server-side page preview rendering (HTML + CSS) and wire it to frontend via iframe preview.
 
+## In Scope
 Backend:
-
-PATCH /projects/:projectId/pages/:pageId/meta (title/slug/seoJson)
-
-POST /projects/:projectId/pages/:pageId/duplicate
-
-DELETE /projects/:projectId/pages/:pageId
-
-Navigation storage endpoints (project-scoped):
-
-GET /projects/:projectId/navigation
-
-PUT /projects/:projectId/navigation
-
-Auto-generate default nav if none exists (based on pages, home first)
+- GET /projects/:projectId/preview/:pageId
+- Minimal deterministic renderer (sections → blocks → nodes)
+- Stable hash generation
+- Safe handling of unknown nodes
 
 Frontend:
+- Preview button on Page screen
+- Call preview API
+- Render preview in iframe using srcdoc
 
-Page rename + slug edit (via meta PATCH)
+## Out of Scope
+- Publish flow
+- Hosting
+- Domains
+- Assets upload
+- Global styles editor
+- AI generation
+- Billing
 
-Duplicate/Delete page buttons
+## Constraints
+- Use existing editorJson only
+- No refactors of existing APIs
+- No new DB tables
+- Response format must follow ok/data contract
 
-Nav editor: rename menu labels + reorder (simple up/down)
-
-Out of scope:
-
-Publish/preview
-
-Assets pipeline
-
-Global tokens UI
-
-AI
-
-DoD:
-
-User can rename/slug-edit a page, duplicate/delete a page, and edit navigation labels/order; all persists via API.
+## Definition of Done
+- Preview reflects saved editor JSON
+- Preview never crashes on malformed data
+- Preview updates after save
+- No impact on save/version/409 logic
