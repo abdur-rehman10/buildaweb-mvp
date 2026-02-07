@@ -217,6 +217,26 @@ export type DeletePageResult = {
   deleted: boolean;
 };
 
+export type NavigationItem = {
+  label: string;
+  pageId: string;
+};
+
+export type NavigationCta = {
+  label: string;
+  href: string;
+};
+
+export type NavigationResult = {
+  items: NavigationItem[];
+  cta?: NavigationCta;
+};
+
+export type UpdateNavigationInput = {
+  items: NavigationItem[];
+  cta?: NavigationCta;
+};
+
 export const authApi = {
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/auth/login', {
@@ -299,5 +319,19 @@ export const pagesApi = {
         method: 'DELETE',
       },
     );
+  },
+};
+
+export const navigationApi = {
+  get(projectId: string) {
+    return apiRequest<NavigationResult>(`/projects/${encodeURIComponent(projectId)}/navigation`, {
+      method: 'GET',
+    });
+  },
+  update(projectId: string, input: UpdateNavigationInput) {
+    return apiRequest<NavigationResult>(`/projects/${encodeURIComponent(projectId)}/navigation`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   },
 };
