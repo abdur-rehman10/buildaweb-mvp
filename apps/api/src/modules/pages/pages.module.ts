@@ -12,6 +12,6 @@ import { PreviewRendererService } from './preview-renderer.service';
   imports: [MongooseModule.forFeature([{ name: Page.name, schema: PageSchema }]), ProjectsModule, AssetsModule],
   controllers: [PagesController, PreviewController],
   providers: [PagesService, PreviewRendererService],
-  exports: [PagesService],
+  exports: [PagesService, PreviewRendererService],
 })
 export class PagesModule {}
