@@ -219,6 +219,8 @@ export default function App() {
           {currentScreen === 'dashboard' && (
             <ProjectsApiScreen
               activeProjectId={activeProjectId}
+              activePageId={activePageId}
+              onSelectActivePageId={setActivePageId}
               onSelectProject={(projectId) => {
                 setActiveProjectId(projectId);
               }}
