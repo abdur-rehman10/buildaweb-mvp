@@ -1,6 +1,7 @@
 type JsonRecord = Record<string, unknown>;
 
 export type SectionPresetType = 'hero' | 'features' | 'cta' | 'pricing' | 'contact' | 'footer';
+export type NodeInsertType = 'text' | 'button' | 'image';
 
 function asRecord(value: unknown): JsonRecord | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -20,7 +21,7 @@ function getId(record: JsonRecord): string {
   return '';
 }
 
-function createId(): string {
+export function createStableId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
@@ -28,16 +29,16 @@ function createId(): string {
 }
 
 function textNode(text: string): JsonRecord {
-  return { id: createId(), type: 'text', text };
+  return { id: createStableId(), type: 'text', text };
 }
 
 function buttonNode(label: string): JsonRecord {
-  return { id: createId(), type: 'button', label };
+  return { id: createStableId(), type: 'button', label };
 }
 
 function imageNode(url?: string): JsonRecord {
   return {
-    id: createId(),
+    id: createStableId(),
     type: 'image',
     src: url ?? '',
     alt: 'Image',
@@ -45,50 +46,50 @@ function imageNode(url?: string): JsonRecord {
 }
 
 function block(nodes: JsonRecord[]): JsonRecord {
-  return { id: createId(), nodes };
+  return { id: createStableId(), nodes };
 }
 
 function createPresetSection(presetType: SectionPresetType): JsonRecord {
   switch (presetType) {
     case 'hero':
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'hero',
         blocks: [block([textNode('Hero headline'), buttonNode('Get started')])],
       };
     case 'features':
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'features',
         blocks: [block([textNode('Feature list')])],
       };
     case 'cta':
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'cta',
         blocks: [block([textNode('Call to action'), buttonNode('Contact us')])],
       };
     case 'pricing':
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'pricing',
         blocks: [block([textNode('Pricing plans')])],
       };
     case 'contact':
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'contact',
         blocks: [block([textNode('Contact us'), imageNode()])],
       };
     case 'footer':
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'footer',
         blocks: [block([textNode('Footer text')])],
       };
     default:
       return {
-        id: createId(),
+        id: createStableId(),
         type: 'hero',
         blocks: [block([textNode('Section')])],
       };
@@ -98,7 +99,7 @@ function createPresetSection(presetType: SectionPresetType): JsonRecord {
 function cloneNodeWithNewId(node: unknown): unknown {
   const nodeRecord = asRecord(node);
   if (!nodeRecord) return node;
-  return { ...nodeRecord, id: createId() };
+  return { ...nodeRecord, id: createStableId() };
 }
 
 function cloneBlockWithNewIds(blockValue: unknown): unknown {
@@ -108,7 +109,7 @@ function cloneBlockWithNewIds(blockValue: unknown): unknown {
   const nodes = asArray(blockRecord.nodes).map((node) => cloneNodeWithNewId(node));
   return {
     ...blockRecord,
-    id: createId(),
+    id: createStableId(),
     nodes,
   };
 }
@@ -121,8 +122,33 @@ function cloneSectionWithNewIds(sectionValue: unknown): unknown {
 
   return {
     ...sectionRecord,
-    id: createId(),
+    id: createStableId(),
     blocks,
+  };
+}
+
+function createDefaultNode(nodeType: NodeInsertType): JsonRecord {
+  if (nodeType === 'text') {
+    return {
+      id: createStableId(),
+      type: 'text',
+      content: 'New text',
+    };
+  }
+
+  if (nodeType === 'button') {
+    return {
+      id: createStableId(),
+      type: 'button',
+      label: 'Click me',
+      href: '#',
+    };
+  }
+
+  return {
+    id: createStableId(),
+    type: 'image',
+    asset_ref: null,
   };
 }
 
@@ -182,6 +208,47 @@ export function moveSection(editorJson: JsonRecord, sectionId: string, direction
   const nextSections = [...sections];
   const [item] = nextSections.splice(index, 1);
   nextSections.splice(targetIndex, 0, item);
+
+  return {
+    ...editorJson,
+    sections: nextSections,
+  };
+}
+
+export function insertNodeInFirstBlock(
+  editorJson: JsonRecord,
+  sectionId: string,
+  nodeType: NodeInsertType,
+): JsonRecord {
+  const sections = asArray(editorJson.sections);
+
+  const nextSections = sections.map((section) => {
+    const sectionRecord = asRecord(section);
+    if (!sectionRecord || getId(sectionRecord) !== sectionId) {
+      return section;
+    }
+
+    const blocks = asArray(sectionRecord.blocks);
+    if (blocks.length === 0) {
+      return section;
+    }
+
+    const firstBlockRecord = asRecord(blocks[0]);
+    if (!firstBlockRecord) {
+      return section;
+    }
+
+    const nodes = asArray(firstBlockRecord.nodes);
+    const nextFirstBlock = {
+      ...firstBlockRecord,
+      nodes: [...nodes, createDefaultNode(nodeType)],
+    };
+
+    return {
+      ...sectionRecord,
+      blocks: [nextFirstBlock, ...blocks.slice(1)],
+    };
+  });
 
   return {
     ...editorJson,

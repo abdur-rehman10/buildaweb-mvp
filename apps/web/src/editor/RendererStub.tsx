@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { deleteSection, duplicateSection, moveSection } from './sectionHelpers';
+import { deleteSection, duplicateSection, insertNodeInFirstBlock, moveSection } from './sectionHelpers';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -145,6 +145,30 @@ export function RendererStub({ value, onChange }: RendererStubProps) {
                   onClick={() => onChange(deleteSection(value, sectionId))}
                 >
                   Delete
+                </button>
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId || blocks.length === 0}
+                  onClick={() => onChange(insertNodeInFirstBlock(value, sectionId, 'text'))}
+                >
+                  Add Text
+                </button>
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId || blocks.length === 0}
+                  onClick={() => onChange(insertNodeInFirstBlock(value, sectionId, 'button'))}
+                >
+                  Add Button
+                </button>
+                <button
+                  type="button"
+                  className="border rounded px-2 py-1 text-xs"
+                  disabled={!sectionId || blocks.length === 0}
+                  onClick={() => onChange(insertNodeInFirstBlock(value, sectionId, 'image'))}
+                >
+                  Add Image
                 </button>
               </div>
             </div>
