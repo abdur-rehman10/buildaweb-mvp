@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { AppController } from './app.controller';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { ProjectsModule } from './modules/projects/projects.module';
+import { PagesModule } from './modules/pages/pages.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { AuthModule } from './modules/auth/auth.module';
     }),
     UsersModule,
     AuthModule,
+    ProjectsModule,
+    PagesModule,
   ],
   controllers: [AppController],
 })

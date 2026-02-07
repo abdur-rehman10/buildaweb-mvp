@@ -19,6 +19,10 @@ export class Project {
 
   @Prop({ required: true, default: 'en', trim: true })
   defaultLocale!: string;
+
+  // from @Schema({ timestamps: true })
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export const ProjectSchema = SchemaFactory.createForClass(Project);
