@@ -303,7 +303,6 @@ export function updateImageNodeAssetRefById(
   editorJson: JsonRecord,
   nodeId: string,
   assetId: string,
-  publicUrl?: string,
 ): JsonRecord {
   const sections = asArray(editorJson.sections);
 
@@ -335,7 +334,6 @@ export function updateImageNodeAssetRefById(
         return {
           ...nodeRecord,
           asset_ref: assetId,
-          ...(publicUrl ? { src: publicUrl, url: publicUrl } : {}),
         };
       });
 
