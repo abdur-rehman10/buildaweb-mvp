@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { PagesModule } from './modules/pages/pages.module';
+import { NavigationModule } from './modules/navigation/navigation.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PagesModule } from './modules/pages/pages.module';
     AuthModule,
     ProjectsModule,
     PagesModule,
+    NavigationModule,
   ],
   controllers: [AppController],
 })

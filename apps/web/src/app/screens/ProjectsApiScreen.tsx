@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, pagesApi, projectsApi, type ProjectSummary } from '../../lib/api';
+import { ApiError, navigationApi, pagesApi, projectsApi, type NavigationItem, type ProjectSummary } from '../../lib/api';
 
 interface ProjectsApiScreenProps {
   activeProjectId: string | null;
+  activePageId: string | null;
+  onSelectActivePageId: (pageId: string | null) => void;
   onSelectProject: (projectId: string) => void;
   onOpenPage: (projectId: string, pageId: string) => void;
 }
@@ -17,9 +19,10 @@ type ProjectPageListItem = {
 };
 
 function toPageList(value: unknown): ProjectPageListItem[] | null {
-  if (!Array.isArray(value)) return null;
+  if (value === undefined) return null;
+  const rawItems = Array.isArray(value) ? value : [value];
 
-  return value
+  return rawItems
     .map((item) => {
       if (typeof item !== 'object' || item === null) return null;
       const record = item as Record<string, unknown>;
@@ -36,7 +39,13 @@ function toPageList(value: unknown): ProjectPageListItem[] | null {
     .filter((item): item is ProjectPageListItem => item !== null);
 }
 
-export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage }: ProjectsApiScreenProps) {
+export function ProjectsApiScreen({
+  activeProjectId,
+  activePageId,
+  onSelectActivePageId,
+  onSelectProject,
+  onOpenPage,
+}: ProjectsApiScreenProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -52,6 +61,26 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
 
   const [lastPageId, setLastPageId] = useState<string | null>(null);
   const [projectPages, setProjectPages] = useState<ProjectPageListItem[] | null>(null);
+  const [isNavigationEditorOpen, setIsNavigationEditorOpen] = useState(false);
+  const [navigationItems, setNavigationItems] = useState<NavigationItem[]>([]);
+  const [loadingNavigation, setLoadingNavigation] = useState(false);
+  const [savingNavigation, setSavingNavigation] = useState(false);
+  const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
+
+  const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
+    if (!Array.isArray(items)) return [];
+
+    return items
+      .map((item) => {
+        if (typeof item !== 'object' || item === null) return null;
+        const record = item as Record<string, unknown>;
+        const label = typeof record.label === 'string' ? record.label : '';
+        const pageId = typeof record.pageId === 'string' ? record.pageId : '';
+        if (!label || !pageId) return null;
+        return { label, pageId };
+      })
+      .filter((item): item is NavigationItem => item !== null);
+  };
 
   const loadProjects = async () => {
     setLoading(true);
@@ -73,13 +102,36 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
     try {
       const detail = await projectsApi.get(projectId);
       const detailRecord = detail.project as unknown as Record<string, unknown>;
-      setProjectPages(toPageList(detailRecord.pages));
+      const pages = toPageList(detailRecord.pages);
+      setProjectPages(pages);
+
+      if (pages && pages.length > 0 && !activePageId) {
+        const firstPageId = pages[0].id;
+        window.localStorage.setItem(`baw_last_page_${projectId}`, firstPageId);
+        setLastPageId(firstPageId);
+        onSelectActivePageId(firstPageId);
+      }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to load project details';
       setError(message);
       setProjectPages(null);
     } finally {
       setLoadingProjectDetails(false);
+    }
+  };
+
+  const loadNavigation = async (projectId: string) => {
+    setLoadingNavigation(true);
+    setNavigationMessage(null);
+    try {
+      const nav = await navigationApi.get(projectId);
+      setNavigationItems(normalizeNavigationItems(nav.items));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to load navigation';
+      setNavigationMessage(message);
+      setNavigationItems([]);
+    } finally {
+      setLoadingNavigation(false);
     }
   };
 
@@ -91,13 +143,67 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
     if (!activeProjectId) {
       setLastPageId(null);
       setProjectPages(null);
+      setIsNavigationEditorOpen(false);
+      setNavigationItems([]);
+      setNavigationMessage(null);
       return;
     }
 
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
     void loadProjectDetails(activeProjectId);
-  }, [activeProjectId]);
+  }, [activeProjectId, activePageId]);
+
+  const toggleNavigationEditor = () => {
+    if (!activeProjectId) return;
+
+    const nextOpen = !isNavigationEditorOpen;
+    setIsNavigationEditorOpen(nextOpen);
+    if (nextOpen) {
+      void loadNavigation(activeProjectId);
+    }
+  };
+
+  const updateNavigationLabel = (index: number, label: string) => {
+    setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, label } : item)));
+  };
+
+  const moveNavigationItem = (index: number, direction: 'up' | 'down') => {
+    setNavigationItems((prev) => {
+      const targetIndex = direction === 'up' ? index - 1 : index + 1;
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      const [item] = next.splice(index, 1);
+      next.splice(targetIndex, 0, item);
+      return next;
+    });
+  };
+
+  const saveNavigation = async () => {
+    if (!activeProjectId) return;
+
+    const invalid = navigationItems.some((item) => !item.label.trim() || !item.pageId.trim());
+    if (invalid) {
+      setNavigationMessage('Navigation labels and page IDs are required');
+      return;
+    }
+
+    setSavingNavigation(true);
+    setNavigationMessage(null);
+    try {
+      const res = await navigationApi.update(activeProjectId, {
+        items: navigationItems.map((item) => ({ label: item.label.trim(), pageId: item.pageId })),
+      });
+      setNavigationItems(normalizeNavigationItems(res.items));
+      setNavigationMessage('Navigation saved');
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to save navigation';
+      setNavigationMessage(message);
+    } finally {
+      setSavingNavigation(false);
+    }
+  };
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,9 +330,14 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
 
       {activeProjectId && (
         <Card className="p-4 space-y-4">
-          <div>
-            <h2 className="font-semibold">Active project pages</h2>
-            <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Active project pages</h2>
+              <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
+            </div>
+            <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
+              {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -285,6 +396,78 @@ export function ProjectsApiScreen({ activeProjectId, onSelectProject, onOpenPage
               </aside>
             )}
           </div>
+
+          {isNavigationEditorOpen && (
+            <div className="border rounded-md p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium">Navigation</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void loadNavigation(activeProjectId)}
+                  disabled={loadingNavigation}
+                >
+                  {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
+                </Button>
+              </div>
+
+              {navigationItems.length === 0 && !loadingNavigation && (
+                <p className="text-sm text-muted-foreground">No navigation items.</p>
+              )}
+
+              <div className="space-y-2">
+                {navigationItems.map((item, index) => (
+                  <div key={`${item.pageId}-${index}`} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                    <div className="md:col-span-7">
+                      <Input
+                        label={`Label ${index + 1}`}
+                        value={item.label}
+                        onChange={(e) => updateNavigationLabel(index, e.target.value)}
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <Input label="Page ID" value={item.pageId} disabled />
+                    </div>
+                    <div className="md:col-span-2 flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => moveNavigationItem(index, 'up')}
+                        disabled={index === 0}
+                      >
+                        Up
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => moveNavigationItem(index, 'down')}
+                        disabled={index === navigationItems.length - 1}
+                      >
+                        Down
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  onClick={() => void saveNavigation()}
+                  disabled={savingNavigation || loadingNavigation}
+                >
+                  {savingNavigation ? 'Saving...' : 'Save Navigation'}
+                </Button>
+                {navigationMessage && (
+                  <p className="text-sm" role="alert">
+                    {navigationMessage}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </Card>
       )}
     </div>
