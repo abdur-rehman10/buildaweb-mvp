@@ -46,6 +46,7 @@ export default function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [activePageId, setActivePageId] = useState<string | null>(null);
 
   // Announce route changes to screen readers
   useRouteAnnouncer(currentScreen);
@@ -72,6 +73,11 @@ export default function App() {
       window.removeEventListener('mousedown', handleMouseDown);
     };
   }, []);
+
+  useEffect(() => {
+    if (!activeProjectId || !activePageId) return;
+    window.localStorage.setItem(`baw_last_page_${activeProjectId}`, activePageId);
+  }, [activeProjectId, activePageId]);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -120,6 +126,7 @@ export default function App() {
     setIsAuthenticated(false);
     setShowOnboarding(false);
     setActiveProjectId(null);
+    setActivePageId(null);
     navigate('login');
   };
 
@@ -214,6 +221,10 @@ export default function App() {
               activeProjectId={activeProjectId}
               onSelectProject={(projectId) => {
                 setActiveProjectId(projectId);
+              }}
+              onOpenPage={(projectId, pageId) => {
+                setActiveProjectId(projectId);
+                setActivePageId(pageId);
                 navigate('page-api');
               }}
             />
@@ -222,6 +233,8 @@ export default function App() {
           {currentScreen === 'page-api' && activeProjectId && (
             <PageApiScreen
               projectId={activeProjectId}
+              pageId={activePageId}
+              onPageIdChange={setActivePageId}
               onBackToProjects={() => navigate('dashboard')}
             />
           )}
