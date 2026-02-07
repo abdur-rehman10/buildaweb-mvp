@@ -1,0 +1,156 @@
+import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+
+type JsonRecord = Record<string, unknown>;
+
+const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
+
+@Injectable()
+export class PreviewRendererService {
+  private readonly baseCss = `
+.baw-page{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#ffffff;max-width:1200px;margin:0 auto;padding:24px;line-height:1.5}
+.baw-section{margin:0 0 24px}
+.baw-block{display:grid;gap:12px}
+.baw-node-text{margin:0}
+.baw-node-button{display:inline-block;padding:10px 16px;border-radius:8px;background:#111827;color:#ffffff;text-decoration:none;font-weight:600}
+.baw-node-image{max-width:100%;height:auto;border-radius:8px;display:block}
+`.trim();
+
+  private asRecord(value: unknown): JsonRecord | null {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+    return value as JsonRecord;
+  }
+
+  private asArray(value: unknown): unknown[] {
+    return Array.isArray(value) ? value : [];
+  }
+
+  private readString(value: unknown, fallback = ''): string {
+    if (typeof value === 'string') return value;
+    if (typeof value === 'number') return String(value);
+    return fallback;
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  private readId(record: JsonRecord): string {
+    return this.readString(record.id);
+  }
+
+  private getTextTag(record: JsonRecord): 'h1' | 'h2' | 'p' {
+    const explicitTag = this.readString(record.tag).toLowerCase();
+    if (explicitTag === 'h1' || explicitTag === 'h2' || explicitTag === 'p') return explicitTag;
+
+    const size = this.resolveFontSize(record);
+    if (size >= 42) return 'h1';
+    if (size >= 30) return 'h2';
+    return 'p';
+  }
+
+  private resolveFontSize(record: JsonRecord): number {
+    const direct = record.size;
+    if (typeof direct === 'number') return direct;
+    if (typeof direct === 'string') {
+      const lower = direct.toLowerCase();
+      if (lower === 'h1' || lower === '3xl' || lower === '4xl' || lower === 'display') return 48;
+      if (lower === 'h2' || lower === '2xl' || lower === 'xl') return 32;
+      const parsed = Number.parseFloat(lower);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+
+    const style = this.asRecord(record.style);
+    const fontSize = style?.fontSize;
+    if (typeof fontSize === 'number') return fontSize;
+    if (typeof fontSize === 'string') {
+      const parsed = Number.parseFloat(fontSize);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+
+    return 0;
+  }
+
+  private renderNode(node: unknown): string {
+    const record = this.asRecord(node);
+    if (!record) return '<!-- Invalid node -->';
+
+    const type = this.readString(record.type).toLowerCase();
+
+    if (type === 'text') {
+      const tag = this.getTextTag(record);
+      const text = this.readString(record.content, this.readString(record.text, ''));
+      return `<${tag} class="baw-node-text">${this.escapeHtml(text)}</${tag}>`;
+    }
+
+    if (type === 'button') {
+      const label = this.readString(record.label, this.readString(record.text, 'Button'));
+      const href = this.readString(record.href, this.readString(record.url, '#')) || '#';
+      return `<a class="baw-node-button" href="${this.escapeHtml(href)}">${this.escapeHtml(label)}</a>`;
+    }
+
+    if (type === 'image') {
+      const src =
+        this.readString(record.src, this.readString(record.url, this.readString(record.asset_ref, ''))) ||
+        IMAGE_PLACEHOLDER_SRC;
+      const alt = this.readString(record.alt, 'Image');
+      return `<img class="baw-node-image" src="${this.escapeHtml(src)}" alt="${this.escapeHtml(alt)}" />`;
+    }
+
+    return `<!-- Unknown node type: ${this.escapeHtml(type || 'unknown')} -->`;
+  }
+
+  private renderBlock(block: unknown): string {
+    const record = this.asRecord(block);
+    if (!record) return '<div class="baw-block"><!-- Invalid block --></div>';
+
+    const blockId = this.readId(record);
+    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node)).join('');
+    const attr = blockId ? ` data-block="${this.escapeHtml(blockId)}"` : '';
+    return `<div class="baw-block"${attr}>${nodes}</div>`;
+  }
+
+  private renderSection(section: unknown): string {
+    const record = this.asRecord(section);
+    if (!record) return '<section class="baw-section"><!-- Invalid section --></section>';
+
+    const sectionId = this.readId(record);
+    const blocks = this.asArray(record.blocks).map((block) => this.renderBlock(block)).join('');
+    const attr = sectionId ? ` data-section="${this.escapeHtml(sectionId)}"` : '';
+    return `<section class="baw-section"${attr}>${blocks}</section>`;
+  }
+
+  private stableStringify(value: unknown): string {
+    const visit = (input: unknown): unknown => {
+      if (Array.isArray(input)) return input.map((item) => visit(item));
+      if (input && typeof input === 'object') {
+        const record = input as Record<string, unknown>;
+        const out: Record<string, unknown> = {};
+        for (const key of Object.keys(record).sort()) {
+          out[key] = visit(record[key]);
+        }
+        return out;
+      }
+      return input;
+    };
+
+    return JSON.stringify(visit(value));
+  }
+
+  render(params: { pageId: string; editorJson: unknown }) {
+    const pageRecord = this.asRecord(params.editorJson) ?? {};
+    const sections = this.asArray(pageRecord.sections).map((section) => this.renderSection(section)).join('');
+
+    const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${sections}</div>`;
+    const css = this.baseCss;
+    const pageJsonString = this.stableStringify(pageRecord);
+    const hash = createHash('sha256').update(pageJsonString + css).digest('hex');
+
+    return { html, css, hash };
+  }
+}
