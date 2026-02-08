@@ -197,6 +197,7 @@ describe('PublishService pretty URLs', () => {
       {
         $set: {
           latestPublishId: '507f1f77bcf86cd799439011',
+          publishedAt: expect.any(Date),
         },
       },
     );
