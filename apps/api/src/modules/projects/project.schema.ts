@@ -1,4 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Types } from 'mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type ProjectDocument = HydratedDocument<Project>;
@@ -19,6 +20,9 @@ export class Project {
 
   @Prop({ required: true, default: 'en', trim: true })
   defaultLocale!: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'Page', default: null })
+  homePageId?: Types.ObjectId | null;
 
   // from @Schema({ timestamps: true })
   createdAt?: Date;
