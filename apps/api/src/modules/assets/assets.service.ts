@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
 import { extname } from 'node:path';
 import { Model } from 'mongoose';
 import { Asset, AssetDocument } from './asset.schema';
@@ -62,6 +63,7 @@ export class AssetsService {
       tenantId: params.tenantId,
       projectId: params.projectId,
       storagePath,
+      fileName: (params.file.originalname ?? '').trim() || `${objectId}.${ext}`,
       publicUrl,
       mimeType: params.file.mimetype,
       sizeBytes: params.file.size,
@@ -71,6 +73,26 @@ export class AssetsService {
       assetId: String(asset._id),
       publicUrl: asset.publicUrl,
     };
+  }
+
+  async listByProjectScoped(params: { tenantId: string; projectId: string }) {
+    const assets = await this.assetModel
+      .find({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      })
+      .sort({ createdAt: -1 })
+      .select('_id fileName storagePath sizeBytes publicUrl createdAt')
+      .lean()
+      .exec();
+
+    return assets.map((asset) => ({
+      id: String(asset._id),
+      fileName: (asset.fileName || '').trim() || basename(asset.storagePath || ''),
+      size: asset.sizeBytes,
+      publicUrl: asset.publicUrl,
+      createdAt: asset.createdAt,
+    }));
   }
 
   async getByIdScoped(params: { tenantId: string; projectId: string; assetId: string }) {

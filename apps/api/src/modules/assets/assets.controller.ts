@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpException,
   HttpStatus,
   Param,
@@ -11,6 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Types } from 'mongoose';
 import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
@@ -31,6 +33,28 @@ export class AssetsController {
     private readonly assets: AssetsService,
     private readonly projects: ProjectsService,
   ) {}
+
+  private isValidObjectId(value: string) {
+    return Types.ObjectId.isValid(value);
+  }
+
+  @Get()
+  async list(@Param('projectId') projectId: string, @Req() req: any) {
+    if (!this.isValidObjectId(projectId)) {
+      throw new HttpException(fail('INVALID_PROJECT_ID', 'Invalid project id'), HttpStatus.BAD_REQUEST);
+    }
+
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    if (!project) {
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+    }
+
+    const assets = await this.assets.listByProjectScoped({ tenantId, projectId });
+    return ok({ assets });
+  }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))

@@ -242,6 +242,18 @@ export type UploadAssetResult = {
   publicUrl: string;
 };
 
+export type ProjectAsset = {
+  id: string;
+  fileName: string;
+  size: number;
+  publicUrl: string;
+  createdAt?: string;
+};
+
+export type ListAssetsResult = {
+  assets: ProjectAsset[];
+};
+
 export type ResolveAssetsItem = {
   assetId: string;
   publicUrl: string;
@@ -400,6 +412,11 @@ export const navigationApi = {
 };
 
 export const assetsApi = {
+  list(projectId: string) {
+    return apiRequest<ListAssetsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets`, {
+      method: 'GET',
+    });
+  },
   upload(projectId: string, file: File) {
     const body = new FormData();
     body.append('file', file);
