@@ -9,6 +9,7 @@ import { ProjectsModule } from './modules/projects/projects.module';
 import { PagesModule } from './modules/pages/pages.module';
 import { NavigationModule } from './modules/navigation/navigation.module';
 import { AssetsModule } from './modules/assets/assets.module';
+import { PublishModule } from './modules/publish/publish.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { AssetsModule } from './modules/assets/assets.module';
     PagesModule,
     NavigationModule,
     AssetsModule,
+    PublishModule,
   ],
   controllers: [AppController],
 })

@@ -2,7 +2,17 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, navigationApi, pagesApi, projectsApi, type NavigationItem, type ProjectSummary } from '../../lib/api';
+import {
+  ApiError,
+  navigationApi,
+  pagesApi,
+  projectsApi,
+  publishApi,
+  type PageMetaSummary,
+  type NavigationItem,
+  type ProjectSummary,
+  type PublishStatus,
+} from '../../lib/api';
 
 interface ProjectsApiScreenProps {
   activeProjectId: string | null;
@@ -12,31 +22,8 @@ interface ProjectsApiScreenProps {
   onOpenPage: (projectId: string, pageId: string) => void;
 }
 
-type ProjectPageListItem = {
-  id: string;
-  title?: string;
-  slug?: string;
-};
-
-function toPageList(value: unknown): ProjectPageListItem[] | null {
-  if (value === undefined) return null;
-  const rawItems = Array.isArray(value) ? value : [value];
-
-  return rawItems
-    .map((item) => {
-      if (typeof item !== 'object' || item === null) return null;
-      const record = item as Record<string, unknown>;
-      const idRaw = record.id ?? record._id;
-      const id = typeof idRaw === 'string' ? idRaw : typeof idRaw === 'number' ? String(idRaw) : '';
-      if (!id) return null;
-
-      return {
-        id,
-        title: typeof record.title === 'string' ? record.title : undefined,
-        slug: typeof record.slug === 'string' ? record.slug : undefined,
-      };
-    })
-    .filter((item): item is ProjectPageListItem => item !== null);
+function toPublishedHomeUrl(baseUrl: string): string {
+  return `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}index.html`;
 }
 
 export function ProjectsApiScreen({
@@ -60,12 +47,19 @@ export function ProjectsApiScreen({
   const [newPageSlug, setNewPageSlug] = useState('');
 
   const [lastPageId, setLastPageId] = useState<string | null>(null);
-  const [projectPages, setProjectPages] = useState<ProjectPageListItem[] | null>(null);
+  const [projectPages, setProjectPages] = useState<PageMetaSummary[]>([]);
   const [isNavigationEditorOpen, setIsNavigationEditorOpen] = useState(false);
   const [navigationItems, setNavigationItems] = useState<NavigationItem[]>([]);
   const [loadingNavigation, setLoadingNavigation] = useState(false);
   const [savingNavigation, setSavingNavigation] = useState(false);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
+  const [publishStarting, setPublishStarting] = useState(false);
+  const [publishId, setPublishId] = useState<string | null>(null);
+  const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const publishedHomeUrl = publishedUrl ? toPublishedHomeUrl(publishedUrl) : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -96,25 +90,30 @@ export function ProjectsApiScreen({
     }
   };
 
-  const loadProjectDetails = async (projectId: string) => {
+  const formatPageOptionLabel = (page: PageMetaSummary) => {
+    const title = (page.title || page.id).trim();
+    const slug = (page.slug || '').trim();
+    if (!slug) return title;
+    return `${title} (${slug})`;
+  };
+
+  const loadProjectPages = async (projectId: string) => {
     setLoadingProjectDetails(true);
     setError(null);
     try {
-      const detail = await projectsApi.get(projectId);
-      const detailRecord = detail.project as unknown as Record<string, unknown>;
-      const pages = toPageList(detailRecord.pages);
+      const { pages } = await pagesApi.list(projectId);
       setProjectPages(pages);
 
-      if (pages && pages.length > 0 && !activePageId) {
+      if (pages.length > 0 && !activePageId) {
         const firstPageId = pages[0].id;
         window.localStorage.setItem(`baw_last_page_${projectId}`, firstPageId);
         setLastPageId(firstPageId);
         onSelectActivePageId(firstPageId);
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load project details';
+      const message = err instanceof ApiError ? err.message : 'Failed to load project pages';
       setError(message);
-      setProjectPages(null);
+      setProjectPages([]);
     } finally {
       setLoadingProjectDetails(false);
     }
@@ -142,7 +141,7 @@ export function ProjectsApiScreen({
   useEffect(() => {
     if (!activeProjectId) {
       setLastPageId(null);
-      setProjectPages(null);
+      setProjectPages([]);
       setIsNavigationEditorOpen(false);
       setNavigationItems([]);
       setNavigationMessage(null);
@@ -151,8 +150,56 @@ export function ProjectsApiScreen({
 
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
-    void loadProjectDetails(activeProjectId);
+    void loadProjectPages(activeProjectId);
   }, [activeProjectId, activePageId]);
+
+  useEffect(() => {
+    setPublishStarting(false);
+    setPublishId(null);
+    setPublishStatus(null);
+    setPublishedUrl(null);
+    setPublishError(null);
+    setPublishMessage(null);
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId || !publishId || publishStatus !== 'publishing') return;
+
+    let cancelled = false;
+    const pollPublishStatus = async () => {
+      try {
+        const result = await publishApi.getStatus(activeProjectId, publishId);
+        if (cancelled) return;
+
+        setPublishStatus(result.status);
+        setPublishedUrl(result.url);
+
+        if (result.status === 'failed') {
+          setPublishError(result.errorMessage ?? 'Publish failed');
+          return;
+        }
+
+        if (result.status === 'live') {
+          setPublishError(null);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof ApiError ? err.message : 'Failed to check publish status';
+        setPublishError(message);
+        setPublishStatus('failed');
+      }
+    };
+
+    void pollPublishStatus();
+    const interval = window.setInterval(() => {
+      void pollPublishStatus();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeProjectId, publishId, publishStatus]);
 
   const toggleNavigationEditor = () => {
     if (!activeProjectId) return;
@@ -161,11 +208,45 @@ export function ProjectsApiScreen({
     setIsNavigationEditorOpen(nextOpen);
     if (nextOpen) {
       void loadNavigation(activeProjectId);
+      void loadProjectPages(activeProjectId);
     }
   };
 
   const updateNavigationLabel = (index: number, label: string) => {
     setNavigationItems((prev) => prev.map((item, idx) => (idx === index ? { ...item, label } : item)));
+  };
+
+  const addNavigationItem = () => {
+    setNavigationItems((prev) => [...prev, { label: '', pageId: '' }]);
+  };
+
+  const removeNavigationItem = (index: number) => {
+    setNavigationItems((prev) => prev.filter((_, idx) => idx !== index));
+  };
+
+  const updateNavigationPageId = (index: number, pageId: string) => {
+    setNavigationItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item;
+
+        const selectedPage = projectPages.find((page) => page.id === pageId);
+        const nextLabel = item.label.trim()
+          ? item.label
+          : (selectedPage?.title || selectedPage?.id || '');
+
+        return {
+          ...item,
+          pageId,
+          label: nextLabel,
+        };
+      }),
+    );
+  };
+
+  const getPageDisplay = (pageId: string) => {
+    const page = projectPages.find((item) => item.id === pageId);
+    if (!page) return null;
+    return formatPageOptionLabel(page);
   };
 
   const moveNavigationItem = (index: number, direction: 'up' | 'down') => {
@@ -183,9 +264,22 @@ export function ProjectsApiScreen({
   const saveNavigation = async () => {
     if (!activeProjectId) return;
 
-    const invalid = navigationItems.some((item) => !item.label.trim() || !item.pageId.trim());
-    if (invalid) {
-      setNavigationMessage('Navigation labels and page IDs are required');
+    const missingPage = navigationItems.some((item) => !item.pageId.trim());
+    if (missingPage) {
+      setNavigationMessage('Each navigation item must have a target page');
+      return;
+    }
+
+    const missingLabel = navigationItems.some((item) => !item.label.trim());
+    if (missingLabel) {
+      setNavigationMessage('Navigation labels are required');
+      return;
+    }
+
+    const pageIds = navigationItems.map((item) => item.pageId.trim());
+    const hasDuplicates = new Set(pageIds).size !== pageIds.length;
+    if (hasDuplicates) {
+      setNavigationMessage('Duplicate target pages are not allowed in navigation');
       return;
     }
 
@@ -202,6 +296,41 @@ export function ProjectsApiScreen({
       setNavigationMessage(message);
     } finally {
       setSavingNavigation(false);
+    }
+  };
+
+  const startPublish = async () => {
+    if (!activeProjectId) return;
+
+    setPublishStarting(true);
+    setPublishError(null);
+    setPublishMessage(null);
+    try {
+      const result = await publishApi.create(activeProjectId);
+      setPublishId(result.publishId);
+      setPublishStatus(result.status);
+      setPublishedUrl(result.url);
+
+      if (result.status === 'failed') {
+        setPublishError(result.errorMessage ?? 'Publish failed');
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to publish project';
+      setPublishError(message);
+      setPublishStatus('failed');
+    } finally {
+      setPublishStarting(false);
+    }
+  };
+
+  const copyPublishedUrl = async () => {
+    if (!publishedHomeUrl) return;
+
+    try {
+      await window.navigator.clipboard.writeText(publishedHomeUrl);
+      setPublishMessage('URL copied');
+    } catch {
+      setPublishMessage('Failed to copy URL');
     }
   };
 
@@ -243,13 +372,7 @@ export function ProjectsApiScreen({
       setLastPageId(res.page_id);
       setNewPageTitle('');
       setNewPageSlug('');
-
-      if (projectPages) {
-        setProjectPages([
-          ...projectPages,
-          { id: res.page_id, title: newPageTitle.trim(), slug: newPageSlug.trim() },
-        ]);
-      }
+      await loadProjectPages(activeProjectId);
 
       onOpenPage(activeProjectId, res.page_id);
     } catch (err) {
@@ -291,7 +414,17 @@ export function ProjectsApiScreen({
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Your projects</h2>
-          <Button variant="outline" size="sm" onClick={() => void loadProjects()} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void loadProjects();
+              if (activeProjectId) {
+                void loadProjectPages(activeProjectId);
+              }
+            }}
+            disabled={loading}
+          >
             {loading ? 'Loading...' : 'Refresh'}
           </Button>
         </div>
@@ -335,10 +468,54 @@ export function ProjectsApiScreen({
               <h2 className="font-semibold">Active project pages</h2>
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
-            <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
-              {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
+                {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void startPublish()}
+                disabled={publishStarting || publishStatus === 'publishing'}
+              >
+                {publishStarting || publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
+              </Button>
+            </div>
           </div>
+
+          {(publishStatus || publishError || publishedHomeUrl || publishMessage) && (
+            <div className="border rounded-md p-3 space-y-1">
+              {publishStatus && (
+                <p className="text-sm">
+                  Publish status: <strong>{publishStatus}</strong>
+                </p>
+              )}
+              {publishError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {publishError}
+                </p>
+              )}
+              {publishStatus === 'live' && publishedHomeUrl && (
+                <div className="flex items-center gap-2">
+                  <a
+                    href={publishedHomeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm underline text-primary"
+                  >
+                    Open published site
+                  </a>
+                  <Button type="button" variant="outline" size="sm" onClick={() => void copyPublishedUrl()}>
+                    Copy URL
+                  </Button>
+                </div>
+              )}
+              {publishMessage && (
+                <p className="text-xs text-muted-foreground" role="status">
+                  {publishMessage}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
@@ -376,39 +553,50 @@ export function ProjectsApiScreen({
               )}
             </div>
 
-            {projectPages && (
-              <aside className="border rounded-md p-3 space-y-2">
-                <h3 className="text-sm font-medium">Pages</h3>
-                {projectPages.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No pages returned.</p>
-                )}
-                {projectPages.map((page) => (
-                  <button
-                    key={page.id}
-                    type="button"
-                    className="w-full text-left border rounded-md p-2 hover:border-primary"
-                    onClick={() => onOpenPage(activeProjectId, page.id)}
-                  >
-                    <div className="text-sm font-medium">{page.title ?? page.id}</div>
-                    {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
-                  </button>
-                ))}
-              </aside>
-            )}
+            <aside className="border rounded-md p-3 space-y-2">
+              <h3 className="text-sm font-medium">Pages</h3>
+              {projectPages.length === 0 && (
+                <p className="text-sm text-muted-foreground">No pages returned.</p>
+              )}
+              {projectPages.map((page) => (
+                <button
+                  key={page.id}
+                  type="button"
+                  className="w-full text-left border rounded-md p-2 hover:border-primary"
+                  onClick={() => onOpenPage(activeProjectId, page.id)}
+                >
+                  <div className="text-sm font-medium">{page.title ?? page.id}</div>
+                  {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
+                </button>
+              ))}
+            </aside>
           </div>
 
           {isNavigationEditorOpen && (
             <div className="border rounded-md p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Navigation</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void loadNavigation(activeProjectId)}
-                  disabled={loadingNavigation}
-                >
-                  {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => addNavigationItem()}
+                    disabled={loadingNavigation}
+                  >
+                    Add Navigation Item
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      void loadNavigation(activeProjectId);
+                      void loadProjectPages(activeProjectId);
+                    }}
+                    disabled={loadingNavigation}
+                  >
+                    {loadingNavigation ? 'Loading...' : 'Reload Navigation'}
+                  </Button>
+                </div>
               </div>
 
               {navigationItems.length === 0 && !loadingNavigation && (
@@ -426,7 +614,32 @@ export function ProjectsApiScreen({
                       />
                     </div>
                     <div className="md:col-span-3">
-                      <Input label="Page ID" value={item.pageId} disabled />
+                      <label className="block text-sm font-medium mb-1">Target page</label>
+                      <select
+                        className="h-10 px-3 border rounded-md bg-background w-full"
+                        value={item.pageId}
+                        onChange={(e) => updateNavigationPageId(index, e.target.value)}
+                      >
+                        <option value="">Select page</option>
+                        {projectPages.length === 0 && (
+                          <option value={item.pageId || ''} disabled>
+                            No pages available
+                          </option>
+                        )}
+                        {projectPages.map((page) => (
+                          <option key={page.id} value={page.id}>
+                            {formatPageOptionLabel(page)}
+                          </option>
+                        ))}
+                        {!projectPages.some((page) => page.id === item.pageId) && item.pageId && (
+                          <option value={item.pageId}>
+                            Missing page ({item.pageId})
+                          </option>
+                        )}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {`Linked: ${getPageDisplay(item.pageId) ?? `missing page (${item.pageId})`}`}
+                      </p>
                     </div>
                     <div className="md:col-span-2 flex gap-2">
                       <Button
@@ -446,6 +659,14 @@ export function ProjectsApiScreen({
                         disabled={index === navigationItems.length - 1}
                       >
                         Down
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeNavigationItem(index)}
+                      >
+                        Remove
                       </Button>
                     </div>
                   </div>

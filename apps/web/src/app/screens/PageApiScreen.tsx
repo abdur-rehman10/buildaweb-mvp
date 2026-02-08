@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, assetsApi, pagesApi } from '../../lib/api';
+import { ApiError, assetsApi, pagesApi, type PageMetaSummary } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
 import { addSection, type SectionPresetType, updateImageNodeAssetRefById } from '../../editor/sectionHelpers';
 
@@ -13,12 +13,60 @@ interface PageApiScreenProps {
   onBackToProjects: () => void;
 }
 
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  return value as JsonRecord;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function collectImageAssetIds(editorJson: JsonRecord): string[] {
+  const ids = new Set<string>();
+  const sections = asArray(editorJson.sections);
+
+  for (const section of sections) {
+    const sectionRecord = asRecord(section);
+    const blocks = asArray(sectionRecord?.blocks);
+
+    for (const block of blocks) {
+      const blockRecord = asRecord(block);
+      const nodes = asArray(blockRecord?.nodes);
+
+      for (const node of nodes) {
+        const nodeRecord = asRecord(node);
+        if (!nodeRecord) continue;
+
+        const type = typeof nodeRecord.type === 'string' ? nodeRecord.type : '';
+        if (type !== 'image') continue;
+
+        const assetRef =
+          typeof nodeRecord.asset_ref === 'string'
+            ? nodeRecord.asset_ref
+            : typeof nodeRecord.asset_ref === 'number'
+              ? String(nodeRecord.asset_ref)
+              : '';
+
+        if (!assetRef) continue;
+        if (!/^[a-f0-9]{24}$/i.test(assetRef)) continue;
+        ids.add(assetRef);
+      }
+    }
+  }
+
+  return [...ids];
+}
+
 export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProjects }: PageApiScreenProps) {
   const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
   const [pageTitleInput, setPageTitleInput] = useState('');
   const [pageSlugInput, setPageSlugInput] = useState('');
   const [version, setVersion] = useState(1);
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
+  const [projectPages, setProjectPages] = useState<PageMetaSummary[]>([]);
   const [assetsById, setAssetsById] = useState<Record<string, string>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
 
@@ -36,6 +84,15 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     setPageIdInput(pageId ?? '');
   }, [pageId]);
 
+  const loadProjectPages = async () => {
+    try {
+      const { pages } = await pagesApi.list(projectId);
+      setProjectPages(pages);
+    } catch {
+      setProjectPages([]);
+    }
+  };
+
   const loadPage = async (explicitPageId?: string) => {
     const targetPageId = (explicitPageId ?? pageIdInput).trim();
     if (!targetPageId) return;
@@ -49,14 +106,37 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setPageTitleInput(typeof page.title === 'string' ? page.title : '');
       setPageSlugInput(typeof page.slug === 'string' ? page.slug : '');
       const json = page.editorJson;
-      setEditorJson(
+      const nextEditorJson =
         typeof json === 'object' && json !== null && !Array.isArray(json)
           ? (json as Record<string, unknown>)
-          : {},
-      );
-      setAssetsById({});
+          : {};
+      setEditorJson(nextEditorJson);
+
+      const assetIds = collectImageAssetIds(nextEditorJson);
+      const nextAssetsById: Record<string, string> = {};
+      let loadedMessage = 'Page loaded';
+
+      if (assetIds.length > 0) {
+        try {
+          const chunkSize = 100;
+          for (let i = 0; i < assetIds.length; i += chunkSize) {
+            const chunk = assetIds.slice(i, i + chunkSize);
+            const resolved = await assetsApi.resolve(projectId, chunk);
+            for (const item of resolved.items) {
+              if (item.assetId && item.publicUrl) {
+                nextAssetsById[item.assetId] = item.publicUrl;
+              }
+            }
+          }
+        } catch (err) {
+          const apiError = err instanceof ApiError ? err : null;
+          loadedMessage = apiError?.message ?? 'Page loaded, but image rehydration failed';
+        }
+      }
+
+      setAssetsById(nextAssetsById);
       onPageIdChange(targetPageId);
-      setMessage('Page loaded');
+      setMessage(loadedMessage);
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
       setMessage(apiError?.message ?? 'Failed to load page');
@@ -194,6 +274,12 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   };
 
   useEffect(() => {
+    void loadProjectPages();
+    // Intentional dependency on projectId to refresh page options on project switch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  useEffect(() => {
     if (!pageId) return;
     void loadPage(pageId);
     // Intentional dependency on pageId/projectId only to trigger navigation-based loads.
@@ -310,6 +396,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
             value={editorJson}
             onChange={setEditorJson}
             assetsById={assetsById}
+            projectPages={projectPages}
             onUploadImage={uploadImageForNode}
           />
         </div>

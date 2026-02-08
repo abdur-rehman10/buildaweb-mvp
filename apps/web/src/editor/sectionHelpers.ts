@@ -354,3 +354,68 @@ export function updateImageNodeAssetRefById(
     sections: nextSections,
   };
 }
+
+export function updateButtonNodeHrefById(
+  editorJson: JsonRecord,
+  nodeId: string,
+  nextHref: string,
+): JsonRecord {
+  const sections = asArray(editorJson.sections);
+
+  const nextSections = sections.map((section) => {
+    const sectionRecord = asRecord(section);
+    if (!sectionRecord) {
+      return section;
+    }
+
+    const blocks = asArray(sectionRecord.blocks);
+    const nextBlocks = blocks.map((block) => {
+      const blockRecord = asRecord(block);
+      if (!blockRecord) {
+        return block;
+      }
+
+      const nodes = asArray(blockRecord.nodes);
+      const nextNodes = nodes.map((node) => {
+        const nodeRecord = asRecord(node);
+        if (!nodeRecord) {
+          return node;
+        }
+
+        const type = typeof nodeRecord.type === 'string' ? nodeRecord.type : '';
+        if (getId(nodeRecord) !== nodeId || type !== 'button') {
+          return node;
+        }
+
+        return {
+          ...nodeRecord,
+          href: nextHref,
+        };
+      });
+
+      return {
+        ...blockRecord,
+        nodes: nextNodes,
+      };
+    });
+
+    return {
+      ...sectionRecord,
+      blocks: nextBlocks,
+    };
+  });
+
+  return {
+    ...editorJson,
+    sections: nextSections,
+  };
+}
+
+// Backward-compatible alias; prefer updateButtonNodeHrefById.
+export function updateButtonHrefById(
+  editorJson: JsonRecord,
+  nodeId: string,
+  nextHref: string,
+): JsonRecord {
+  return updateButtonNodeHrefById(editorJson, nodeId, nextHref);
+}
