@@ -1,39 +1,29 @@
 # PLAN.md
 
 ## Branch
-feat/publish-static-site
+feat/page-management
 
 ## Goal
-Implement MVP one-click publish that renders all project pages to static HTML/CSS and uploads to MinIO for a public URL.
+Implement page management functionality: duplicate page, delete page, and set home page.
 
 ## In Scope
-Backend:
-- POST /projects/:projectId/publish (JWT protected, scoped)
-- GET /projects/:projectId/publish/:publishId (JWT protected, scoped)
-- Render pages using existing preview renderer logic (deterministic)
-- Upload rendered HTML files (and one CSS file) to MinIO under a publish folder
-- Persist publish record/status in Mongo (minimal)
-
-Frontend:
-- Publish button in Project screen
-- Poll publish status until live
-- Show published URL link
+- Duplicate page functionality (API + UI flow)
+- Delete page functionality (API + UI flow)
+- Set home page functionality (API + UI flow)
+- Update navigation automatically when page management actions affect pages
 
 ## Out of Scope
-- Custom domains
-- CDN invalidation
-- SEO settings UI
-- Assets copying/rewriting (we will reference stable public URLs)
-- Multi-user collaboration
-- Billing
+- Any feature not explicitly listed in In Scope
 
 ## Constraints
-- Must not change existing editor JSON schema
-- Use ok/data + ok/error response contract
-- Publish must never crash if page has unknown nodes; render placeholders safely
+- Must follow existing API response shape:
+  - `{ "ok": true, "data": {} }`
+  - `{ "ok": false, "error": { "code": "", "message": "" } }`
+- All relevant endpoints must remain JWT protected
+- Pages save/update flows must preserve optimistic concurrency behavior
 
 ## Definition of Done
-- User clicks Publish → gets a public URL for the site
-- Home page available at /index.html
-- Other pages available at /<slug>/index.html
-- Publishing status can be checked and does not block server
+- Users can duplicate a page from the UI
+- Users can delete pages from the UI, except when it is the only page
+- Users can set any page as the home page from the UI
+- Navigation updates automatically to reflect page changes
