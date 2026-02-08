@@ -14,6 +14,7 @@ import {
   type ProjectSummary,
   type PublishStatus,
 } from '../../lib/api';
+import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 import { appToast } from '../../lib/toast';
 
 interface ProjectsApiScreenProps {
@@ -95,7 +96,7 @@ export function ProjectsApiScreen({
       const res = await projectsApi.list();
       setProjects(res.projects);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load projects';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load projects');
       setError(message);
     } finally {
       setLoading(false);
@@ -130,7 +131,7 @@ export function ProjectsApiScreen({
         onSelectActivePageId(null);
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load project pages';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load project pages');
       setError(message);
       setProjectPages([]);
     } finally {
@@ -145,7 +146,7 @@ export function ProjectsApiScreen({
       const nav = await navigationApi.get(projectId);
       setNavigationItems(normalizeNavigationItems(nav.items));
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load navigation';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load navigation');
       setNavigationMessage(message);
       setNavigationItems([]);
     } finally {
@@ -210,7 +211,7 @@ export function ProjectsApiScreen({
         }
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof ApiError ? err.message : 'Failed to check publish status';
+        const message = getUserFriendlyErrorMessage(err, 'Failed to check publish status');
         setPublishError(message);
         setPublishStatus('failed');
         appToast.error(message, {
@@ -324,7 +325,7 @@ export function ProjectsApiScreen({
         eventKey: `navigation-saved:${activeProjectId}`,
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to save navigation';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to save navigation');
       setNavigationMessage(message);
       appToast.error(message, {
         eventKey: `navigation-save-error:${activeProjectId}`,
@@ -357,7 +358,7 @@ export function ProjectsApiScreen({
         });
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to publish project';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to publish project');
       setPublishError(message);
       setPublishStatus('failed');
       appToast.error(message, {
@@ -401,7 +402,7 @@ export function ProjectsApiScreen({
         eventKey: `page-duplicated:${activeProjectId}:${page.id}`,
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to duplicate page';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to duplicate page');
       appToast.error(message, {
         eventKey: `page-duplicate-error:${activeProjectId}:${page.id}`,
       });
@@ -428,11 +429,13 @@ export function ProjectsApiScreen({
       const apiError = err instanceof ApiError ? err : null;
       if (apiError?.status === 409 || apiError?.code === 'VERSION_CONFLICT') {
         await refreshPagesAndNavigation(activeProjectId);
-        appToast.error(apiError.message || 'This page changed elsewhere. List refreshed.', {
+        const message = getUserFriendlyErrorMessage(err, 'This page changed elsewhere. List refreshed.');
+        appToast.error(message, {
           eventKey: `page-delete-conflict:${activeProjectId}:${page.id}`,
         });
       } else {
-        appToast.error(apiError?.message ?? 'Failed to delete page', {
+        const message = getUserFriendlyErrorMessage(err, 'Failed to delete page');
+        appToast.error(message, {
           eventKey: `page-delete-error:${activeProjectId}:${page.id}`,
         });
       }
@@ -453,7 +456,7 @@ export function ProjectsApiScreen({
         eventKey: `page-home-set:${activeProjectId}:${page.id}`,
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to set home page';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to set home page');
       appToast.error(message, {
         eventKey: `page-home-set-error:${activeProjectId}:${page.id}`,
       });
@@ -480,7 +483,7 @@ export function ProjectsApiScreen({
         eventKey: `project-created:${res.project_id}`,
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create project';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to create project');
       setError(message);
       appToast.error(message, {
         eventKey: 'project-create-error',
@@ -513,7 +516,7 @@ export function ProjectsApiScreen({
         eventKey: `page-created:${activeProjectId}:${res.page_id}`,
       });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create page';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to create page');
       setError(message);
       appToast.error(message, {
         eventKey: `page-create-error:${activeProjectId}`,

@@ -1,5 +1,5 @@
 import { toast } from 'sonner';
-import { ApiError } from './api';
+import { getUserFriendlyErrorMessage } from './error-messages';
 
 const DEFAULT_DURATION_MS = 3500;
 const DEDUPE_WINDOW_MS = 1200;
@@ -27,15 +27,7 @@ function resolveDuration(duration?: number): number {
 }
 
 export function toApiErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError) {
-    return error.message || fallback;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
+  return getUserFriendlyErrorMessage(error, fallback);
 }
 
 function notifySuccess(message: string, options?: ToastOptions) {

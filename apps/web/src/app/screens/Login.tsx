@@ -4,9 +4,10 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Logo } from '../components/Logo';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { ApiError, authApi } from '../../lib/api';
+import { authApi } from '../../lib/api';
 import { setAuthToken } from '../../lib/auth';
 import { appToast } from '../../lib/toast';
+import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 
 interface LoginProps {
   onNavigateToSignUp: () => void;
@@ -49,7 +50,7 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
       });
       onLogin();
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Login failed';
+      const message = getUserFriendlyErrorMessage(err, 'Login failed');
       appToast.error(message, {
         eventKey: 'auth-login-error',
       });

@@ -8,6 +8,7 @@ vi.mock('sonner', () => ({
 }));
 
 import { toast } from 'sonner';
+import { ApiError } from './api';
 import { appToast, resetToastDedupeStateForTests } from './toast';
 
 describe('appToast', () => {
@@ -30,6 +31,23 @@ describe('appToast', () => {
       expect.objectContaining({
         id: 'page-duplicate:project-1:page-1',
       }),
+    );
+  });
+
+  it('maps VERSION_CONFLICT to a friendly error message', () => {
+    appToast.apiError(
+      new ApiError({
+        status: 409,
+        code: 'VERSION_CONFLICT',
+        message: 'Conflict from API',
+      }),
+      'Fallback',
+      { eventKey: 'version-conflict' },
+    );
+
+    expect(toast.error).toHaveBeenCalledWith(
+      'This page was modified elsewhere. Please reload.',
+      expect.objectContaining({ id: 'version-conflict' }),
     );
   });
 });

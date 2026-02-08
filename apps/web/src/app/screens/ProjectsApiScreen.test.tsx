@@ -161,9 +161,26 @@ describe('ProjectsApiScreen toasts', () => {
 
     await waitFor(() => {
       expect(appToast.error).toHaveBeenCalledWith(
-        'Page changed elsewhere',
+        'This page was modified elsewhere. Please reload.',
         expect.objectContaining({
           eventKey: 'page-delete-conflict:project-1:page-home',
+        }),
+      );
+    });
+  });
+
+  it('shows a friendly network error message when an API call fails due to network', async () => {
+    vi.mocked(pagesApi.duplicate).mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderScreen();
+    await screen.findAllByRole('button', { name: 'Duplicate' });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Duplicate' })[0]);
+
+    await waitFor(() => {
+      expect(appToast.error).toHaveBeenCalledWith(
+        'Network error. Please check your connection and try again.',
+        expect.objectContaining({
+          eventKey: 'page-duplicate-error:project-1:page-home',
         }),
       );
     });

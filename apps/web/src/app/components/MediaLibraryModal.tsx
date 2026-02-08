@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { assetsApi, ApiError, type ProjectAsset } from '../../lib/api';
+import { assetsApi, type ProjectAsset } from '../../lib/api';
 import { appToast } from '../../lib/toast';
+import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 import { Button } from './Button';
 import { Card } from './Card';
 
@@ -48,7 +49,7 @@ export function MediaLibraryModal({ isOpen, projectId, onClose, onSelect }: Medi
       })
       .catch((err) => {
         if (cancelled) return;
-        const message = err instanceof ApiError ? err.message : 'Failed to load media library';
+        const message = getUserFriendlyErrorMessage(err, 'Failed to load media library');
         setError(message);
         appToast.error(message, {
           eventKey: `media-library-load-error:${projectId}`,
