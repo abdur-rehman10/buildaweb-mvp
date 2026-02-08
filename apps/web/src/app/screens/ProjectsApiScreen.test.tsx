@@ -287,6 +287,48 @@ describe('ProjectsApiScreen toasts', () => {
     expect(aboutLink.getAttribute('href')).toBe(aboutPageUrl);
   });
 
+  it('maps slug "home" to root index.html for published page URLs', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({
+      pages: [
+        {
+          id: 'page-home',
+          title: 'Home',
+          slug: 'home',
+          isHome: false,
+          version: 1,
+        },
+        {
+          id: 'page-about',
+          title: 'About',
+          slug: 'about',
+          isHome: false,
+          version: 1,
+        },
+      ],
+    });
+
+    const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-home-slug/';
+    vi.mocked(publishApi.create).mockResolvedValue({
+      publishId: 'publish-home-slug',
+      status: 'live',
+      url: publishedBaseUrl,
+    });
+
+    renderScreen();
+
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    fireEvent.click(publishButton);
+
+    const expectedHomeUrl = `${publishedBaseUrl}index.html`;
+    const homeUrlLink = await screen.findByRole('link', { name: expectedHomeUrl });
+    expect(homeUrlLink.getAttribute('href')).toBe(expectedHomeUrl);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Home URL' }));
+    await waitFor(() => {
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(expectedHomeUrl);
+    });
+  });
+
   it('shows Live status and link on initial render when latest publish exists', async () => {
     const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-2/';
     vi.mocked(publishApi.getLatest).mockResolvedValueOnce({
