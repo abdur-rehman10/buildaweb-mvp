@@ -29,6 +29,43 @@ function normalizePublishedBaseUrl(baseUrl: string): string {
   return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 }
 
+function parseBooleanEnv(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function toPublishedDisplayBaseUrl(baseUrl: string): string {
+  const normalizedBase = normalizePublishedBaseUrl(baseUrl);
+  const proxyBase = (import.meta.env.VITE_PRETTY_URL_PROXY_BASE_URL as string | undefined)?.trim();
+  if (!proxyBase) return normalizedBase;
+
+  try {
+    const originalUrl = new URL(normalizedBase);
+    const proxyUrl = new URL(proxyBase.endsWith('/') ? proxyBase : `${proxyBase}/`);
+    return `${proxyUrl.origin}${originalUrl.pathname}`;
+  } catch {
+    return normalizedBase;
+  }
+}
+
+function shouldUsePrettySubpageUrls(displayBaseUrl: string): boolean {
+  const envPrettyUrls = parseBooleanEnv(import.meta.env.VITE_PUBLISH_PRETTY_SUBPAGE_URLS as string | undefined);
+  if (envPrettyUrls) return true;
+
+  try {
+    const parsed = new URL(displayBaseUrl);
+    return parsed.port === '8080';
+  } catch {
+    return false;
+  }
+}
+
+function toPublishedHomeUrl(baseUrl: string): string {
+  const normalizedBase = normalizePublishedBaseUrl(baseUrl);
+  return `${normalizedBase}index.html`;
+}
+
 function normalizePublishedPagePath(params: { slug?: string; isHome?: boolean }) {
   if (params.isHome) return '';
   const raw = (params.slug ?? '').trim();
@@ -36,13 +73,26 @@ function normalizePublishedPagePath(params: { slug?: string; isHome?: boolean })
   return `${raw.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
 }
 
-function toPublishedPageUrl(baseUrl: string, page: Pick<PageMetaSummary, 'slug' | 'isHome'>) {
+function toPublishedPageUrl(params: {
+  baseUrl: string;
+  page: Pick<PageMetaSummary, 'slug' | 'isHome'>;
+  usePrettySubpageUrls: boolean;
+}) {
+  const { baseUrl, page, usePrettySubpageUrls } = params;
   const normalizedBase = normalizePublishedBaseUrl(baseUrl);
   const pagePath = normalizePublishedPagePath({
     slug: page.slug,
     isHome: page.isHome,
   });
-  return `${normalizedBase}${pagePath}`;
+  if (!pagePath) {
+    return toPublishedHomeUrl(normalizedBase);
+  }
+
+  if (usePrettySubpageUrls) {
+    return `${normalizedBase}${pagePath}`;
+  }
+
+  return `${normalizedBase}${pagePath}index.html`;
 }
 
 export function ProjectsApiScreen({
@@ -82,7 +132,9 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
-  const publishedHomeUrl = publishedUrl ? normalizePublishedBaseUrl(publishedUrl) : null;
+  const publishedBaseUrl = publishedUrl ? toPublishedDisplayBaseUrl(publishedUrl) : null;
+  const usePrettySubpageUrls = publishedBaseUrl ? shouldUsePrettySubpageUrls(publishedBaseUrl) : false;
+  const publishedHomeUrl = publishedBaseUrl ? toPublishedHomeUrl(publishedBaseUrl) : null;
   const publishDisabledReason =
     publishStarting || publishStatus === 'publishing'
       ? 'Publishing is already in progress.'
@@ -660,7 +712,7 @@ export function ProjectsApiScreen({
                   {publishError}
                 </p>
               )}
-              {publishStatus === 'live' && publishedHomeUrl && (
+              {publishStatus === 'live' && publishedBaseUrl && publishedHomeUrl && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <a
@@ -677,7 +729,11 @@ export function ProjectsApiScreen({
                   </div>
                   <div className="space-y-1">
                     {projectPages.map((page) => {
-                      const pageUrl = toPublishedPageUrl(publishedHomeUrl, page);
+                      const pageUrl = toPublishedPageUrl({
+                        baseUrl: publishedBaseUrl,
+                        page,
+                        usePrettySubpageUrls,
+                      });
                       return (
                         <div key={`published-url-${page.id}`} className="flex items-center gap-2 text-xs">
                           <span className="min-w-24 text-muted-foreground">{page.title}</span>
