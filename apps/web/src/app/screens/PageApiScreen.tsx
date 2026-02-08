@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
-import { ApiError, assetsApi, pagesApi, type PageMetaSummary } from '../../lib/api';
+import { MediaLibraryModal } from '../components/MediaLibraryModal';
+import { ApiError, assetsApi, pagesApi, type PageMetaSummary, type ProjectAsset } from '../../lib/api';
 import { RendererStub } from '../../editor/RendererStub';
-import { addSection, type SectionPresetType, updateImageNodeAssetRefById } from '../../editor/sectionHelpers';
+import {
+  addSection,
+  type SectionPresetType,
+  updateImageNodeAssetById,
+  updateImageNodeAssetRefById,
+} from '../../editor/sectionHelpers';
 
 interface PageApiScreenProps {
   projectId: string;
@@ -69,6 +76,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [projectPages, setProjectPages] = useState<PageMetaSummary[]>([]);
   const [assetsById, setAssetsById] = useState<Record<string, string>>({});
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
+  const [mediaLibraryNodeId, setMediaLibraryNodeId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -278,6 +286,18 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     }
   };
 
+  const insertFromMediaLibrary = (nodeId: string, asset: ProjectAsset) => {
+    setAssetsById((prev) => ({ ...prev, [asset.id]: asset.publicUrl }));
+    setEditorJson((prev) =>
+      updateImageNodeAssetById(prev, nodeId, {
+        assetId: asset.id,
+        publicUrl: asset.publicUrl,
+      }),
+    );
+    setMediaLibraryNodeId(null);
+    toast.success('Image inserted from media library');
+  };
+
   useEffect(() => {
     void loadProjectPages();
     // Intentional dependency on projectId to refresh page options on project switch.
@@ -403,6 +423,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
             assetsById={assetsById}
             projectPages={projectPages}
             onUploadImage={uploadImageForNode}
+            onOpenMediaLibrary={setMediaLibraryNodeId}
           />
         </div>
 
@@ -447,6 +468,15 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
           </div>
         )}
       </Card>
+      <MediaLibraryModal
+        isOpen={!!mediaLibraryNodeId}
+        projectId={projectId}
+        onClose={() => setMediaLibraryNodeId(null)}
+        onSelect={(asset) => {
+          if (!mediaLibraryNodeId) return;
+          insertFromMediaLibrary(mediaLibraryNodeId, asset);
+        }}
+      />
     </div>
   );
 }
