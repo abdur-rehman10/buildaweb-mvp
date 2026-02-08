@@ -16,6 +16,7 @@ type RendererStubProps = {
   assetsById: Record<string, string>;
   projectPages: Array<{ id: string; title?: string; slug?: string }>;
   onUploadImage: (nodeId: string, file: File) => Promise<{ assetId: string; publicUrl: string }>;
+  onOpenMediaLibrary: (nodeId: string) => void;
 };
 
 function asRecord(value: unknown): JsonRecord | null {
@@ -95,7 +96,14 @@ function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string, nextT
   return { ...editorJson, sections: nextSections };
 }
 
-export function RendererStub({ value, onChange, assetsById, projectPages, onUploadImage }: RendererStubProps) {
+export function RendererStub({
+  value,
+  onChange,
+  assetsById,
+  projectPages,
+  onUploadImage,
+  onOpenMediaLibrary,
+}: RendererStubProps) {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
   const [uploadingNodeId, setUploadingNodeId] = useState<string | null>(null);
@@ -406,7 +414,9 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                           );
                         } else if (type === 'image') {
                           const assetRef = getAssetRef(nodeRecord);
-                          const resolvedUrl = assetRef ? getText(assetsById[assetRef], '').trim() : '';
+                          const resolvedFromAssetRef = assetRef ? getText(assetsById[assetRef], '').trim() : '';
+                          const fallbackUrl = getText(nodeRecord.src, getText(nodeRecord.url, '')).trim();
+                          const resolvedUrl = resolvedFromAssetRef || fallbackUrl;
                           const alt = getText(nodeRecord.alt, 'Image');
 
                           if (!resolvedUrl) {
@@ -437,6 +447,14 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                                     >
                                       {uploadingNodeId === nodeId ? 'Uploading...' : 'Upload/Replace'}
                                     </button>
+                                    <button
+                                      type="button"
+                                      className="border rounded px-2 py-1 text-xs"
+                                      onClick={() => onOpenMediaLibrary(nodeId)}
+                                      disabled={uploadingNodeId === nodeId}
+                                    >
+                                      Media Library
+                                    </button>
                                   </>
                                 )}
                               </div>
@@ -466,6 +484,14 @@ export function RendererStub({ value, onChange, assetsById, projectPages, onUplo
                                       disabled={uploadingNodeId === nodeId}
                                     >
                                       {uploadingNodeId === nodeId ? 'Uploading...' : 'Upload/Replace'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="border rounded px-2 py-1 text-xs"
+                                      onClick={() => onOpenMediaLibrary(nodeId)}
+                                      disabled={uploadingNodeId === nodeId}
+                                    >
+                                      Media Library
                                     </button>
                                   </>
                                 )}
