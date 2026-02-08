@@ -148,6 +148,15 @@ export type GetProjectResult = {
   project: ProjectSummary;
 };
 
+export type SetProjectHomeInput = {
+  pageId: string;
+};
+
+export type SetProjectHomeResult = {
+  homePageId: string;
+  slug: '/';
+};
+
 export type CreatePageInput = {
   title: string;
   slug: string;
@@ -208,13 +217,14 @@ export type UpdatePageMetaResult = {
   page: PageMetaSummary;
 };
 
-export type DuplicatePageInput = {
-  title: string;
-  slug: string;
+export type DuplicatePageResult = {
+  page?: PageMetaSummary;
+  page_id?: string;
 };
 
-export type DuplicatePageResult = {
-  page_id: string;
+export type DuplicatePageInput = {
+  title?: string;
+  slug?: string;
 };
 
 export type DeletePageResult = {
@@ -301,6 +311,12 @@ export const projectsApi = {
       method: 'GET',
     });
   },
+  setHome(projectId: string, input: SetProjectHomeInput) {
+    return apiRequest<SetProjectHomeResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/home`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
 };
 
 export const pagesApi = {
@@ -341,18 +357,19 @@ export const pagesApi = {
       },
     );
   },
-  duplicate(projectId: string, pageId: string, input: DuplicatePageInput) {
+  duplicate(projectId: string, pageId: string, input?: DuplicatePageInput) {
     return apiRequest<DuplicatePageResult>(
       `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/duplicate`,
       {
         method: 'POST',
-        body: JSON.stringify(input),
+        ...(input ? { body: JSON.stringify(input) } : {}),
       },
     );
   },
-  remove(projectId: string, pageId: string) {
+  remove(projectId: string, pageId: string, version?: number) {
+    const query = typeof version === 'number' ? `?version=${encodeURIComponent(String(version))}` : '';
     return apiRequest<DeletePageResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}${query}`,
       {
         method: 'DELETE',
       },

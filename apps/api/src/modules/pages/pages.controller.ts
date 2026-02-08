@@ -11,9 +11,11 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Types } from 'mongoose';
 import { ok, fail } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
@@ -21,7 +23,6 @@ import { LastPageForbiddenException, PageSlugConflictException, PagesService } f
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdatePageMetaDto } from './dto/update-page-meta.dto';
-import { DuplicatePageDto } from './dto/duplicate-page.dto';
 
 @Controller('projects/:projectId/pages')
 @UseGuards(JwtAuthGuard)
@@ -30,6 +31,19 @@ export class PagesController {
     private readonly pages: PagesService,
     private readonly projects: ProjectsService,
   ) {}
+
+  private isValidObjectId(value: string) {
+    return Types.ObjectId.isValid(value);
+  }
+
+  private parseOptionalVersion(value?: string) {
+    if (typeof value === 'undefined') return undefined;
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      throw new HttpException(fail('INVALID_VERSION', 'Invalid version'), HttpStatus.BAD_REQUEST);
+    }
+    return parsed;
+  }
 
   @Post()
   async createPage(@Param('projectId') projectId: string, @Body() dto: CreatePageDto, @Req() req: any) {
@@ -135,9 +149,12 @@ export class PagesController {
   async duplicatePage(
     @Param('projectId') projectId: string,
     @Param('pageId') pageId: string,
-    @Body() dto: DuplicatePageDto,
     @Req() req: any,
   ) {
+    if (!this.isValidObjectId(projectId) || !this.isValidObjectId(pageId)) {
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+    }
+
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
@@ -151,11 +168,18 @@ export class PagesController {
         tenantId,
         projectId,
         pageId,
-        title: dto.title,
-        slug: dto.slug,
       });
 
-      return ok({ page_id: String(duplicated._id) });
+      return ok({
+        page: {
+          id: String(duplicated._id),
+          title: duplicated.title,
+          slug: duplicated.slug,
+          isHome: duplicated.isHome,
+          updatedAt: duplicated.updatedAt,
+          version: duplicated.version,
+        },
+      });
     } catch (error) {
       if (error instanceof PageSlugConflictException || error instanceof ConflictException) {
         throw new HttpException(fail('SLUG_ALREADY_EXISTS', 'Slug already exists'), HttpStatus.CONFLICT);
@@ -211,7 +235,17 @@ export class PagesController {
   }
 
   @Delete(':pageId')
-  async deletePage(@Param('projectId') projectId: string, @Param('pageId') pageId: string, @Req() req: any) {
+  async deletePage(
+    @Param('projectId') projectId: string,
+    @Param('pageId') pageId: string,
+    @Req() req: any,
+    @Query('version') version?: string,
+  ) {
+    if (!this.isValidObjectId(projectId) || !this.isValidObjectId(pageId)) {
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+    }
+
+    const parsedVersion = this.parseOptionalVersion(version);
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
@@ -221,9 +255,16 @@ export class PagesController {
     }
 
     try {
-      await this.pages.deletePage({ tenantId, projectId, pageId });
+      await this.pages.deletePage({ tenantId, projectId, pageId, version: parsedVersion });
       return ok({ deleted: true });
     } catch (error) {
+      if (error instanceof ConflictException) {
+        throw new HttpException(
+          fail('VERSION_CONFLICT', 'Page changed elsewhere'),
+          HttpStatus.CONFLICT,
+        );
+      }
+
       if (error instanceof LastPageForbiddenException) {
         throw new HttpException(
           fail('LAST_PAGE_FORBIDDEN', 'Cannot delete last remaining page'),
