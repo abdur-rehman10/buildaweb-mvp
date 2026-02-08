@@ -1,25 +1,21 @@
 # PLAN.md
 
 ## Branch
-feat/pretty-urls
+feat/reverse-proxy-pretty-urls
 
 ## Goal
-Remove `index.html` from user-facing URLs in previews and published sites while still serving static pages correctly.
+Configure an Nginx reverse proxy in front of MinIO to serve `index.html` automatically when a directory URL is requested, and to rewrite any request containing `/index.html` to its directory form.
 
 ## In Scope
-- Adjust the preview route to handle paths with or without `index.html`.
-- Generate navigation links using directory paths (trailing slashes) instead of `index.html`.
-- Update the publish UI to display links without `index.html`.
-- Ensure that published sites still load correctly from static storage.
+- Add an Nginx configuration file with rewrite rules for pretty URLs.
+- Integrate Nginx into the existing Docker Compose setup.
+- Expose the reverse proxy on a suitable local port (for example, `8080`).
+- Test that a directory URL such as `/home/` resolves correctly.
 
 ## Out of Scope
-- Server-level rewrite rules (for example, NGINX).
-- Custom domains.
-
-## Constraints
-- Must not break existing preview/publish behavior.
-- Must continue using relative links to ensure nested pages resolve correctly.
+- Production deployment (this setup is for local development only).
+- TLS/HTTPS configuration.
 
 ## Definition of Done
-- All links in previews and published sites omit `index.html`.
-- Users can navigate to pages via `/about/` instead of `/about/index.html`.
+- Visiting `/.../home/` in a browser returns the same content as `/.../home/index.html`.
+- Accessing `/index.html` automatically redirects to the directory URL.
