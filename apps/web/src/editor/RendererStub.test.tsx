@@ -1,10 +1,11 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { RendererStub } from './RendererStub';
 
 describe('RendererStub image actions', () => {
   it('opens media library callback when clicking Media Library button', () => {
-    const onOpenMediaLibrary = jest.fn();
+    const onOpenMediaLibrary = vi.fn();
 
     render(
       <RendererStub
