@@ -99,6 +99,13 @@ describe('ProjectsApiScreen toasts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
+    Object.defineProperty(window.navigator, 'clipboard', {
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+      configurable: true,
+    });
+
     vi.mocked(projectsApi.list).mockResolvedValue({
       projects: [project],
     });
@@ -221,5 +228,38 @@ describe('ProjectsApiScreen toasts', () => {
 
     expect((setHomeButtons[0] as HTMLButtonElement).disabled).toBe(true);
     expect(setHomeButtons[0].getAttribute('title')).toBe('This page is already the home page.');
+  });
+
+  it('shows published links without index.html and uses pretty URLs for copy', async () => {
+    const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-1/';
+    vi.mocked(publishApi.create).mockResolvedValue({
+      publishId: 'publish-1',
+      status: 'live',
+      url: publishedBaseUrl,
+    });
+
+    renderScreen();
+
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    fireEvent.click(publishButton);
+
+    const homeLink = await screen.findByRole('link', { name: 'Open published site' });
+    expect(homeLink.getAttribute('href')).toBe(publishedBaseUrl);
+
+    const aboutPageUrl = `${publishedBaseUrl}about/`;
+    const aboutLink = await screen.findByRole('link', { name: aboutPageUrl });
+    expect(aboutLink.getAttribute('href')).toBe(aboutPageUrl);
+
+    expect(screen.queryByText(/index\.html/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy URL' }));
+    await waitFor(() => {
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(publishedBaseUrl);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy About URL' }));
+    await waitFor(() => {
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(aboutPageUrl);
+    });
   });
 });
