@@ -71,9 +71,9 @@ export class PreviewRendererService {
     const prefix = this.relPrefix(depth);
     const normalizedTarget = this.normalizeSlug(targetSlug);
     if (normalizedTarget === '/') {
-      return `${prefix}index.html`;
+      return depth <= 0 ? '/' : prefix;
     }
-    return `${prefix}${normalizedTarget.slice(1)}/index.html`;
+    return `${prefix}${normalizedTarget.slice(1)}/`;
   }
 
   private getTextTag(record: JsonRecord): 'h1' | 'h2' | 'p' {
