@@ -230,7 +230,7 @@ describe('ProjectsApiScreen toasts', () => {
     expect(setHomeButtons[0].getAttribute('title')).toBe('This page is already the home page.');
   });
 
-  it('shows published links without index.html and uses pretty URLs for copy', async () => {
+  it('shows published root and subpage links with index.html by default and copies those URLs', async () => {
     const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-1/';
     vi.mocked(publishApi.create).mockResolvedValue({
       publishId: 'publish-1',
@@ -243,23 +243,45 @@ describe('ProjectsApiScreen toasts', () => {
     const publishButton = await screen.findByRole('button', { name: 'Publish' });
     fireEvent.click(publishButton);
 
+    const homePageUrl = `${publishedBaseUrl}index.html`;
     const homeLink = await screen.findByRole('link', { name: 'Open published site' });
-    expect(homeLink.getAttribute('href')).toBe(publishedBaseUrl);
+    expect(homeLink.getAttribute('href')).toBe(homePageUrl);
 
-    const aboutPageUrl = `${publishedBaseUrl}about/`;
+    const aboutPageUrl = `${publishedBaseUrl}about/index.html`;
     const aboutLink = await screen.findByRole('link', { name: aboutPageUrl });
     expect(aboutLink.getAttribute('href')).toBe(aboutPageUrl);
 
-    expect(screen.queryByText(/index\.html/i)).toBeNull();
+    expect(screen.getAllByText(/index\.html/i).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy URL' }));
     await waitFor(() => {
-      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(publishedBaseUrl);
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(homePageUrl);
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy About URL' }));
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(aboutPageUrl);
     });
+  });
+
+  it('shows pretty directory subpage links when publish URL uses proxy port', async () => {
+    const proxyPublishedBaseUrl = 'http://localhost:8080/buildaweb-sites/tenant/project/publish-1/';
+    vi.mocked(publishApi.create).mockResolvedValue({
+      publishId: 'publish-1',
+      status: 'live',
+      url: proxyPublishedBaseUrl,
+    });
+
+    renderScreen();
+
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    fireEvent.click(publishButton);
+
+    const homeLink = await screen.findByRole('link', { name: 'Open published site' });
+    expect(homeLink.getAttribute('href')).toBe(`${proxyPublishedBaseUrl}index.html`);
+
+    const aboutPageUrl = `${proxyPublishedBaseUrl}about/`;
+    const aboutLink = await screen.findByRole('link', { name: aboutPageUrl });
+    expect(aboutLink.getAttribute('href')).toBe(aboutPageUrl);
   });
 });
