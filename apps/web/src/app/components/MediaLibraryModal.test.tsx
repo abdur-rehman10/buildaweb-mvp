@@ -64,7 +64,7 @@ describe('MediaLibraryModal', () => {
 
     await waitFor(() => {
       const alert = screen.getByRole('alert');
-      expect(alert.textContent).toContain('Failed to load media library');
+      expect(alert.textContent).toContain('Load failed');
     });
   });
 

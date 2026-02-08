@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import { ApiError, assetsApi, pagesApi, type PageMetaSummary, type ProjectAsset } from '../../lib/api';
+import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
+import { appToast } from '../../lib/toast';
 import { RendererStub } from '../../editor/RendererStub';
 import {
   addSection,
@@ -137,8 +138,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
             }
           }
         } catch (err) {
-          const apiError = err instanceof ApiError ? err : null;
-          loadedMessage = apiError?.message ?? 'Page loaded, but image rehydration failed';
+          loadedMessage = getUserFriendlyErrorMessage(err, 'Page loaded, but image rehydration failed');
         }
       }
 
@@ -146,8 +146,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       onPageIdChange(targetPageId);
       setMessage(loadedMessage);
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : null;
-      setMessage(apiError?.message ?? 'Failed to load page');
+      setMessage(getUserFriendlyErrorMessage(err, 'Failed to load page'));
     } finally {
       setLoading(false);
     }
@@ -183,9 +182,15 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setPageSlugInput(res.page.slug);
       setVersion(res.page.version);
       setMessage('Page metadata saved');
+      appToast.success('Page metadata saved', {
+        eventKey: `page-meta-saved:${projectId}:${targetPageId}`,
+      });
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : null;
-      setMessage(apiError?.message ?? 'Failed to save page metadata');
+      const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to save page metadata');
+      setMessage(nextMessage);
+      appToast.error(nextMessage, {
+        eventKey: `page-meta-save-error:${projectId}:${targetPageId}`,
+      });
     } finally {
       setMetaSaving(false);
     }
@@ -215,15 +220,24 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       const nextPageId = res.page_id ?? res.page?.id;
       if (!nextPageId) {
         setMessage('Page duplicated, but no page id returned');
+        appToast.error('Page duplicated, but no page id returned', {
+          eventKey: `page-duplicate-missing-id:${projectId}:${targetPageId}`,
+        });
         return;
       }
       onPageIdChange(nextPageId);
       setPageIdInput(nextPageId);
       await loadPage(nextPageId);
       setMessage('Page duplicated');
+      appToast.success('Page duplicated', {
+        eventKey: `page-duplicated:${projectId}:${targetPageId}`,
+      });
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : null;
-      setMessage(apiError?.message ?? 'Failed to duplicate page');
+      const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to duplicate page');
+      setMessage(nextMessage);
+      appToast.error(nextMessage, {
+        eventKey: `page-duplicate-error:${projectId}:${targetPageId}`,
+      });
     } finally {
       setDuplicating(false);
     }
@@ -246,9 +260,15 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       }
       onPageIdChange(null);
       onBackToProjects();
+      appToast.success('Page deleted', {
+        eventKey: `page-deleted:${projectId}:${targetPageId}`,
+      });
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : null;
-      setMessage(apiError?.message ?? 'Failed to delete page');
+      const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to delete page');
+      setMessage(nextMessage);
+      appToast.error(nextMessage, {
+        eventKey: `page-delete-error:${projectId}:${targetPageId}`,
+      });
     } finally {
       setDeleting(false);
     }
@@ -265,8 +285,11 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setPreviewHash(preview.hash);
       setPreviewSrcDoc(`<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`);
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : null;
-      setMessage(apiError?.message ?? 'Failed to load preview');
+      const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to load preview');
+      setMessage(nextMessage);
+      appToast.error(nextMessage, {
+        eventKey: `page-preview-error:${projectId}:${targetPageId}`,
+      });
     } finally {
       setPreviewLoading(false);
     }
@@ -278,10 +301,16 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       const uploaded = await assetsApi.upload(projectId, file);
       setAssetsById((prev) => ({ ...prev, [uploaded.assetId]: uploaded.publicUrl }));
       setEditorJson((prev) => updateImageNodeAssetRefById(prev, nodeId, uploaded.assetId));
+      appToast.success('Image uploaded', {
+        eventKey: `asset-uploaded:${projectId}:${uploaded.assetId}`,
+      });
       return uploaded;
     } catch (err) {
-      const apiError = err instanceof ApiError ? err : null;
-      setMessage(apiError?.message ?? 'Failed to upload image');
+      const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to upload image');
+      setMessage(nextMessage);
+      appToast.error(nextMessage, {
+        eventKey: `asset-upload-error:${projectId}:${nodeId}`,
+      });
       throw err;
     }
   };
@@ -295,7 +324,9 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       }),
     );
     setMediaLibraryNodeId(null);
-    toast.success('Image inserted from media library');
+    appToast.success('Image inserted from media library', {
+      eventKey: `media-library-insert:${projectId}:${nodeId}:${asset.id}`,
+    });
   };
 
   useEffect(() => {
@@ -325,13 +356,24 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setVersion(res.version);
       onPageIdChange(targetPageId);
       setMessage('Page saved');
+      appToast.success('Page saved', {
+        eventKey: `page-saved:${projectId}:${targetPageId}:${res.version}`,
+      });
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
       if (apiError?.status === 409 || apiError?.code === 'VERSION_CONFLICT') {
-        setMessage('This page was changed elsewhere. Reload required.');
+        const conflictMessage = getUserFriendlyErrorMessage(err, 'This page was changed elsewhere. Reload required.');
+        setMessage(conflictMessage);
+        appToast.error(conflictMessage, {
+          eventKey: `page-save-conflict:${projectId}:${targetPageId}`,
+        });
         return;
       }
-      setMessage(apiError?.message ?? 'Failed to save page');
+      const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to save page');
+      setMessage(nextMessage);
+      appToast.error(nextMessage, {
+        eventKey: `page-save-error:${projectId}:${targetPageId}`,
+      });
     } finally {
       setSaving(false);
     }

@@ -61,10 +61,19 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers,
+    });
+  } catch {
+    throw new ApiError({
+      status: 0,
+      code: 'NETWORK_ERROR',
+      message: 'Network request failed',
+    });
+  }
 
   const body = (await parseJson(response)) as ApiEnvelope<T> | null;
 

@@ -3,7 +3,6 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { toast } from 'sonner';
 import {
   ApiError,
   navigationApi,
@@ -15,6 +14,8 @@ import {
   type ProjectSummary,
   type PublishStatus,
 } from '../../lib/api';
+import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
+import { appToast } from '../../lib/toast';
 
 interface ProjectsApiScreenProps {
   activeProjectId: string | null;
@@ -66,6 +67,12 @@ export function ProjectsApiScreen({
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
   const publishedHomeUrl = publishedUrl ? toPublishedHomeUrl(publishedUrl) : null;
+  const publishDisabledReason =
+    publishStarting || publishStatus === 'publishing'
+      ? 'Publishing is already in progress.'
+      : projectPages.length === 0
+        ? 'Create at least one page before publishing.'
+        : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -89,7 +96,7 @@ export function ProjectsApiScreen({
       const res = await projectsApi.list();
       setProjects(res.projects);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load projects';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load projects');
       setError(message);
     } finally {
       setLoading(false);
@@ -124,7 +131,7 @@ export function ProjectsApiScreen({
         onSelectActivePageId(null);
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load project pages';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load project pages');
       setError(message);
       setProjectPages([]);
     } finally {
@@ -139,7 +146,7 @@ export function ProjectsApiScreen({
       const nav = await navigationApi.get(projectId);
       setNavigationItems(normalizeNavigationItems(nav.items));
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to load navigation';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load navigation');
       setNavigationMessage(message);
       setNavigationItems([]);
     } finally {
@@ -188,18 +195,28 @@ export function ProjectsApiScreen({
         setPublishedUrl(result.url);
 
         if (result.status === 'failed') {
-          setPublishError(result.errorMessage ?? 'Publish failed');
+          const message = result.errorMessage ?? 'Publish failed';
+          setPublishError(message);
+          appToast.error(message, {
+            eventKey: `publish-failed:${publishId}`,
+          });
           return;
         }
 
         if (result.status === 'live') {
           setPublishError(null);
+          appToast.success('Project published successfully', {
+            eventKey: `publish-live:${publishId}`,
+          });
         }
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof ApiError ? err.message : 'Failed to check publish status';
+        const message = getUserFriendlyErrorMessage(err, 'Failed to check publish status');
         setPublishError(message);
         setPublishStatus('failed');
+        appToast.error(message, {
+          eventKey: `publish-status-error:${publishId}`,
+        });
       }
     };
 
@@ -304,9 +321,15 @@ export function ProjectsApiScreen({
       });
       setNavigationItems(normalizeNavigationItems(res.items));
       setNavigationMessage('Navigation saved');
+      appToast.success('Navigation saved', {
+        eventKey: `navigation-saved:${activeProjectId}`,
+      });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to save navigation';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to save navigation');
       setNavigationMessage(message);
+      appToast.error(message, {
+        eventKey: `navigation-save-error:${activeProjectId}`,
+      });
     } finally {
       setSavingNavigation(false);
     }
@@ -323,14 +346,24 @@ export function ProjectsApiScreen({
       setPublishId(result.publishId);
       setPublishStatus(result.status);
       setPublishedUrl(result.url);
+      appToast.success('Publish started', {
+        eventKey: `publish-started:${result.publishId}`,
+      });
 
       if (result.status === 'failed') {
-        setPublishError(result.errorMessage ?? 'Publish failed');
+        const message = result.errorMessage ?? 'Publish failed';
+        setPublishError(message);
+        appToast.error(message, {
+          eventKey: `publish-failed:${result.publishId}`,
+        });
       }
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to publish project';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to publish project');
       setPublishError(message);
       setPublishStatus('failed');
+      appToast.error(message, {
+        eventKey: `publish-start-error:${activeProjectId}`,
+      });
     } finally {
       setPublishStarting(false);
     }
@@ -342,8 +375,14 @@ export function ProjectsApiScreen({
     try {
       await window.navigator.clipboard.writeText(publishedHomeUrl);
       setPublishMessage('URL copied');
+      appToast.success('Published URL copied', {
+        eventKey: `publish-url-copied:${activeProjectId ?? 'unknown'}`,
+      });
     } catch {
       setPublishMessage('Failed to copy URL');
+      appToast.error('Failed to copy published URL', {
+        eventKey: `publish-url-copy-error:${activeProjectId ?? 'unknown'}`,
+      });
     }
   };
 
@@ -359,10 +398,14 @@ export function ProjectsApiScreen({
     try {
       await pagesApi.duplicate(activeProjectId, page.id);
       await refreshPagesAndNavigation(activeProjectId);
-      toast.success(`Duplicated "${page.title}"`);
+      appToast.success(`Duplicated "${page.title}"`, {
+        eventKey: `page-duplicated:${activeProjectId}:${page.id}`,
+      });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to duplicate page';
-      toast.error(message);
+      const message = getUserFriendlyErrorMessage(err, 'Failed to duplicate page');
+      appToast.error(message, {
+        eventKey: `page-duplicate-error:${activeProjectId}:${page.id}`,
+      });
     } finally {
       setDuplicatingPageId(null);
     }
@@ -379,14 +422,22 @@ export function ProjectsApiScreen({
       }
 
       await refreshPagesAndNavigation(activeProjectId);
-      toast.success(`Deleted "${page.title}"`);
+      appToast.success(`Deleted "${page.title}"`, {
+        eventKey: `page-deleted:${activeProjectId}:${page.id}`,
+      });
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
       if (apiError?.status === 409 || apiError?.code === 'VERSION_CONFLICT') {
         await refreshPagesAndNavigation(activeProjectId);
-        toast.error('This page changed elsewhere. List refreshed.');
+        const message = getUserFriendlyErrorMessage(err, 'This page changed elsewhere. List refreshed.');
+        appToast.error(message, {
+          eventKey: `page-delete-conflict:${activeProjectId}:${page.id}`,
+        });
       } else {
-        toast.error(apiError?.message ?? 'Failed to delete page');
+        const message = getUserFriendlyErrorMessage(err, 'Failed to delete page');
+        appToast.error(message, {
+          eventKey: `page-delete-error:${activeProjectId}:${page.id}`,
+        });
       }
     } finally {
       setDeletingPageId(null);
@@ -401,10 +452,14 @@ export function ProjectsApiScreen({
     try {
       await projectsApi.setHome(activeProjectId, { pageId: page.id });
       await refreshPagesAndNavigation(activeProjectId);
-      toast.success(`"${page.title}" set as home page`);
+      appToast.success(`"${page.title}" set as home page`, {
+        eventKey: `page-home-set:${activeProjectId}:${page.id}`,
+      });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to set home page';
-      toast.error(message);
+      const message = getUserFriendlyErrorMessage(err, 'Failed to set home page');
+      appToast.error(message, {
+        eventKey: `page-home-set-error:${activeProjectId}:${page.id}`,
+      });
     } finally {
       setSettingHomePageId(null);
     }
@@ -424,9 +479,15 @@ export function ProjectsApiScreen({
       setName('');
       await loadProjects();
       onSelectProject(res.project_id);
+      appToast.success('Project created', {
+        eventKey: `project-created:${res.project_id}`,
+      });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create project';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to create project');
       setError(message);
+      appToast.error(message, {
+        eventKey: 'project-create-error',
+      });
     } finally {
       setCreating(false);
     }
@@ -451,9 +512,15 @@ export function ProjectsApiScreen({
       await loadProjectPages(activeProjectId);
 
       onOpenPage(activeProjectId, res.page_id);
+      appToast.success('Page created', {
+        eventKey: `page-created:${activeProjectId}:${res.page_id}`,
+      });
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : 'Failed to create page';
+      const message = getUserFriendlyErrorMessage(err, 'Failed to create page');
       setError(message);
+      appToast.error(message, {
+        eventKey: `page-create-error:${activeProjectId}`,
+      });
     } finally {
       setCreatingPage(false);
     }
@@ -481,7 +548,7 @@ export function ProjectsApiScreen({
             onChange={(e) => setDefaultLocale(e.target.value)}
             placeholder="en"
           />
-          <Button type="submit" disabled={creating}>
+          <Button type="submit" disabled={creating || !name.trim()}>
             {creating ? 'Creating...' : 'Create Project'}
           </Button>
         </form>
@@ -551,12 +618,18 @@ export function ProjectsApiScreen({
               <Button
                 type="button"
                 onClick={() => void startPublish()}
-                disabled={publishStarting || publishStatus === 'publishing'}
+                disabled={!!publishDisabledReason}
+                title={publishDisabledReason ?? undefined}
               >
                 {publishStarting || publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
               </Button>
             </div>
           </div>
+          {publishDisabledReason && (
+            <p className="text-xs text-muted-foreground" role="note">
+              {publishDisabledReason}
+            </p>
+          )}
 
           {(publishStatus || publishError || publishedHomeUrl || publishMessage) && (
             <div className="border rounded-md p-3 space-y-1">
@@ -610,7 +683,10 @@ export function ProjectsApiScreen({
                   placeholder="home"
                   required
                 />
-                <Button type="submit" disabled={creatingPage}>
+                <Button
+                  type="submit"
+                  disabled={creatingPage || !newPageTitle.trim() || !newPageSlug.trim() || !activeProjectId}
+                >
                   {creatingPage ? 'Creating...' : 'Create Page'}
                 </Button>
               </form>
@@ -633,6 +709,11 @@ export function ProjectsApiScreen({
               <h3 className="text-sm font-medium">Pages</h3>
               {projectPages.length === 0 && (
                 <p className="text-sm text-muted-foreground">No pages returned.</p>
+              )}
+              {projectPages.length === 1 && (
+                <p className="text-xs text-muted-foreground" role="note">
+                  Delete is disabled because a project must keep at least one page.
+                </p>
               )}
               {projectPages.map((page) => (
                 <div key={page.id} className="w-full text-left border rounded-md p-2 space-y-2">
@@ -663,6 +744,7 @@ export function ProjectsApiScreen({
                       variant="outline"
                       onClick={() => void handleSetHomePage(page)}
                       disabled={page.isHome || settingHomePageId === page.id}
+                      title={page.isHome ? 'This page is already the home page.' : undefined}
                     >
                       {settingHomePageId === page.id ? 'Setting...' : 'Set as Home'}
                     </Button>
@@ -681,6 +763,7 @@ export function ProjectsApiScreen({
                       variant="destructive"
                       onClick={() => setPendingDeletePage(page)}
                       disabled={projectPages.length <= 1 || deletingPageId === page.id}
+                      title={projectPages.length <= 1 ? 'Cannot delete the only page in a project.' : undefined}
                     >
                       {deletingPageId === page.id ? 'Deleting...' : 'Delete'}
                     </Button>
