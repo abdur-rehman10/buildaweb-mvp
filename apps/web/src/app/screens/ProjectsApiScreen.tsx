@@ -67,11 +67,14 @@ function toPublishedHomeUrl(baseUrl: string): string {
   return `${normalizedBase}index.html`;
 }
 
+function normalizeSlugToken(slug?: string): string {
+  return (slug ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+}
+
 function normalizePublishedPagePath(params: { slug?: string; isHome?: boolean }) {
-  if (params.isHome) return '';
-  const raw = (params.slug ?? '').trim();
-  if (!raw || raw === '/') return '';
-  return `${raw.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+  const slugToken = normalizeSlugToken(params.slug);
+  if (params.isHome || slugToken === '' || slugToken === 'home') return '';
+  return `${slugToken}/`;
 }
 
 function toPublishedPageUrl(params: {
