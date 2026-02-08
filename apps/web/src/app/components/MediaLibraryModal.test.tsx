@@ -1,11 +1,12 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MediaLibraryModal } from './MediaLibraryModal';
 import { assetsApi } from '../../lib/api';
 
-jest.mock('../../lib/api', () => ({
+vi.mock('../../lib/api', () => ({
   assetsApi: {
-    list: jest.fn(),
+    list: vi.fn(),
   },
   ApiError: class ApiError extends Error {
     status = 500;
@@ -15,11 +16,15 @@ jest.mock('../../lib/api', () => ({
 
 describe('MediaLibraryModal', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it('fetches and displays asset thumbnails when opened', async () => {
-    (assetsApi.list as jest.Mock).mockResolvedValue({
+    vi.mocked(assetsApi.list).mockResolvedValue({
       assets: [
         {
           id: 'asset-1',
@@ -46,7 +51,7 @@ describe('MediaLibraryModal', () => {
   });
 
   it('renders error state when assets loading fails', async () => {
-    (assetsApi.list as jest.Mock).mockRejectedValue(new Error('Load failed'));
+    vi.mocked(assetsApi.list).mockRejectedValue(new Error('Load failed'));
 
     render(
       <MediaLibraryModal
@@ -59,12 +64,12 @@ describe('MediaLibraryModal', () => {
 
     await waitFor(() => {
       const alert = screen.getByRole('alert');
-      expect(alert.textContent).toContain('Load failed');
+      expect(alert.textContent).toContain('Failed to load media library');
     });
   });
 
   it('calls onSelect with selected asset publicUrl', async () => {
-    (assetsApi.list as jest.Mock).mockResolvedValue({
+    vi.mocked(assetsApi.list).mockResolvedValue({
       assets: [
         {
           id: 'asset-1',
@@ -76,7 +81,7 @@ describe('MediaLibraryModal', () => {
       ],
     });
 
-    const onSelect = jest.fn();
+    const onSelect = vi.fn();
 
     render(
       <MediaLibraryModal
@@ -87,8 +92,8 @@ describe('MediaLibraryModal', () => {
       />,
     );
 
-    const thumbnail = await screen.findByAltText('hero.jpg');
-    fireEvent.click(thumbnail);
+    const cardButton = await screen.findByRole('button', { name: /hero\.jpg/i });
+    fireEvent.click(cardButton);
 
     expect(onSelect).toHaveBeenCalledWith(
       expect.objectContaining({
