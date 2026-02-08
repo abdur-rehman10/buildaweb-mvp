@@ -22,6 +22,16 @@ services:
     volumes:
       - minio_data:/data
 
+  nginx:
+    image: nginx:latest
+    container_name: buildaweb-nginx
+    depends_on:
+      - minio
+    ports:
+      - "8080:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
 volumes:
   mongo_data:
   minio_data:
