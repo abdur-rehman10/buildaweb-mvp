@@ -1,6 +1,6 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsApiScreen } from './ProjectsApiScreen';
 import { ApiError, navigationApi, pagesApi, projectsApi, publishApi } from '../../lib/api';
 import { appToast } from '../../lib/toast';
@@ -92,6 +92,10 @@ function renderScreen() {
 }
 
 describe('ProjectsApiScreen toasts', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -163,5 +167,42 @@ describe('ProjectsApiScreen toasts', () => {
         }),
       );
     });
+  });
+
+  it('disables delete when project has only one page and shows a hint', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({
+      pages: [pages[0]],
+    });
+
+    renderScreen();
+    const deleteButtons = await screen.findAllByRole('button', { name: 'Delete' });
+
+    expect((deleteButtons[0] as HTMLButtonElement).disabled).toBe(true);
+    expect(deleteButtons[0].getAttribute('title')).toBe('Cannot delete the only page in a project.');
+    expect(screen.getByText('Delete is disabled because a project must keep at least one page.')).not.toBeNull();
+  });
+
+  it('disables publish button while publishing is in progress', async () => {
+    vi.mocked(publishApi.create).mockResolvedValue({
+      publishId: 'publish-2',
+      status: 'publishing',
+      url: 'http://localhost:9000/buildaweb-sites/example/',
+    });
+
+    renderScreen();
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+
+    fireEvent.click(publishButton);
+
+    const publishingButton = await screen.findByRole('button', { name: 'Publishing...' });
+    expect((publishingButton as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('disables set home action for the current home page', async () => {
+    renderScreen();
+    const setHomeButtons = await screen.findAllByRole('button', { name: 'Set as Home' });
+
+    expect((setHomeButtons[0] as HTMLButtonElement).disabled).toBe(true);
+    expect(setHomeButtons[0].getAttribute('title')).toBe('This page is already the home page.');
   });
 });
