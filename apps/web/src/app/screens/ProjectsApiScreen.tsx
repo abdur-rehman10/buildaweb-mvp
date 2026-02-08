@@ -66,6 +66,12 @@ export function ProjectsApiScreen({
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
   const publishedHomeUrl = publishedUrl ? toPublishedHomeUrl(publishedUrl) : null;
+  const publishDisabledReason =
+    publishStarting || publishStatus === 'publishing'
+      ? 'Publishing is already in progress.'
+      : projectPages.length === 0
+        ? 'Create at least one page before publishing.'
+        : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -609,12 +615,18 @@ export function ProjectsApiScreen({
               <Button
                 type="button"
                 onClick={() => void startPublish()}
-                disabled={publishStarting || publishStatus === 'publishing'}
+                disabled={!!publishDisabledReason}
+                title={publishDisabledReason ?? undefined}
               >
                 {publishStarting || publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
               </Button>
             </div>
           </div>
+          {publishDisabledReason && (
+            <p className="text-xs text-muted-foreground" role="note">
+              {publishDisabledReason}
+            </p>
+          )}
 
           {(publishStatus || publishError || publishedHomeUrl || publishMessage) && (
             <div className="border rounded-md p-3 space-y-1">
@@ -695,6 +707,11 @@ export function ProjectsApiScreen({
               {projectPages.length === 0 && (
                 <p className="text-sm text-muted-foreground">No pages returned.</p>
               )}
+              {projectPages.length === 1 && (
+                <p className="text-xs text-muted-foreground" role="note">
+                  Delete is disabled because a project must keep at least one page.
+                </p>
+              )}
               {projectPages.map((page) => (
                 <div key={page.id} className="w-full text-left border rounded-md p-2 space-y-2">
                   <div className="flex items-start justify-between gap-2">
@@ -724,6 +741,7 @@ export function ProjectsApiScreen({
                       variant="outline"
                       onClick={() => void handleSetHomePage(page)}
                       disabled={page.isHome || settingHomePageId === page.id}
+                      title={page.isHome ? 'This page is already the home page.' : undefined}
                     >
                       {settingHomePageId === page.id ? 'Setting...' : 'Set as Home'}
                     </Button>
@@ -742,6 +760,7 @@ export function ProjectsApiScreen({
                       variant="destructive"
                       onClick={() => setPendingDeletePage(page)}
                       disabled={projectPages.length <= 1 || deletingPageId === page.id}
+                      title={projectPages.length <= 1 ? 'Cannot delete the only page in a project.' : undefined}
                     >
                       {deletingPageId === page.id ? 'Deleting...' : 'Delete'}
                     </Button>
