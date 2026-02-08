@@ -1,29 +1,30 @@
 # PLAN.md
 
 ## Branch
-feat/page-management
+feat/media-library-ui
 
 ## Goal
-Implement page management functionality: duplicate page, delete page, and set home page.
+Implement a media library UI so users can browse and reuse previously uploaded images.
 
 ## In Scope
-- Duplicate page functionality (API + UI flow)
-- Delete page functionality (API + UI flow)
-- Set home page functionality (API + UI flow)
-- Update navigation automatically when page management actions affect pages
+- Add a backend endpoint to list assets per project.
+- Create a React modal to display the media library.
+- Integrate the modal into the image picker in the editor.
+- Ensure newly uploaded images appear in the library immediately.
 
 ## Out of Scope
-- Any feature not explicitly listed in In Scope
+- Image cropping or editing.
+- Asset deletion.
+- File type filtering (unless already supported).
 
 ## Constraints
-- Must follow existing API response shape:
+- Follow existing API response shapes:
   - `{ "ok": true, "data": {} }`
   - `{ "ok": false, "error": { "code": "", "message": "" } }`
-- All relevant endpoints must remain JWT protected
-- Pages save/update flows must preserve optimistic concurrency behavior
+- Keep JWT authentication and user/tenant scoping on relevant endpoints.
+- Do not add new libraries unless explicitly allowed.
 
 ## Definition of Done
-- Users can duplicate a page from the UI
-- Users can delete pages from the UI, except when it is the only page
-- Users can set any page as the home page from the UI
-- Navigation updates automatically to reflect page changes
+- Users can open the media library from the editor.
+- Users can see thumbnails of previously uploaded images for their current project.
+- Users can select an image from the library to replace an image in the editor.
