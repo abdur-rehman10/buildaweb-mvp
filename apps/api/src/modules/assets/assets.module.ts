@@ -10,6 +10,6 @@ import { MinioService } from './minio.service';
   imports: [MongooseModule.forFeature([{ name: Asset.name, schema: AssetSchema }]), ProjectsModule],
   controllers: [AssetsController],
   providers: [AssetsService, MinioService],
-  exports: [AssetsService],
+  exports: [AssetsService, MinioService],
 })
 export class AssetsModule {}

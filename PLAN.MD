@@ -1,40 +1,39 @@
 # PLAN.md
 
 ## Branch
-feat/preview-renderer-api
+feat/publish-static-site
 
 ## Goal
-Add server-side page preview rendering (HTML + CSS) and wire it to frontend via iframe preview.
+Implement MVP one-click publish that renders all project pages to static HTML/CSS and uploads to MinIO for a public URL.
 
 ## In Scope
 Backend:
-- GET /projects/:projectId/preview/:pageId
-- Minimal deterministic renderer (sections → blocks → nodes)
-- Stable hash generation
-- Safe handling of unknown nodes
+- POST /projects/:projectId/publish (JWT protected, scoped)
+- GET /projects/:projectId/publish/:publishId (JWT protected, scoped)
+- Render pages using existing preview renderer logic (deterministic)
+- Upload rendered HTML files (and one CSS file) to MinIO under a publish folder
+- Persist publish record/status in Mongo (minimal)
 
 Frontend:
-- Preview button on Page screen
-- Call preview API
-- Render preview in iframe using srcdoc
+- Publish button in Project screen
+- Poll publish status until live
+- Show published URL link
 
 ## Out of Scope
-- Publish flow
-- Hosting
-- Domains
-- Assets upload
-- Global styles editor
-- AI generation
+- Custom domains
+- CDN invalidation
+- SEO settings UI
+- Assets copying/rewriting (we will reference stable public URLs)
+- Multi-user collaboration
 - Billing
 
 ## Constraints
-- Use existing editorJson only
-- No refactors of existing APIs
-- No new DB tables
-- Response format must follow ok/data contract
+- Must not change existing editor JSON schema
+- Use ok/data + ok/error response contract
+- Publish must never crash if page has unknown nodes; render placeholders safely
 
 ## Definition of Done
-- Preview reflects saved editor JSON
-- Preview never crashes on malformed data
-- Preview updates after save
-- No impact on save/version/409 logic
+- User clicks Publish → gets a public URL for the site
+- Home page available at /index.html
+- Other pages available at /<slug>/index.html
+- Publishing status can be checked and does not block server

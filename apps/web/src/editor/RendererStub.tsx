@@ -5,6 +5,7 @@ import {
   duplicateSection,
   insertNodeInFirstBlock,
   moveSection,
+  updateButtonNodeHrefById,
 } from './sectionHelpers';
 
 type JsonRecord = Record<string, unknown>;
@@ -13,6 +14,7 @@ type RendererStubProps = {
   value: JsonRecord;
   onChange: (nextEditorJson: JsonRecord) => void;
   assetsById: Record<string, string>;
+  projectPages: Array<{ id: string; title?: string; slug?: string }>;
   onUploadImage: (nodeId: string, file: File) => Promise<{ assetId: string; publicUrl: string }>;
 };
 
@@ -43,6 +45,16 @@ function getAssetRef(record: JsonRecord): string {
   if (typeof raw === 'string') return raw;
   if (typeof raw === 'number') return String(raw);
   return '';
+}
+
+function normalizeInternalHref(slug: string): string {
+  const trimmed = slug.trim();
+  if (!trimmed || trimmed === '/') return '/';
+  return `/${trimmed.replace(/^\/+/, '')}`;
+}
+
+function isInternalHref(href: string): boolean {
+  return href.startsWith('/');
 }
 
 function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string, nextText: string): JsonRecord {
@@ -83,7 +95,7 @@ function updateTextNodeContentById(editorJson: JsonRecord, nodeId: string, nextT
   return { ...editorJson, sections: nextSections };
 }
 
-export function RendererStub({ value, onChange, assetsById, onUploadImage }: RendererStubProps) {
+export function RendererStub({ value, onChange, assetsById, projectPages, onUploadImage }: RendererStubProps) {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState('');
   const [uploadingNodeId, setUploadingNodeId] = useState<string | null>(null);
@@ -296,10 +308,101 @@ export function RendererStub({ value, onChange, assetsById, onUploadImage }: Ren
                           }
                         } else if (type === 'button') {
                           const label = getText(nodeRecord.label, getText(nodeRecord.text, 'Button'));
+                          const href = getText(nodeRecord.href, '#').trim() || '#';
+                          const linkMode: 'external' | 'internal' = isInternalHref(href) ? 'internal' : 'external';
+                          const normalizedInternalHref = normalizeInternalHref(href);
+                          const matchedPage = projectPages.find(
+                            (page) => normalizeInternalHref(getText(page.slug, '')) === normalizedInternalHref,
+                          );
+
                           content = (
-                            <button type="button" disabled>
-                              {label}
-                            </button>
+                            <div className="space-y-2">
+                              <button type="button" disabled>
+                                {label}
+                              </button>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 items-end">
+                                <div>
+                                  <label className="block text-xs font-medium mb-1">Link type</label>
+                                  <select
+                                    className="h-9 px-2 border rounded-md bg-background w-full text-sm"
+                                    value={linkMode}
+                                    onChange={(e) => {
+                                      if (!nodeId) return;
+                                      const mode = e.target.value === 'internal' ? 'internal' : 'external';
+                                      if (mode === 'internal') {
+                                        const firstSlug = projectPages[0]?.slug ?? '/';
+                                        onChange(
+                                          updateButtonNodeHrefById(value, nodeId, normalizeInternalHref(firstSlug)),
+                                        );
+                                        return;
+                                      }
+                                      onChange(updateButtonNodeHrefById(value, nodeId, '#'));
+                                    }}
+                                    disabled={!nodeId}
+                                  >
+                                    <option value="external">External</option>
+                                    <option value="internal">Internal</option>
+                                  </select>
+                                </div>
+
+                                {linkMode === 'external' ? (
+                                  <div>
+                                    <label className="block text-xs font-medium mb-1">URL</label>
+                                    <input
+                                      className="h-9 px-2 border rounded-md w-full text-sm"
+                                      value={href}
+                                      onChange={(e) => {
+                                        if (!nodeId) return;
+                                        onChange(updateButtonNodeHrefById(value, nodeId, e.target.value));
+                                      }}
+                                      placeholder="https://example.com"
+                                      disabled={!nodeId}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <label className="block text-xs font-medium mb-1">Page</label>
+                                    <select
+                                      className="h-9 px-2 border rounded-md bg-background w-full text-sm"
+                                      value={normalizedInternalHref}
+                                      onChange={(e) => {
+                                        if (!nodeId) return;
+                                        onChange(
+                                          updateButtonNodeHrefById(
+                                            value,
+                                            nodeId,
+                                            normalizeInternalHref(e.target.value),
+                                          ),
+                                        );
+                                      }}
+                                      disabled={!nodeId}
+                                    >
+                                      {projectPages.length === 0 && (
+                                        <option value="/">No pages available</option>
+                                      )}
+                                      {projectPages.map((page) => {
+                                        const optionHref = normalizeInternalHref(getText(page.slug, ''));
+                                        return (
+                                          <option key={page.id} value={optionHref}>
+                                            {(page.title || page.id) +
+                                              (page.slug ? ` (/` + page.slug + ')' : '')}
+                                          </option>
+                                        );
+                                      })}
+                                      {!projectPages.some(
+                                        (page) =>
+                                          normalizeInternalHref(getText(page.slug, '')) === normalizedInternalHref,
+                                      ) && <option value={normalizedInternalHref}>{normalizedInternalHref}</option>}
+                                    </select>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {linkMode === 'internal'
+                                  ? `Target: ${matchedPage ? `${matchedPage.title || matchedPage.id}${matchedPage.slug ? ` /${matchedPage.slug}` : ''}` : normalizedInternalHref}`
+                                  : `Target: ${href}`}
+                              </div>
+                            </div>
                           );
                         } else if (type === 'image') {
                           const assetRef = getAssetRef(nodeRecord);

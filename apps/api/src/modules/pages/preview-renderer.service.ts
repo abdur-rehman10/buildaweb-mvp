@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
 type JsonRecord = Record<string, unknown>;
+type RenderNavLink = { label: string; targetSlug: string };
 
 const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 
@@ -9,6 +10,8 @@ const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 export class PreviewRendererService {
   private readonly baseCss = `
 .baw-page{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#ffffff;max-width:1200px;margin:0 auto;padding:24px;line-height:1.5}
+.baw-nav{display:flex;gap:12px;padding:12px 0}
+.baw-nav a{text-decoration:none}
 .baw-section{margin:0 0 24px}
 .baw-block{display:grid;gap:12px}
 .baw-node-text{margin:0}
@@ -44,6 +47,35 @@ export class PreviewRendererService {
     return this.readString(record.id);
   }
 
+  private normalizeSlug(slug: string): string {
+    const trimmed = slug.trim();
+    if (!trimmed || trimmed === '/') return '/';
+    const noEdges = trimmed.replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!noEdges) return '/';
+    return `/${noEdges}`;
+  }
+
+  private slugDepth(slug: string): number {
+    const normalized = this.normalizeSlug(slug);
+    if (normalized === '/') return 0;
+    return normalized.slice(1).split('/').filter(Boolean).length;
+  }
+
+  private relPrefix(depth: number): string {
+    if (depth <= 0) return '';
+    return '../'.repeat(depth);
+  }
+
+  private toStaticHref(currentSlug: string, targetSlug: string): string {
+    const depth = this.slugDepth(currentSlug);
+    const prefix = this.relPrefix(depth);
+    const normalizedTarget = this.normalizeSlug(targetSlug);
+    if (normalizedTarget === '/') {
+      return `${prefix}index.html`;
+    }
+    return `${prefix}${normalizedTarget.slice(1)}/index.html`;
+  }
+
   private getTextTag(record: JsonRecord): 'h1' | 'h2' | 'p' {
     const explicitTag = this.readString(record.tag).toLowerCase();
     if (explicitTag === 'h1' || explicitTag === 'h2' || explicitTag === 'p') return explicitTag;
@@ -76,7 +108,7 @@ export class PreviewRendererService {
     return 0;
   }
 
-  private renderNode(node: unknown, assetUrlById: Record<string, string>): string {
+  private renderNode(node: unknown, assetUrlById: Record<string, string>, currentSlug: string): string {
     const record = this.asRecord(node);
     if (!record) return '<!-- Invalid node -->';
 
@@ -91,7 +123,8 @@ export class PreviewRendererService {
     if (type === 'button') {
       const label = this.readString(record.label, this.readString(record.text, 'Button'));
       const href = this.readString(record.href, this.readString(record.url, '#')) || '#';
-      return `<a class="baw-node-button" href="${this.escapeHtml(href)}">${this.escapeHtml(label)}</a>`;
+      const resolvedHref = href.startsWith('/') ? this.toStaticHref(currentSlug, href) : href;
+      return `<a class="baw-node-button" href="${this.escapeHtml(resolvedHref)}">${this.escapeHtml(label)}</a>`;
     }
 
     if (type === 'image') {
@@ -107,22 +140,24 @@ export class PreviewRendererService {
     return `<!-- Unknown node type: ${this.escapeHtml(type || 'unknown')} -->`;
   }
 
-  private renderBlock(block: unknown, assetUrlById: Record<string, string>): string {
+  private renderBlock(block: unknown, assetUrlById: Record<string, string>, currentSlug: string): string {
     const record = this.asRecord(block);
     if (!record) return '<div class="baw-block"><!-- Invalid block --></div>';
 
     const blockId = this.readId(record);
-    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node, assetUrlById)).join('');
+    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node, assetUrlById, currentSlug)).join('');
     const attr = blockId ? ` data-block="${this.escapeHtml(blockId)}"` : '';
     return `<div class="baw-block"${attr}>${nodes}</div>`;
   }
 
-  private renderSection(section: unknown, assetUrlById: Record<string, string>): string {
+  private renderSection(section: unknown, assetUrlById: Record<string, string>, currentSlug: string): string {
     const record = this.asRecord(section);
     if (!record) return '<section class="baw-section"><!-- Invalid section --></section>';
 
     const sectionId = this.readId(record);
-    const blocks = this.asArray(record.blocks).map((block) => this.renderBlock(block, assetUrlById)).join('');
+    const blocks = this.asArray(record.blocks)
+      .map((block) => this.renderBlock(block, assetUrlById, currentSlug))
+      .join('');
     const attr = sectionId ? ` data-section="${this.escapeHtml(sectionId)}"` : '';
     return `<section class="baw-section"${attr}>${blocks}</section>`;
   }
@@ -144,15 +179,47 @@ export class PreviewRendererService {
     return JSON.stringify(visit(value));
   }
 
-  render(params: { pageId: string; editorJson: unknown; assetUrlById?: Record<string, string> }) {
+  private renderNavigation(navLinks: RenderNavLink[], currentSlug: string): string {
+    if (!Array.isArray(navLinks) || navLinks.length === 0) return '';
+
+    const links = navLinks
+      .filter((item) => item && typeof item.label === 'string' && typeof item.targetSlug === 'string')
+      .map((item) => {
+        const normalizedTarget = this.normalizeSlug(item.targetSlug);
+        const label = item.label.trim() || normalizedTarget;
+        if (normalizedTarget === this.normalizeSlug(currentSlug)) {
+          return `<span>${this.escapeHtml(label)}</span>`;
+        }
+        const href = this.toStaticHref(currentSlug, normalizedTarget);
+        return `<a href="${this.escapeHtml(href)}">${this.escapeHtml(label)}</a>`;
+      })
+      .join('');
+
+    if (!links) return '';
+    return `<nav class="baw-nav">${links}</nav>`;
+  }
+
+  render(params: {
+    pageId: string;
+    editorJson: unknown;
+    assetUrlById?: Record<string, string>;
+    navLinks?: RenderNavLink[];
+    currentSlug?: string;
+  }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
-    const sections = this.asArray(pageRecord.sections).map((section) => this.renderSection(section, assetUrlById)).join('');
+    const navLinks = params.navLinks ?? [];
+    const currentSlug = this.normalizeSlug(params.currentSlug ?? '/');
+    const navHtml = this.renderNavigation(navLinks, currentSlug);
+    const sections = this.asArray(pageRecord.sections)
+      .map((section) => this.renderSection(section, assetUrlById, currentSlug))
+      .join('');
 
-    const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${sections}</div>`;
+    const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${navHtml}${sections}</div>`;
     const css = this.baseCss;
     const pageJsonString = this.stableStringify(pageRecord);
-    const hash = createHash('sha256').update(pageJsonString + css).digest('hex');
+    const navString = this.stableStringify(navLinks);
+    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css).digest('hex');
 
     return { html, css, hash };
   }

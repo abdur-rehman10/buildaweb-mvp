@@ -175,6 +175,10 @@ export type GetPageResult = {
   page: PageRecord;
 };
 
+export type ListPagesResult = {
+  pages: PageMetaSummary[];
+};
+
 export type UpdatePageInput = {
   page: Record<string, unknown>;
   version: number;
@@ -228,6 +232,15 @@ export type UploadAssetResult = {
   publicUrl: string;
 };
 
+export type ResolveAssetsItem = {
+  assetId: string;
+  publicUrl: string;
+};
+
+export type ResolveAssetsResult = {
+  items: ResolveAssetsItem[];
+};
+
 export type NavigationItem = {
   label: string;
   pageId: string;
@@ -246,6 +259,15 @@ export type NavigationResult = {
 export type UpdateNavigationInput = {
   items: NavigationItem[];
   cta?: NavigationCta;
+};
+
+export type PublishStatus = 'publishing' | 'live' | 'failed';
+
+export type PublishResult = {
+  publishId: string;
+  status: PublishStatus;
+  url: string;
+  errorMessage?: string;
 };
 
 export const authApi = {
@@ -286,6 +308,11 @@ export const pagesApi = {
     return apiRequest<CreatePageResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
       method: 'POST',
       body: JSON.stringify(input),
+    });
+  },
+  list(projectId: string) {
+    return apiRequest<ListPagesResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
+      method: 'GET',
     });
   },
   get(projectId: string, pageId: string) {
@@ -364,5 +391,27 @@ export const assetsApi = {
       method: 'POST',
       body,
     });
+  },
+  resolve(projectId: string, assetIds: string[]) {
+    return apiRequest<ResolveAssetsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets/resolve`, {
+      method: 'POST',
+      body: JSON.stringify({ assetIds }),
+    });
+  },
+};
+
+export const publishApi = {
+  create(projectId: string) {
+    return apiRequest<PublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish`, {
+      method: 'POST',
+    });
+  },
+  getStatus(projectId: string, publishId: string) {
+    return apiRequest<PublishResult>(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/publish/${encodeURIComponent(publishId)}`,
+      {
+        method: 'GET',
+      },
+    );
   },
 };
