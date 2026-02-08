@@ -5,6 +5,7 @@ import { MinioService } from '../assets/minio.service';
 import { NavigationDocument } from '../navigation/navigation.schema';
 import { PageDocument } from '../pages/page.schema';
 import { PreviewRendererService } from '../pages/preview-renderer.service';
+import { ProjectDocument } from '../projects/project.schema';
 import { PublishDocument } from './publish.schema';
 import { PublishService } from './publish.service';
 
@@ -18,6 +19,10 @@ type MockPageModel = {
 
 type MockNavigationModel = {
   findOne: jest.Mock;
+};
+
+type MockProjectModel = {
+  updateOne: jest.Mock;
 };
 
 type MockAssetsService = {
@@ -37,6 +42,7 @@ describe('PublishService pretty URLs', () => {
   let publishModel: MockPublishModel;
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
+  let projectModel: MockProjectModel;
   let assets: MockAssetsService;
   let minio: MockMinioService;
   let config: MockConfigService;
@@ -113,6 +119,12 @@ describe('PublishService pretty URLs', () => {
       }),
     };
 
+    projectModel = {
+      updateOne: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
+    };
+
     assets = {
       getByIdsScoped: jest.fn().mockResolvedValue([]),
     };
@@ -133,6 +145,7 @@ describe('PublishService pretty URLs', () => {
       publishModel as unknown as Model<PublishDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
+      projectModel as unknown as Model<ProjectDocument>,
       new PreviewRendererService(),
       assets as unknown as AssetsService,
       minio as unknown as MinioService,
@@ -174,5 +187,18 @@ describe('PublishService pretty URLs', () => {
     const css = cssUpload!.buffer.toString('utf-8');
     expect(css).toContain('.baw-nav{display:flex;gap:12px;padding:12px 0}');
     expect(css).toContain('.baw-nav a{text-decoration:none}');
+
+    expect(projectModel.updateOne).toHaveBeenCalledWith(
+      {
+        _id: 'project-1',
+        tenantId: 'default',
+        ownerUserId: 'user-1',
+      },
+      {
+        $set: {
+          latestPublishId: '507f1f77bcf86cd799439011',
+        },
+      },
+    );
   });
 });

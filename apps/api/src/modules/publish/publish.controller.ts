@@ -31,6 +31,41 @@ export class PublishController {
     }
   }
 
+  @Get('latest')
+  async getLatestPublish(@Param('projectId') projectId: string, @Req() req: any) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    if (!project) {
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+    }
+
+    const latestPublishId = project.latestPublishId ? String(project.latestPublishId) : null;
+    if (!latestPublishId) {
+      return ok(null);
+    }
+
+    const publish = await this.publish.getByIdScoped({
+      tenantId,
+      projectId,
+      ownerUserId,
+      publishId: latestPublishId,
+    });
+
+    if (!publish) {
+      return ok(null);
+    }
+
+    return ok({
+      publishId: String(publish._id),
+      status: publish.status,
+      url: publish.baseUrl,
+      timestamp: publish.updatedAt ?? publish.createdAt ?? null,
+      ...(publish.errorMessage ? { errorMessage: publish.errorMessage } : {}),
+    });
+  }
+
   @Get(':publishId')
   async getPublishStatus(@Param('projectId') projectId: string, @Param('publishId') publishId: string, @Req() req: any) {
     const ownerUserId = req.user?.sub as string;

@@ -24,6 +24,9 @@ export class Project {
   @Prop({ type: Types.ObjectId, ref: 'Page', default: null })
   homePageId?: Types.ObjectId | null;
 
+  @Prop({ type: Types.ObjectId, ref: 'Publish', default: null })
+  latestPublishId?: Types.ObjectId | null;
+
   // from @Schema({ timestamps: true })
   createdAt?: Date;
   updatedAt?: Date;

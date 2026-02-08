@@ -4,6 +4,7 @@ import { AssetsModule } from '../assets/assets.module';
 import { Navigation, NavigationSchema } from '../navigation/navigation.schema';
 import { Page, PageSchema } from '../pages/page.schema';
 import { PagesModule } from '../pages/pages.module';
+import { Project, ProjectSchema } from '../projects/project.schema';
 import { ProjectsModule } from '../projects/projects.module';
 import { PublishController } from './publish.controller';
 import { Publish, PublishSchema } from './publish.schema';
@@ -15,6 +16,7 @@ import { PublishService } from './publish.service';
       { name: Publish.name, schema: PublishSchema },
       { name: Page.name, schema: PageSchema },
       { name: Navigation.name, schema: NavigationSchema },
+      { name: Project.name, schema: ProjectSchema },
     ]),
     ProjectsModule,
     PagesModule,
