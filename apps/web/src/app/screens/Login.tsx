@@ -6,6 +6,7 @@ import { Logo } from '../components/Logo';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { ApiError, authApi } from '../../lib/api';
 import { setAuthToken } from '../../lib/auth';
+import { appToast } from '../../lib/toast';
 
 interface LoginProps {
   onNavigateToSignUp: () => void;
@@ -43,11 +44,15 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
     try {
       const res = await authApi.login({ email, password });
       setAuthToken(res.accessToken);
-      toast.success('Logged in successfully!');
+      appToast.success('Logged in successfully!', {
+        eventKey: 'auth-login-success',
+      });
       onLogin();
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Login failed';
-      toast.error(message);
+      appToast.error(message, {
+        eventKey: 'auth-login-error',
+      });
     } finally {
       setIsSubmitting(false);
     }
