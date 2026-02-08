@@ -25,8 +25,24 @@ interface ProjectsApiScreenProps {
   onOpenPage: (projectId: string, pageId: string) => void;
 }
 
-function toPublishedHomeUrl(baseUrl: string): string {
-  return `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}index.html`;
+function normalizePublishedBaseUrl(baseUrl: string): string {
+  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+}
+
+function normalizePublishedPagePath(params: { slug?: string; isHome?: boolean }) {
+  if (params.isHome) return '';
+  const raw = (params.slug ?? '').trim();
+  if (!raw || raw === '/') return '';
+  return `${raw.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+}
+
+function toPublishedPageUrl(baseUrl: string, page: Pick<PageMetaSummary, 'slug' | 'isHome'>) {
+  const normalizedBase = normalizePublishedBaseUrl(baseUrl);
+  const pagePath = normalizePublishedPagePath({
+    slug: page.slug,
+    isHome: page.isHome,
+  });
+  return `${normalizedBase}${pagePath}`;
 }
 
 export function ProjectsApiScreen({
@@ -66,7 +82,7 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
-  const publishedHomeUrl = publishedUrl ? toPublishedHomeUrl(publishedUrl) : null;
+  const publishedHomeUrl = publishedUrl ? normalizePublishedBaseUrl(publishedUrl) : null;
   const publishDisabledReason =
     publishStarting || publishStatus === 'publishing'
       ? 'Publishing is already in progress.'
@@ -369,11 +385,12 @@ export function ProjectsApiScreen({
     }
   };
 
-  const copyPublishedUrl = async () => {
-    if (!publishedHomeUrl) return;
+  const copyPublishedUrl = async (url?: string) => {
+    const targetUrl = url ?? publishedHomeUrl;
+    if (!targetUrl) return;
 
     try {
-      await window.navigator.clipboard.writeText(publishedHomeUrl);
+      await window.navigator.clipboard.writeText(targetUrl);
       setPublishMessage('URL copied');
       appToast.success('Published URL copied', {
         eventKey: `publish-url-copied:${activeProjectId ?? 'unknown'}`,
@@ -644,18 +661,41 @@ export function ProjectsApiScreen({
                 </p>
               )}
               {publishStatus === 'live' && publishedHomeUrl && (
-                <div className="flex items-center gap-2">
-                  <a
-                    href={publishedHomeUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-sm underline text-primary"
-                  >
-                    Open published site
-                  </a>
-                  <Button type="button" variant="outline" size="sm" onClick={() => void copyPublishedUrl()}>
-                    Copy URL
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={publishedHomeUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm underline text-primary"
+                    >
+                      Open published site
+                    </a>
+                    <Button type="button" variant="outline" size="sm" onClick={() => void copyPublishedUrl()}>
+                      Copy URL
+                    </Button>
+                  </div>
+                  <div className="space-y-1">
+                    {projectPages.map((page) => {
+                      const pageUrl = toPublishedPageUrl(publishedHomeUrl, page);
+                      return (
+                        <div key={`published-url-${page.id}`} className="flex items-center gap-2 text-xs">
+                          <span className="min-w-24 text-muted-foreground">{page.title}</span>
+                          <a href={pageUrl} target="_blank" rel="noreferrer" className="underline text-primary break-all">
+                            {pageUrl}
+                          </a>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void copyPublishedUrl(pageUrl)}
+                          >
+                            {`Copy ${page.title} URL`}
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
               {publishMessage && (
