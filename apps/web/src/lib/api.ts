@@ -136,6 +136,8 @@ export type ProjectSummary = {
   name: string;
   status: ProjectStatus;
   defaultLocale: string;
+  latestPublishId?: string | null;
+  publishedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

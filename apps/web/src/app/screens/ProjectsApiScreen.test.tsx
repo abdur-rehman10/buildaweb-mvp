@@ -113,6 +113,16 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(pagesApi.list).mockResolvedValue({
       pages,
     });
+    vi.mocked(projectsApi.get).mockResolvedValue({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
     vi.mocked(navigationApi.get).mockResolvedValue({
       items: [],
     });
@@ -121,7 +131,6 @@ describe('ProjectsApiScreen toasts', () => {
       status: 'publishing',
       url: 'http://localhost:9000/buildaweb-sites/example/',
     });
-    vi.mocked(publishApi.getLatest).mockResolvedValue(null);
     vi.mocked(pagesApi.duplicate).mockResolvedValue({
       page_id: 'page-home-copy',
     });
@@ -331,24 +340,44 @@ describe('ProjectsApiScreen toasts', () => {
 
   it('shows Live status and link on initial render when latest publish exists', async () => {
     const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-2/';
-    vi.mocked(publishApi.getLatest).mockResolvedValueOnce({
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'published',
+        defaultLocale: 'en',
+        latestPublishId: 'publish-2',
+        publishedAt: '2026-02-08T10:00:00.000Z',
+      },
+    });
+    vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
       publishId: 'publish-2',
       status: 'live',
       url: latestUrl,
-      timestamp: '2026-02-08T10:00:00.000Z',
     });
 
     renderScreen();
 
     const status = await screen.findByText('Live');
     expect(status).not.toBeNull();
+    expect(projectsApi.get).toHaveBeenCalledWith('project-1');
+    expect(publishApi.getStatus).toHaveBeenCalledWith('project-1', 'publish-2');
 
     const homeLink = await screen.findByRole('link', { name: 'Open published site' });
     expect(homeLink.getAttribute('href')).toBe(`${latestUrl}index.html`);
   });
 
   it('shows Not published on initial render when latest publish is null', async () => {
-    vi.mocked(publishApi.getLatest).mockResolvedValueOnce(null);
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
 
     renderScreen();
 
@@ -358,23 +387,46 @@ describe('ProjectsApiScreen toasts', () => {
 
   it('updates to Live when a publish completes', async () => {
     const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-3/';
-    vi.mocked(publishApi.getLatest)
-      .mockResolvedValueOnce(null)
+    vi.mocked(projectsApi.get)
       .mockResolvedValueOnce({
-        publishId: 'publish-3',
-        status: 'live',
-        url: latestUrl,
+        project: {
+          id: 'project-1',
+          name: 'Main site',
+          status: 'draft',
+          defaultLocale: 'en',
+          latestPublishId: null,
+          publishedAt: null,
+        },
+      })
+      .mockResolvedValueOnce({
+        project: {
+          id: 'project-1',
+          name: 'Main site',
+          status: 'published',
+          defaultLocale: 'en',
+          latestPublishId: 'publish-3',
+          publishedAt: '2026-02-08T11:00:00.000Z',
+        },
       });
+
+    vi.mocked(publishApi.getStatus).mockImplementation(async (_projectId: string, publishId: string) => {
+      if (publishId === 'publish-3') {
+        return {
+          publishId: 'publish-3',
+          status: 'live',
+          url: latestUrl,
+        };
+      }
+      return {
+        publishId: 'publish-3',
+        status: 'publishing',
+        url: latestUrl,
+      };
+    });
 
     vi.mocked(publishApi.create).mockResolvedValue({
       publishId: 'publish-3',
       status: 'publishing',
-      url: latestUrl,
-    });
-
-    vi.mocked(publishApi.getStatus).mockResolvedValue({
-      publishId: 'publish-3',
-      status: 'live',
       url: latestUrl,
     });
 
@@ -387,7 +439,7 @@ describe('ProjectsApiScreen toasts', () => {
     });
 
     await waitFor(() => {
-      expect(publishApi.getLatest).toHaveBeenCalledTimes(2);
+      expect(projectsApi.get).toHaveBeenCalledTimes(2);
     });
 
     const homeLink = await screen.findByRole('link', { name: 'Open published site' });
