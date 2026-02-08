@@ -39,6 +39,20 @@ export class PreviewController {
     return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
   }
 
+  private normalizePreviewPath(path: string) {
+    const trimmed = path.trim();
+    if (!trimmed) return '';
+
+    const withoutEdgeSlashes = trimmed.replace(/^\/+/, '').replace(/\/+$/, '');
+    if (!withoutEdgeSlashes || withoutEdgeSlashes === 'index.html') return '';
+
+    if (withoutEdgeSlashes.endsWith('/index.html')) {
+      return withoutEdgeSlashes.slice(0, -'/index.html'.length);
+    }
+
+    return withoutEdgeSlashes;
+  }
+
   private toPageSlug(params: { slug: string; isHome?: boolean }) {
     if (params.isHome || params.slug.trim() === '/') return '/';
     const normalized = this.normalizeSlug(params.slug);
@@ -59,6 +73,53 @@ export class PreviewController {
     if (emptyHome) return emptyHome;
 
     return pages[0];
+  }
+
+  private async resolvePageBySlugRef(params: { tenantId: string; projectId: string; slugRef: string }) {
+    const pages = await this.pages.listPages({
+      tenantId: params.tenantId,
+      projectId: params.projectId,
+    });
+    if (pages.length === 0) return null;
+
+    const normalizedPath = this.normalizePreviewPath(params.slugRef);
+    const normalizedTargetSlug = this.normalizeSlug(normalizedPath);
+
+    let pageSummary = null as (typeof pages)[number] | null;
+    if (!normalizedTargetSlug) {
+      pageSummary = this.resolveHomePage(pages);
+    } else {
+      pageSummary = pages.find((page) => this.normalizeSlug(this.readString(page.slug)) === normalizedTargetSlug) ?? null;
+    }
+
+    if (!pageSummary) return null;
+    return this.pages.getPage({
+      tenantId: params.tenantId,
+      projectId: params.projectId,
+      pageId: pageSummary.id,
+    });
+  }
+
+  private async resolvePageByReference(params: {
+    tenantId: string;
+    projectId: string;
+    pageRef: string;
+    preferSlug?: boolean;
+  }) {
+    if (!params.preferSlug && Types.ObjectId.isValid(params.pageRef)) {
+      const byId = await this.pages.getPage({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+        pageId: params.pageRef,
+      });
+      if (byId) return byId;
+    }
+
+    return this.resolvePageBySlugRef({
+      tenantId: params.tenantId,
+      projectId: params.projectId,
+      slugRef: params.pageRef,
+    });
   }
 
   private async loadNavigationLinks(params: { tenantId: string; projectId: string }) {
@@ -139,17 +200,26 @@ export class PreviewController {
     return [...refs];
   }
 
-  @Get(':pageId')
-  async previewPage(@Param('projectId') projectId: string, @Param('pageId') pageId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  private async renderPreview(params: {
+    projectId: string;
+    pageRef: string;
+    req: any;
+    preferSlug?: boolean;
+  }) {
+    const ownerUserId = params.req.user?.sub as string;
+    const tenantId = (params.req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId: params.projectId });
     if (!project) {
       throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
-    const page = await this.pages.getPage({ tenantId, projectId, pageId });
+    const page = await this.resolvePageByReference({
+      tenantId,
+      projectId: params.projectId,
+      pageRef: params.pageRef,
+      preferSlug: params.preferSlug,
+    });
     if (!page) {
       throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
@@ -158,11 +228,11 @@ export class PreviewController {
     const validAssetIds = assetRefs.filter((assetId) => Types.ObjectId.isValid(assetId));
     const assets = await this.assets.getByIdsScoped({
       tenantId,
-      projectId,
+      projectId: params.projectId,
       assetIds: validAssetIds,
     });
     const assetUrlById = Object.fromEntries(assets.map((asset) => [String(asset._id), asset.publicUrl]));
-    const navLinks = await this.loadNavigationLinks({ tenantId, projectId });
+    const navLinks = await this.loadNavigationLinks({ tenantId, projectId: params.projectId });
     const currentSlug = this.toPageSlug({
       slug: this.readString(page.slug),
       isHome: page.isHome,
@@ -177,5 +247,35 @@ export class PreviewController {
     });
 
     return ok(preview);
+  }
+
+  @Get()
+  async previewHome(@Param('projectId') projectId: string, @Req() req: any) {
+    return this.renderPreview({
+      projectId,
+      pageRef: '/',
+      req,
+      preferSlug: true,
+    });
+  }
+
+  @Get(':slug/index.html')
+  async previewBySlugWithIndex(@Param('projectId') projectId: string, @Param('slug') slug: string, @Req() req: any) {
+    return this.renderPreview({
+      projectId,
+      pageRef: `${slug}/index.html`,
+      req,
+      preferSlug: true,
+    });
+  }
+
+  @Get(':pageRef')
+  async previewPage(@Param('projectId') projectId: string, @Param('pageRef') pageRef: string, @Req() req: any) {
+    return this.renderPreview({
+      projectId,
+      pageRef,
+      req,
+      preferSlug: false,
+    });
   }
 }
