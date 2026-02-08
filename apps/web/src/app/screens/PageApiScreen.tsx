@@ -204,9 +204,14 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     setMessage(null);
     try {
       const res = await pagesApi.duplicate(projectId, targetPageId, { title, slug });
-      onPageIdChange(res.page_id);
-      setPageIdInput(res.page_id);
-      await loadPage(res.page_id);
+      const nextPageId = res.page_id ?? res.page?.id;
+      if (!nextPageId) {
+        setMessage('Page duplicated, but no page id returned');
+        return;
+      }
+      onPageIdChange(nextPageId);
+      setPageIdInput(nextPageId);
+      await loadPage(nextPageId);
       setMessage('Page duplicated');
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;

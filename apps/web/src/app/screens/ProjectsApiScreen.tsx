@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { toast } from 'sonner';
 import {
   ApiError,
   navigationApi,
@@ -59,6 +61,10 @@ export function ProjectsApiScreen({
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [duplicatingPageId, setDuplicatingPageId] = useState<string | null>(null);
+  const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
+  const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
+  const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
   const publishedHomeUrl = publishedUrl ? toPublishedHomeUrl(publishedUrl) : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
@@ -104,11 +110,18 @@ export function ProjectsApiScreen({
       const { pages } = await pagesApi.list(projectId);
       setProjectPages(pages);
 
-      if (pages.length > 0 && !activePageId) {
+      const hasActivePage = !!activePageId && pages.some((page) => page.id === activePageId);
+      if (pages.length > 0 && !hasActivePage) {
         const firstPageId = pages[0].id;
         window.localStorage.setItem(`baw_last_page_${projectId}`, firstPageId);
         setLastPageId(firstPageId);
         onSelectActivePageId(firstPageId);
+      }
+
+      if (pages.length === 0) {
+        window.localStorage.removeItem(`baw_last_page_${projectId}`);
+        setLastPageId(null);
+        onSelectActivePageId(null);
       }
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Failed to load project pages';
@@ -331,6 +344,69 @@ export function ProjectsApiScreen({
       setPublishMessage('URL copied');
     } catch {
       setPublishMessage('Failed to copy URL');
+    }
+  };
+
+  const refreshPagesAndNavigation = async (projectId: string) => {
+    await loadProjectPages(projectId);
+    await loadNavigation(projectId);
+  };
+
+  const handleDuplicatePage = async (page: PageMetaSummary) => {
+    if (!activeProjectId) return;
+
+    setDuplicatingPageId(page.id);
+    try {
+      await pagesApi.duplicate(activeProjectId, page.id);
+      await refreshPagesAndNavigation(activeProjectId);
+      toast.success(`Duplicated "${page.title}"`);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to duplicate page';
+      toast.error(message);
+    } finally {
+      setDuplicatingPageId(null);
+    }
+  };
+
+  const handleDeletePage = async (page: PageMetaSummary) => {
+    if (!activeProjectId) return;
+
+    setDeletingPageId(page.id);
+    try {
+      await pagesApi.remove(activeProjectId, page.id, page.version);
+      if (window.localStorage.getItem(`baw_last_page_${activeProjectId}`) === page.id) {
+        window.localStorage.removeItem(`baw_last_page_${activeProjectId}`);
+      }
+
+      await refreshPagesAndNavigation(activeProjectId);
+      toast.success(`Deleted "${page.title}"`);
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      if (apiError?.status === 409 || apiError?.code === 'VERSION_CONFLICT') {
+        await refreshPagesAndNavigation(activeProjectId);
+        toast.error('This page changed elsewhere. List refreshed.');
+      } else {
+        toast.error(apiError?.message ?? 'Failed to delete page');
+      }
+    } finally {
+      setDeletingPageId(null);
+      setPendingDeletePage(null);
+    }
+  };
+
+  const handleSetHomePage = async (page: PageMetaSummary) => {
+    if (!activeProjectId) return;
+
+    setSettingHomePageId(page.id);
+    try {
+      await projectsApi.setHome(activeProjectId, { pageId: page.id });
+      await refreshPagesAndNavigation(activeProjectId);
+      toast.success(`"${page.title}" set as home page`);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Failed to set home page';
+      toast.error(message);
+    } finally {
+      setSettingHomePageId(null);
     }
   };
 
@@ -559,15 +635,57 @@ export function ProjectsApiScreen({
                 <p className="text-sm text-muted-foreground">No pages returned.</p>
               )}
               {projectPages.map((page) => (
-                <button
-                  key={page.id}
-                  type="button"
-                  className="w-full text-left border rounded-md p-2 hover:border-primary"
-                  onClick={() => onOpenPage(activeProjectId, page.id)}
-                >
-                  <div className="text-sm font-medium">{page.title ?? page.id}</div>
-                  {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
-                </button>
+                <div key={page.id} className="w-full text-left border rounded-md p-2 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{page.title ?? page.id}</div>
+                      {page.slug && <div className="text-xs text-muted-foreground">/{page.slug}</div>}
+                      <div className="text-xs text-muted-foreground">v{page.version}</div>
+                    </div>
+                    {page.isHome && (
+                      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium">
+                        Home
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onOpenPage(activeProjectId, page.id)}
+                    >
+                      Open
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleSetHomePage(page)}
+                      disabled={page.isHome || settingHomePageId === page.id}
+                    >
+                      {settingHomePageId === page.id ? 'Setting...' : 'Set as Home'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void handleDuplicatePage(page)}
+                      disabled={duplicatingPageId === page.id}
+                    >
+                      {duplicatingPageId === page.id ? 'Duplicating...' : 'Duplicate'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setPendingDeletePage(page)}
+                      disabled={projectPages.length <= 1 || deletingPageId === page.id}
+                    >
+                      {deletingPageId === page.id ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
+                </div>
               ))}
             </aside>
           </div>
@@ -691,6 +809,24 @@ export function ProjectsApiScreen({
           )}
         </Card>
       )}
+
+      <ConfirmDialog
+        isOpen={!!pendingDeletePage}
+        onClose={() => setPendingDeletePage(null)}
+        onConfirm={() => {
+          if (!pendingDeletePage) return;
+          void handleDeletePage(pendingDeletePage);
+        }}
+        title="Delete page?"
+        description={
+          pendingDeletePage
+            ? `Delete "${pendingDeletePage.title}"? This action cannot be undone.`
+            : 'Delete this page?'
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }
