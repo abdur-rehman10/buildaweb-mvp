@@ -7,6 +7,7 @@ import { MinioService } from '../assets/minio.service';
 import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
 import { Page, PageDocument } from '../pages/page.schema';
 import { PreviewRendererService } from '../pages/preview-renderer.service';
+import { Project, ProjectDocument } from '../projects/project.schema';
 import { Publish, PublishDocument } from './publish.schema';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class PublishService {
     @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
     @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
     private readonly renderer: PreviewRendererService,
     private readonly assets: AssetsService,
     private readonly minio: MinioService,
@@ -306,6 +308,21 @@ ${params.bodyHtml}
       publish.status = 'live';
       publish.errorMessage = null;
       await publish.save();
+
+      await this.projectModel
+        .updateOne(
+          {
+            _id: params.projectId,
+            tenantId: params.tenantId,
+            ownerUserId: params.ownerUserId,
+          },
+          {
+            $set: {
+              latestPublishId: publish._id,
+            },
+          },
+        )
+        .exec();
 
       return {
         publishId: String(publish._id),
