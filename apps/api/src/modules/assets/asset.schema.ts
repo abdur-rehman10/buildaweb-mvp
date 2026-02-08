@@ -14,6 +14,9 @@ export class Asset {
   @Prop({ required: true })
   storagePath!: string;
 
+  @Prop({ required: true, trim: true })
+  fileName!: string;
+
   @Prop({ required: true })
   publicUrl!: string;
 
