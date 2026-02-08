@@ -318,7 +318,8 @@ ${params.bodyHtml}
           },
           {
             $set: {
-              latestPublishId: publish._id,
+              latestPublishId: String(publish._id),
+              publishedAt: new Date(),
             },
           },
         )
