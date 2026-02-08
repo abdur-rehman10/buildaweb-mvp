@@ -1,29 +1,25 @@
 # PLAN.md
 
 ## Branch
-feat/ui-polish
+feat/pretty-urls
 
 ## Goal
-Improve the MVP user interface by adding consistent toast notifications, disabling invalid actions, and providing clearer error feedback.
+Remove `index.html` from user-facing URLs in previews and published sites while still serving static pages correctly.
 
 ## In Scope
-- Implement consistent success and failure toast notifications across the app.
-- Disable buttons when actions are not valid (for example, deleting the only page).
-- Improve UI-facing API error messages, including clearer version-conflict feedback.
+- Adjust the preview route to handle paths with or without `index.html`.
+- Generate navigation links using directory paths (trailing slashes) instead of `index.html`.
+- Update the publish UI to display links without `index.html`.
+- Ensure that published sites still load correctly from static storage.
 
 ## Out of Scope
-- Visual redesigns.
-- Adding new functionality.
-- Changing existing logic beyond UI feedback improvements.
+- Server-level rewrite rules (for example, NGINX).
+- Custom domains.
 
 ## Constraints
-- Follow existing API response shapes:
-  - `{ "ok": true, "data": {} }`
-  - `{ "ok": false, "error": { "code": "", "message": "" } }`
-- Do not introduce new libraries unless explicitly permitted.
-- Keep changes minimal and focused on UI polish.
+- Must not break existing preview/publish behavior.
+- Must continue using relative links to ensure nested pages resolve correctly.
 
 ## Definition of Done
-- The app displays consistent toast notifications for success and failure states.
-- Invalid actions are prevented through disabled UI controls.
-- Network and version-conflict issues are shown with clear, user-friendly error messages.
+- All links in previews and published sites omit `index.html`.
+- Users can navigate to pages via `/about/` instead of `/about/index.html`.
