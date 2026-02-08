@@ -1,30 +1,29 @@
 # PLAN.md
 
 ## Branch
-feat/media-library-ui
+feat/ui-polish
 
 ## Goal
-Implement a media library UI so users can browse and reuse previously uploaded images.
+Improve the MVP user interface by adding consistent toast notifications, disabling invalid actions, and providing clearer error feedback.
 
 ## In Scope
-- Add a backend endpoint to list assets per project.
-- Create a React modal to display the media library.
-- Integrate the modal into the image picker in the editor.
-- Ensure newly uploaded images appear in the library immediately.
+- Implement consistent success and failure toast notifications across the app.
+- Disable buttons when actions are not valid (for example, deleting the only page).
+- Improve UI-facing API error messages, including clearer version-conflict feedback.
 
 ## Out of Scope
-- Image cropping or editing.
-- Asset deletion.
-- File type filtering (unless already supported).
+- Visual redesigns.
+- Adding new functionality.
+- Changing existing logic beyond UI feedback improvements.
 
 ## Constraints
 - Follow existing API response shapes:
   - `{ "ok": true, "data": {} }`
   - `{ "ok": false, "error": { "code": "", "message": "" } }`
-- Keep JWT authentication and user/tenant scoping on relevant endpoints.
-- Do not add new libraries unless explicitly allowed.
+- Do not introduce new libraries unless explicitly permitted.
+- Keep changes minimal and focused on UI polish.
 
 ## Definition of Done
-- Users can open the media library from the editor.
-- Users can see thumbnails of previously uploaded images for their current project.
-- Users can select an image from the library to replace an image in the editor.
+- The app displays consistent toast notifications for success and failure states.
+- Invalid actions are prevented through disabled UI controls.
+- Network and version-conflict issues are shown with clear, user-friendly error messages.
