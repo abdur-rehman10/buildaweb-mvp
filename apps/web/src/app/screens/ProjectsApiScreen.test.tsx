@@ -42,6 +42,7 @@ vi.mock('../../lib/api', () => {
     },
     publishApi: {
       create: vi.fn(),
+      getLatest: vi.fn(),
       getStatus: vi.fn(),
     },
   };
@@ -120,6 +121,7 @@ describe('ProjectsApiScreen toasts', () => {
       status: 'publishing',
       url: 'http://localhost:9000/buildaweb-sites/example/',
     });
+    vi.mocked(publishApi.getLatest).mockResolvedValue(null);
     vi.mocked(pagesApi.duplicate).mockResolvedValue({
       page_id: 'page-home-copy',
     });
@@ -283,5 +285,70 @@ describe('ProjectsApiScreen toasts', () => {
     const aboutPageUrl = `${proxyPublishedBaseUrl}about/`;
     const aboutLink = await screen.findByRole('link', { name: aboutPageUrl });
     expect(aboutLink.getAttribute('href')).toBe(aboutPageUrl);
+  });
+
+  it('shows Live status and link on initial render when latest publish exists', async () => {
+    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-2/';
+    vi.mocked(publishApi.getLatest).mockResolvedValueOnce({
+      publishId: 'publish-2',
+      status: 'live',
+      url: latestUrl,
+      timestamp: '2026-02-08T10:00:00.000Z',
+    });
+
+    renderScreen();
+
+    const status = await screen.findByText('Live');
+    expect(status).not.toBeNull();
+
+    const homeLink = await screen.findByRole('link', { name: 'Open published site' });
+    expect(homeLink.getAttribute('href')).toBe(`${latestUrl}index.html`);
+  });
+
+  it('shows Not published on initial render when latest publish is null', async () => {
+    vi.mocked(publishApi.getLatest).mockResolvedValueOnce(null);
+
+    renderScreen();
+
+    const status = await screen.findByText('Not published');
+    expect(status).not.toBeNull();
+  });
+
+  it('updates to Live when a publish completes', async () => {
+    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-3/';
+    vi.mocked(publishApi.getLatest)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        publishId: 'publish-3',
+        status: 'live',
+        url: latestUrl,
+      });
+
+    vi.mocked(publishApi.create).mockResolvedValue({
+      publishId: 'publish-3',
+      status: 'publishing',
+      url: latestUrl,
+    });
+
+    vi.mocked(publishApi.getStatus).mockResolvedValue({
+      publishId: 'publish-3',
+      status: 'live',
+      url: latestUrl,
+    });
+
+    renderScreen();
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    fireEvent.click(publishButton);
+
+    await waitFor(() => {
+      expect(screen.getByText('Live')).not.toBeNull();
+    });
+
+    await waitFor(() => {
+      expect(publishApi.getLatest).toHaveBeenCalledTimes(2);
+    });
+
+    const homeLink = await screen.findByRole('link', { name: 'Open published site' });
+    expect(homeLink.getAttribute('href')).toBe(`${latestUrl}index.html`);
   });
 });

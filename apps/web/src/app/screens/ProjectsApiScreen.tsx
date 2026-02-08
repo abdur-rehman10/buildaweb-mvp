@@ -14,6 +14,7 @@ import {
   type ProjectSummary,
   type PublishStatus,
 } from '../../lib/api';
+import { useLatestPublish } from '../hooks/useLatestPublish';
 import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 import { appToast } from '../../lib/toast';
 
@@ -95,6 +96,12 @@ function toPublishedPageUrl(params: {
   return `${normalizedBase}${pagePath}index.html`;
 }
 
+function formatPublishStatus(status: PublishStatus): string {
+  if (status === 'live') return 'Live';
+  if (status === 'publishing') return 'Publishing';
+  return 'Failed';
+}
+
 export function ProjectsApiScreen({
   activeProjectId,
   activePageId,
@@ -132,6 +139,8 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
+  const { latestPublish, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
+    useLatestPublish(activeProjectId);
   const publishedBaseUrl = publishedUrl ? toPublishedDisplayBaseUrl(publishedUrl) : null;
   const usePrettySubpageUrls = publishedBaseUrl ? shouldUsePrettySubpageUrls(publishedBaseUrl) : false;
   const publishedHomeUrl = publishedBaseUrl ? toPublishedHomeUrl(publishedBaseUrl) : null;
@@ -276,6 +285,7 @@ export function ProjectsApiScreen({
           appToast.success('Project published successfully', {
             eventKey: `publish-live:${publishId}`,
           });
+          void refreshLatestPublish();
         }
       } catch (err) {
         if (cancelled) return;
@@ -297,7 +307,26 @@ export function ProjectsApiScreen({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeProjectId, publishId, publishStatus]);
+  }, [activeProjectId, publishId, publishStatus, refreshLatestPublish]);
+
+  useEffect(() => {
+    if (publishStatus === 'publishing') return;
+
+    if (latestPublish) {
+      setPublishId(latestPublish.publishId);
+      setPublishStatus(latestPublish.status);
+      setPublishedUrl(latestPublish.url);
+      setPublishError(latestPublish.errorMessage ?? null);
+      return;
+    }
+
+    // If there is no persisted publish record and no local publish session, show "Not published".
+    if (!publishId) {
+      setPublishStatus(null);
+      setPublishedUrl(null);
+      setPublishError(null);
+    }
+  }, [latestPublish, publishId, publishStatus]);
 
   const toggleNavigationEditor = () => {
     if (!activeProjectId) return;
@@ -424,6 +453,8 @@ export function ProjectsApiScreen({
         appToast.error(message, {
           eventKey: `publish-failed:${result.publishId}`,
         });
+      } else if (result.status === 'live') {
+        void refreshLatestPublish();
       }
     } catch (err) {
       const message = getUserFriendlyErrorMessage(err, 'Failed to publish project');
@@ -459,6 +490,9 @@ export function ProjectsApiScreen({
     await loadProjectPages(projectId);
     await loadNavigation(projectId);
   };
+
+  const showPublishCard =
+    loadingLatestPublish || publishStatus !== null || !!publishError || !!publishedHomeUrl || !!publishMessage || !latestPublish;
 
   const handleDuplicatePage = async (page: PageMetaSummary) => {
     if (!activeProjectId) return;
@@ -700,16 +734,31 @@ export function ProjectsApiScreen({
             </p>
           )}
 
-          {(publishStatus || publishError || publishedHomeUrl || publishMessage) && (
+          {showPublishCard && (
             <div className="border rounded-md p-3 space-y-1">
               {publishStatus && (
                 <p className="text-sm">
-                  Publish status: <strong>{publishStatus}</strong>
+                  Publish status: <strong>{formatPublishStatus(publishStatus)}</strong>
+                </p>
+              )}
+              {!publishStatus && loadingLatestPublish && (
+                <p className="text-sm">
+                  Publish status: <strong>Loading...</strong>
+                </p>
+              )}
+              {!publishStatus && !loadingLatestPublish && !publishError && !publishedHomeUrl && (
+                <p className="text-sm">
+                  Publish status: <strong>Not published</strong>
                 </p>
               )}
               {publishError && (
                 <p className="text-sm text-destructive" role="alert">
                   {publishError}
+                </p>
+              )}
+              {!publishError && latestPublishError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {latestPublishError}
                 </p>
               )}
               {publishStatus === 'live' && publishedBaseUrl && publishedHomeUrl && (
