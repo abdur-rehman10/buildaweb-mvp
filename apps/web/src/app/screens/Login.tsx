@@ -4,7 +4,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Logo } from '../components/Logo';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { authApi } from '../../lib/api';
+import { ApiError, authApi } from '../../lib/api';
 import { setAuthToken } from '../../lib/auth';
 import { appToast } from '../../lib/toast';
 import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
@@ -20,6 +20,7 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,6 +43,7 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
     }
 
     setIsSubmitting(true);
+    setSubmitError('');
     try {
       const res = await authApi.login({ email, password });
       setAuthToken(res.accessToken);
@@ -50,7 +52,11 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
       });
       onLogin();
     } catch (err) {
-      const message = getUserFriendlyErrorMessage(err, 'Login failed');
+      const message =
+        err instanceof ApiError && err.code === 'INVALID_CREDENTIALS'
+          ? 'Invalid email or password.'
+          : getUserFriendlyErrorMessage(err, 'Login failed');
+      setSubmitError(message);
       appToast.error(message, {
         eventKey: 'auth-login-error',
       });
@@ -99,6 +105,7 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setErrors({ ...errors, email: undefined });
+                  if (submitError) setSubmitError('');
                 }}
                 error={errors.email}
               />
@@ -114,6 +121,7 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
                 onChange={(e) => {
                   setPassword(e.target.value);
                   setErrors({ ...errors, password: undefined });
+                  if (submitError) setSubmitError('');
                 }}
                 error={errors.password}
               />
@@ -126,6 +134,12 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+
+            {submitError && (
+              <p className="text-sm text-destructive" role="alert">
+                {submitError}
+              </p>
+            )}
 
             <div className="flex items-center justify-end">
               <button

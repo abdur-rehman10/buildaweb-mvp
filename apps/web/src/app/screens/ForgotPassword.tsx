@@ -15,17 +15,19 @@ export function ForgotPassword({ onNavigateToLogin, onNavigateToResetPassword }:
   const [email, setEmail] = useState('');
   const [debugResetToken, setDebugResetToken] = useState('');
   const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    setSubmitError('');
     if (!email) {
-      setError('Email is required');
+      setEmailError('Email is required');
       return;
     } else if (!/\S+@\S+\.\S+/.test(email)) {
-      setError('Email is invalid');
+      setEmailError('Email is invalid');
       return;
     }
 
@@ -38,7 +40,9 @@ export function ForgotPassword({ onNavigateToLogin, onNavigateToResetPassword }:
         eventKey: 'forgot-password-success',
       });
     } catch (err) {
-      appToast.error(toApiErrorMessage(err, 'Unable to send reset request.'), {
+      const message = toApiErrorMessage(err, 'Unable to send reset request.');
+      setSubmitError(message);
+      appToast.error(message, {
         eventKey: 'forgot-password-error',
       });
     } finally {
@@ -120,12 +124,19 @@ export function ForgotPassword({ onNavigateToLogin, onNavigateToResetPassword }:
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value);
-                setError('');
+                setEmailError('');
+                if (submitError) setSubmitError('');
               }}
-              error={error}
+              error={emailError}
             />
             <Mail className="absolute right-3 top-[38px] h-5 w-5 text-muted-foreground pointer-events-none" />
           </div>
+
+          {submitError && (
+            <p className="text-sm text-destructive" role="alert">
+              {submitError}
+            </p>
+          )}
 
           <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
             {isSubmitting ? 'Sending...' : 'Send reset link'}
