@@ -117,7 +117,7 @@ export class PagesService {
   async listPages(params: { tenantId: string; projectId: string }) {
     const pages = await this.pageModel
       .find({ tenantId: params.tenantId, projectId: params.projectId })
-      .select('_id title slug isHome updatedAt version')
+      .select('_id title slug isHome seoJson updatedAt version')
       .sort({ updatedAt: -1 })
       .lean()
       .exec();
@@ -127,6 +127,10 @@ export class PagesService {
       title: page.title,
       slug: page.slug,
       isHome: page.isHome,
+      seoJson:
+        typeof page.seoJson === 'object' && page.seoJson !== null && !Array.isArray(page.seoJson)
+          ? (page.seoJson as Record<string, unknown>)
+          : {},
       updatedAt: page.updatedAt,
       version: page.version,
     }));

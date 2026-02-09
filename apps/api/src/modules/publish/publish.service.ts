@@ -192,13 +192,13 @@ export class PublishService {
     return `${'../'.repeat(depth)}styles.css`;
   }
 
-  private staticHtmlDocument(params: { title: string; cssHref: string; bodyHtml: string }) {
+  private staticHtmlDocument(params: { headTags: string; cssHref: string; bodyHtml: string }) {
     return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${params.title}</title>
+    ${params.headTags}
     <link rel="stylesheet" href="${params.cssHref}" />
   </head>
   <body>
@@ -260,7 +260,11 @@ ${params.bodyHtml}
       .filter((item): item is { label: string; targetSlug: string } => item !== null);
   }
 
-  private async resolveAssetUrlById(params: { tenantId: string; projectId: string; pages: Array<{ editorJson: unknown }> }) {
+  private async resolveAssetUrlById(params: {
+    tenantId: string;
+    projectId: string;
+    pages: Array<{ editorJson: unknown; seoJson?: unknown }>;
+  }) {
     const refs = new Set<string>();
     for (const page of params.pages) {
       this.collectAssetRefsFromPageJson(page.editorJson, refs);
@@ -307,7 +311,7 @@ ${params.bodyHtml}
   async createAndPublish(params: { tenantId: string; projectId: string; ownerUserId: string }) {
     const pages = await this.pageModel
       .find({ tenantId: params.tenantId, projectId: params.projectId })
-      .select('_id title slug isHome editorJson')
+      .select('_id title slug isHome editorJson seoJson')
       .lean()
       .exec();
 
@@ -391,6 +395,8 @@ ${params.bodyHtml}
           assetUrlById,
           navLinks,
           currentSlug,
+          pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+          seoJson: page.seoJson,
         });
 
         if (!sharedCss) {
@@ -398,7 +404,7 @@ ${params.bodyHtml}
         }
 
         const html = this.staticHtmlDocument({
-          title: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+          headTags: render.headTags,
           cssHref: this.cssHrefForDepth(depth),
           bodyHtml: render.html,
         });

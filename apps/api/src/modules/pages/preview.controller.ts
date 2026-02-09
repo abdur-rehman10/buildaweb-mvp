@@ -244,6 +244,8 @@ export class PreviewController {
       assetUrlById,
       navLinks,
       currentSlug,
+      pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+      seoJson: page.seoJson,
     });
 
     return ok(preview);
