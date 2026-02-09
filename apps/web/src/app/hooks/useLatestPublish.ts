@@ -7,6 +7,7 @@ type UseLatestPublishResult = {
   latestPublishId: string | null;
   publishedAt: string | null;
   homePageId: string | null;
+  hasUnpublishedChanges: boolean | null;
   loadingLatestPublish: boolean;
   latestPublishError: string | null;
   refreshLatestPublish: () => Promise<void>;
@@ -17,6 +18,7 @@ export function useLatestPublish(projectId: string | null): UseLatestPublishResu
   const [latestPublishId, setLatestPublishId] = useState<string | null>(null);
   const [publishedAt, setPublishedAt] = useState<string | null>(null);
   const [homePageId, setHomePageId] = useState<string | null>(null);
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState<boolean | null>(null);
   const [loadingLatestPublish, setLoadingLatestPublish] = useState(false);
   const [latestPublishError, setLatestPublishError] = useState<string | null>(null);
 
@@ -26,6 +28,7 @@ export function useLatestPublish(projectId: string | null): UseLatestPublishResu
       setLatestPublishId(null);
       setPublishedAt(null);
       setHomePageId(null);
+      setHasUnpublishedChanges(null);
       setLatestPublishError(null);
       setLoadingLatestPublish(false);
       return;
@@ -38,10 +41,15 @@ export function useLatestPublish(projectId: string | null): UseLatestPublishResu
       const nextLatestPublishId = projectRes.project.latestPublishId ?? null;
       const nextPublishedAt = projectRes.project.publishedAt ?? null;
       const nextHomePageId = projectRes.project.homePageId ?? null;
+      const nextHasUnpublishedChanges =
+        typeof projectRes.project.hasUnpublishedChanges === 'boolean'
+          ? projectRes.project.hasUnpublishedChanges
+          : !nextLatestPublishId;
 
       setLatestPublishId(nextLatestPublishId);
       setPublishedAt(nextPublishedAt);
       setHomePageId(nextHomePageId);
+      setHasUnpublishedChanges(nextHasUnpublishedChanges);
 
       if (!nextLatestPublishId) {
         setLatestPublish(null);
@@ -57,12 +65,14 @@ export function useLatestPublish(projectId: string | null): UseLatestPublishResu
         setLatestPublishId(null);
         setPublishedAt(null);
         setHomePageId(null);
+        setHasUnpublishedChanges(null);
         setLatestPublishError(null);
         return;
       }
 
       setLatestPublish(null);
       setHomePageId(null);
+      setHasUnpublishedChanges(null);
       setLatestPublishError(getUserFriendlyErrorMessage(err, 'Failed to load publish status'));
     } finally {
       setLoadingLatestPublish(false);
@@ -78,6 +88,7 @@ export function useLatestPublish(projectId: string | null): UseLatestPublishResu
     latestPublishId,
     publishedAt,
     homePageId,
+    hasUnpublishedChanges,
     loadingLatestPublish,
     latestPublishError,
     refreshLatestPublish,

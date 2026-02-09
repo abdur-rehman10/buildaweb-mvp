@@ -6,6 +6,8 @@ describe('ProjectsController.setProjectHomePage', () => {
   let controller: ProjectsController;
   let projects: {
     getByIdScoped: jest.Mock;
+    getByIdScopedWithDraftStatus: jest.Mock;
+    listByOwnerWithDraftStatus: jest.Mock;
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
@@ -14,6 +16,8 @@ describe('ProjectsController.setProjectHomePage', () => {
   beforeEach(() => {
     projects = {
       getByIdScoped: jest.fn(),
+      getByIdScopedWithDraftStatus: jest.fn(),
+      listByOwnerWithDraftStatus: jest.fn(),
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
@@ -68,6 +72,8 @@ describe('ProjectsController.getProject', () => {
   let controller: ProjectsController;
   let projects: {
     getByIdScoped: jest.Mock;
+    getByIdScopedWithDraftStatus: jest.Mock;
+    listByOwnerWithDraftStatus: jest.Mock;
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
@@ -76,6 +82,8 @@ describe('ProjectsController.getProject', () => {
   beforeEach(() => {
     projects = {
       getByIdScoped: jest.fn(),
+      getByIdScopedWithDraftStatus: jest.fn(),
+      listByOwnerWithDraftStatus: jest.fn(),
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
@@ -86,16 +94,19 @@ describe('ProjectsController.getProject', () => {
 
   it('returns latest publish fields when present', async () => {
     const publishedAt = new Date('2026-02-08T10:30:00.000Z');
-    projects.getByIdScoped.mockResolvedValue({
-      _id: '507f1f77bcf86cd799439100',
-      name: 'Main Site',
-      status: 'published',
-      defaultLocale: 'en',
-      homePageId: '507f1f77bcf86cd799439011',
-      latestPublishId: '507f1f77bcf86cd799439200',
-      publishedAt,
-      createdAt: new Date('2026-02-08T09:00:00.000Z'),
-      updatedAt: new Date('2026-02-08T10:30:00.000Z'),
+    projects.getByIdScopedWithDraftStatus.mockResolvedValue({
+      project: {
+        _id: '507f1f77bcf86cd799439100',
+        name: 'Main Site',
+        status: 'published',
+        defaultLocale: 'en',
+        homePageId: '507f1f77bcf86cd799439011',
+        latestPublishId: '507f1f77bcf86cd799439200',
+        publishedAt,
+        createdAt: new Date('2026-02-08T09:00:00.000Z'),
+        updatedAt: new Date('2026-02-08T10:30:00.000Z'),
+      },
+      hasUnpublishedChanges: false,
     });
 
     const result = await controller.getProject('507f1f77bcf86cd799439100', {
@@ -110,22 +121,26 @@ describe('ProjectsController.getProject', () => {
           homePageId: '507f1f77bcf86cd799439011',
           latestPublishId: '507f1f77bcf86cd799439200',
           publishedAt,
+          hasUnpublishedChanges: false,
         }),
       },
     });
   });
 
   it('returns null latest publish fields when not published', async () => {
-    projects.getByIdScoped.mockResolvedValue({
-      _id: '507f1f77bcf86cd799439100',
-      name: 'Draft Site',
-      status: 'draft',
-      defaultLocale: 'en',
-      homePageId: null,
-      latestPublishId: null,
-      publishedAt: null,
-      createdAt: new Date('2026-02-08T09:00:00.000Z'),
-      updatedAt: new Date('2026-02-08T09:05:00.000Z'),
+    projects.getByIdScopedWithDraftStatus.mockResolvedValue({
+      project: {
+        _id: '507f1f77bcf86cd799439100',
+        name: 'Draft Site',
+        status: 'draft',
+        defaultLocale: 'en',
+        homePageId: null,
+        latestPublishId: null,
+        publishedAt: null,
+        createdAt: new Date('2026-02-08T09:00:00.000Z'),
+        updatedAt: new Date('2026-02-08T09:05:00.000Z'),
+      },
+      hasUnpublishedChanges: true,
     });
 
     const result = await controller.getProject('507f1f77bcf86cd799439100', {
@@ -139,6 +154,7 @@ describe('ProjectsController.getProject', () => {
           homePageId: null,
           latestPublishId: null,
           publishedAt: null,
+          hasUnpublishedChanges: true,
         }),
       },
     });
@@ -149,6 +165,8 @@ describe('ProjectsController.settings', () => {
   let controller: ProjectsController;
   let projects: {
     getByIdScoped: jest.Mock;
+    getByIdScopedWithDraftStatus: jest.Mock;
+    listByOwnerWithDraftStatus: jest.Mock;
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
@@ -157,6 +175,8 @@ describe('ProjectsController.settings', () => {
   beforeEach(() => {
     projects = {
       getByIdScoped: jest.fn(),
+      getByIdScopedWithDraftStatus: jest.fn(),
+      listByOwnerWithDraftStatus: jest.fn(),
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),

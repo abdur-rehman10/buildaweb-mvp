@@ -68,18 +68,6 @@ function toPublishUrlInput(baseUrl: string): PublishUrlBuilderInput | null {
   return parsePublishBaseUrl(toPublishedDisplayBaseUrl(baseUrl));
 }
 
-function hasPagesEditedAfterPublish(params: { pages: PageMetaSummary[]; publishedAt: string | null }): boolean {
-  if (!params.publishedAt) return false;
-  const publishedAtMs = Date.parse(params.publishedAt);
-  if (Number.isNaN(publishedAtMs)) return false;
-
-  return params.pages.some((page) => {
-    if (!page.updatedAt) return false;
-    const updatedAtMs = Date.parse(String(page.updatedAt));
-    return !Number.isNaN(updatedAtMs) && updatedAtMs > publishedAtMs;
-  });
-}
-
 function formatPublishHistoryTime(value?: string | null): string {
   if (!value) return 'Unknown';
   const ts = Date.parse(value);
@@ -148,14 +136,26 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
-  const { latestPublish, latestPublishId, publishedAt, homePageId, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
-    useLatestPublish(activeProjectId);
+  const {
+    latestPublish,
+    latestPublishId,
+    homePageId,
+    hasUnpublishedChanges: latestPublishHasUnpublishedChanges,
+    loadingLatestPublish,
+    latestPublishError,
+    refreshLatestPublish,
+  } = useLatestPublish(activeProjectId);
   const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
   const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : null;
-  const hasUnpublishedChanges = hasPagesEditedAfterPublish({
-    pages: projectPages,
-    publishedAt,
-  });
+  const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
+  const hasUnpublishedChangesFromProjectsList =
+    typeof activeProject?.hasUnpublishedChanges === 'boolean' ? activeProject.hasUnpublishedChanges : null;
+  const hasUnpublishedChanges =
+    typeof latestPublishHasUnpublishedChanges === 'boolean'
+      ? latestPublishHasUnpublishedChanges
+      : typeof hasUnpublishedChangesFromProjectsList === 'boolean'
+        ? hasUnpublishedChangesFromProjectsList
+        : !latestPublishId;
   const homePageExistsById = homePageId ? projectPages.some((page) => page.id === homePageId) : false;
   const fallbackHomePage = projectPages.find((page) => hasLegacyHomeMarker(page)) ?? projectPages[0] ?? null;
   const homeExists = homePageId ? homePageExistsById : !!fallbackHomePage;
@@ -185,11 +185,12 @@ export function ProjectsApiScreen({
       ? 'Publishing is already in progress.'
       : preflightDisabledReason
         ? preflightDisabledReason
+      : hasAnyLiveSite && !hasUnpublishedChanges
+        ? 'No unpublished changes to publish.'
       : projectPages.length === 0
         ? 'Create at least one page before publishing.'
         : null;
   const previewDisabledReason = projectPages.length === 0 ? 'Create at least one page before previewing.' : null;
-  const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
