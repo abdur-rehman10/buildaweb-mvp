@@ -87,5 +87,26 @@ describe('PreviewRendererService pretty URLs', () => {
     expect(preview.headTags).not.toContain('property="og:title"');
     expect(preview.headTags).not.toContain('property="og:description"');
     expect(preview.headTags).not.toContain('property="og:image"');
+    expect(preview.headTags).not.toContain('rel="icon"');
+  });
+
+  it('uses project settings for title fallback, favicon, og:image, and lang', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      pageTitle: 'Page Title',
+      siteName: 'Project Site',
+      faviconUrl: 'http://localhost:9000/buildaweb/assets/favicon.png',
+      defaultOgImageUrl: 'http://localhost:9000/buildaweb/assets/default-og.png',
+      locale: 'fr',
+      seoJson: {},
+      editorJson: { sections: [] },
+    });
+
+    expect(preview.headTags).toContain('<title>Project Site</title>');
+    expect(preview.headTags).toContain('<link rel="icon" href="http://localhost:9000/buildaweb/assets/favicon.png" />');
+    expect(preview.headTags).toContain(
+      '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/default-og.png" />',
+    );
+    expect(preview.lang).toBe('fr');
   });
 });

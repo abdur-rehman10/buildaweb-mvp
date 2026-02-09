@@ -307,7 +307,11 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
     try {
       const preview = await pagesApi.preview(projectId, targetPageId);
       setPreviewHash(preview.hash);
-      setPreviewSrcDoc(`<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`);
+      const lang = typeof preview.lang === 'string' && preview.lang.trim().length > 0 ? preview.lang.trim() : 'en';
+      const headTags = typeof preview.headTags === 'string' ? preview.headTags : '';
+      setPreviewSrcDoc(
+        `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">${headTags}<style>${preview.css}</style></head><body>${preview.html}</body></html>`,
+      );
     } catch (err) {
       const nextMessage = getUserFriendlyErrorMessage(err, 'Failed to load preview');
       setMessage(nextMessage);
