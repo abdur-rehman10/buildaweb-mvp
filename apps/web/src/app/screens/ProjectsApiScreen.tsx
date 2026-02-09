@@ -99,10 +99,16 @@ function toPublishedPageUrl(params: {
   return `${normalizedBase}${pagePath}index.html`;
 }
 
-function formatPublishStatus(status: PublishStatus): string {
-  if (status === 'live') return 'Live';
-  if (status === 'publishing') return 'Publishing';
-  return 'Failed';
+function hasPagesEditedAfterPublish(params: { pages: PageMetaSummary[]; publishedAt: string | null }): boolean {
+  if (!params.publishedAt) return false;
+  const publishedAtMs = Date.parse(params.publishedAt);
+  if (Number.isNaN(publishedAtMs)) return false;
+
+  return params.pages.some((page) => {
+    if (!page.updatedAt) return false;
+    const updatedAtMs = Date.parse(String(page.updatedAt));
+    return !Number.isNaN(updatedAtMs) && updatedAtMs > publishedAtMs;
+  });
 }
 
 export function ProjectsApiScreen({
@@ -142,11 +148,33 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
-  const { latestPublish, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
+  const { latestPublish, latestPublishId, publishedAt, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
     useLatestPublish(activeProjectId);
   const publishedBaseUrl = publishedUrl ? toPublishedDisplayBaseUrl(publishedUrl) : null;
   const usePrettySubpageUrls = publishedBaseUrl ? shouldUsePrettySubpageUrls(publishedBaseUrl) : false;
   const publishedHomeUrl = publishedBaseUrl ? toPublishedHomeUrl(publishedBaseUrl) : null;
+  const hasUnpublishedChanges = hasPagesEditedAfterPublish({
+    pages: projectPages,
+    publishedAt,
+  });
+  const hasAnyLiveSite = !!latestPublishId || publishStatus === 'live';
+  const showRepublishCta = !!latestPublishId && hasUnpublishedChanges;
+  const publishStatusLabel =
+    publishStatus === 'publishing'
+      ? 'Publishing'
+      : publishStatus === 'failed'
+        ? 'Failed'
+        : hasAnyLiveSite
+          ? hasUnpublishedChanges
+            ? 'Live (outdated) • Unpublished changes'
+            : 'Live (up to date)'
+          : 'Not published';
+  const publishButtonLabel =
+    publishStarting || publishStatus === 'publishing'
+      ? 'Publishing...'
+      : showRepublishCta
+        ? 'Republish to update live site'
+        : 'Publish';
   const publishDisabledReason =
     publishStarting || publishStatus === 'publishing'
       ? 'Publishing is already in progress.'
@@ -727,7 +755,7 @@ export function ProjectsApiScreen({
                 disabled={!!publishDisabledReason}
                 title={publishDisabledReason ?? undefined}
               >
-                {publishStarting || publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
+                {publishButtonLabel}
               </Button>
             </div>
           </div>
@@ -739,19 +767,14 @@ export function ProjectsApiScreen({
 
           {showPublishCard && (
             <div className="border rounded-md p-3 space-y-1">
-              {publishStatus && (
-                <p className="text-sm">
-                  Publish status: <strong>{formatPublishStatus(publishStatus)}</strong>
-                </p>
-              )}
-              {!publishStatus && loadingLatestPublish && (
+              {!publishStatus && loadingLatestPublish && !latestPublishId && (
                 <p className="text-sm">
                   Publish status: <strong>Loading...</strong>
                 </p>
               )}
-              {!publishStatus && !loadingLatestPublish && !publishError && !publishedHomeUrl && (
+              {(!loadingLatestPublish || publishStatus || latestPublishId) && (
                 <p className="text-sm">
-                  Publish status: <strong>Not published</strong>
+                  Publish status: <strong>{publishStatusLabel}</strong>
                 </p>
               )}
               {publishError && (
