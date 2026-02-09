@@ -6,6 +6,7 @@ import { PageDocument } from './page.schema';
 import { PagesService } from './pages.service';
 
 type MockPageModel = {
+  find: jest.Mock;
   findOne: jest.Mock;
   findOneAndUpdate: jest.Mock;
   create: jest.Mock;
@@ -47,6 +48,7 @@ describe('PagesService', () => {
 
   beforeEach(() => {
     pageModel = {
+      find: jest.fn(),
       findOne: jest.fn(),
       findOneAndUpdate: jest.fn(),
       create: jest.fn(),
@@ -265,6 +267,50 @@ describe('PagesService', () => {
         },
         { new: true },
       );
+    });
+  });
+
+  describe('listPages', () => {
+    it('includes seoJson in list response items', async () => {
+      pageModel.find.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        sort: jest.fn().mockReturnThis(),
+        lean: jest.fn().mockReturnThis(),
+        exec: jest.fn().mockResolvedValue([
+          {
+            _id: 'page-1',
+            title: 'Home',
+            slug: '/',
+            isHome: true,
+            seoJson: {
+              title: 'SEO Home',
+              description: 'Home description',
+            },
+            updatedAt: new Date('2026-02-09T00:00:00.000Z'),
+            version: 2,
+          },
+        ]),
+      });
+
+      const pages = await service.listPages({
+        tenantId: 'default',
+        projectId: 'project-1',
+      });
+
+      expect(pages).toEqual([
+        {
+          id: 'page-1',
+          title: 'Home',
+          slug: '/',
+          isHome: true,
+          seoJson: {
+            title: 'SEO Home',
+            description: 'Home description',
+          },
+          updatedAt: new Date('2026-02-09T00:00:00.000Z'),
+          version: 2,
+        },
+      ]);
     });
   });
 
