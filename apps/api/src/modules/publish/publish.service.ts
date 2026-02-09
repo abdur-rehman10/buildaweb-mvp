@@ -88,14 +88,6 @@ export class PublishService {
     }
   }
 
-  private collectAssetRefsFromSeoJson(seoJson: unknown, refs: Set<string>) {
-    const seo = this.asRecord(seoJson);
-    const ogImageAssetId = this.readString(seo?.ogImageAssetId).trim();
-    if (ogImageAssetId) {
-      refs.add(ogImageAssetId);
-    }
-  }
-
   private normalizeSlug(slug: string) {
     return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
   }
@@ -276,7 +268,6 @@ ${params.bodyHtml}
     const refs = new Set<string>();
     for (const page of params.pages) {
       this.collectAssetRefsFromPageJson(page.editorJson, refs);
-      this.collectAssetRefsFromSeoJson(page.seoJson, refs);
     }
 
     const validAssetIds = [...refs].filter((id) => Types.ObjectId.isValid(id));

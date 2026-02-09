@@ -297,7 +297,7 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
-  it('injects seo meta tags into published html and resolves og:image from asset id', async () => {
+  it('injects seo title and description meta tags into published html', async () => {
     pageModel.find.mockReturnValueOnce(
       mockLeanExec([
         {
@@ -308,21 +308,12 @@ describe('PublishService pretty URLs', () => {
           seoJson: {
             title: 'SEO Home',
             description: 'Home description',
-            ogTitle: 'Home OG',
-            ogDescription: 'Home OG Description',
-            ogImageAssetId: '507f1f77bcf86cd799439099',
           },
           editorJson: { sections: [] },
         },
       ]),
     );
     navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
-    assets.getByIdsScoped.mockResolvedValueOnce([
-      {
-        _id: '507f1f77bcf86cd799439099',
-        publicUrl: 'http://localhost:9000/buildaweb/tenants/default/projects/project-1/assets/hero.png',
-      },
-    ]);
 
     await service.createAndPublish(baseParams);
 
@@ -334,11 +325,7 @@ describe('PublishService pretty URLs', () => {
     const html = homeUpload!.buffer.toString('utf-8');
     expect(html).toContain('<title>SEO Home</title>');
     expect(html).toContain('<meta name="description" content="Home description" />');
-    expect(html).toContain('<meta property="og:title" content="Home OG" />');
-    expect(html).toContain('<meta property="og:description" content="Home OG Description" />');
-    expect(html).toContain(
-      '<meta property="og:image" content="http://localhost:9000/buildaweb/tenants/default/projects/project-1/assets/hero.png" />',
-    );
+    expect(html).not.toContain('property="og:');
   });
 
   it('uses page title fallback and omits optional seo tags when seoJson is empty', async () => {
