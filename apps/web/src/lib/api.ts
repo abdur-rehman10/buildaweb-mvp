@@ -136,6 +136,21 @@ export type MeResult = {
   user: AuthUser;
 };
 
+export type ForgotPasswordInput = {
+  email: string;
+};
+
+export type ForgotPasswordResult = {
+  debugResetToken?: string;
+};
+
+export type ResetPasswordInput = {
+  token: string;
+  newPassword: string;
+};
+
+export type ResetPasswordResult = Record<string, never>;
+
 export type ProjectStatus = 'draft' | 'published' | 'archived';
 
 export type ProjectSummary = {
@@ -380,6 +395,18 @@ export const authApi = {
   me() {
     return apiRequest<MeResult>('/api/v1/auth/me', {
       method: 'GET',
+    });
+  },
+  forgotPassword(input: ForgotPasswordInput) {
+    return apiRequest<ForgotPasswordResult>('/api/v1/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  resetPassword(input: ResetPasswordInput) {
+    return apiRequest<ResetPasswordResult>('/api/v1/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify(input),
     });
   },
 };

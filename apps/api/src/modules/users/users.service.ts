@@ -24,4 +24,8 @@ export class UsersService {
   async safeById(id: string) {
     return this.userModel.findById(id).select('_id email name tenantId status createdAt updatedAt').exec();
   }
+
+  async updatePasswordHashById(id: string, passwordHash: string) {
+    return this.userModel.updateOne({ _id: id }, { $set: { passwordHash } }).exec();
+  }
 }
