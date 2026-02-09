@@ -51,6 +51,13 @@ function normalizeSlugToken(slug?: string): string {
   return (slug ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
 }
 
+function hasLegacyHomeMarker(page: Pick<PageMetaSummary, 'slug' | 'title'>): boolean {
+  const rawSlug = (page.slug ?? '').trim().toLowerCase();
+  const normalizedSlug = rawSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+  const normalizedTitle = (page.title ?? '').trim().toLowerCase();
+  return rawSlug === '/' || normalizedSlug === 'home' || normalizedTitle === 'home';
+}
+
 function toPublishUrlInput(baseUrl: string): PublishUrlBuilderInput | null {
   return parsePublishBaseUrl(toPublishedDisplayBaseUrl(baseUrl));
 }
@@ -117,7 +124,7 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
-  const { latestPublish, latestPublishId, publishedAt, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
+  const { latestPublish, latestPublishId, publishedAt, homePageId, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
     useLatestPublish(activeProjectId);
   const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
   const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : null;
@@ -125,7 +132,10 @@ export function ProjectsApiScreen({
     pages: projectPages,
     publishedAt,
   });
-  const hasHomePage = projectPages.some((page) => page.isHome || (page.slug ?? '').trim() === '/');
+  const homePageExistsById = homePageId ? projectPages.some((page) => page.id === homePageId) : false;
+  const fallbackHomePage = projectPages.find((page) => hasLegacyHomeMarker(page)) ?? projectPages[0] ?? null;
+  const homeExists = homePageId ? homePageExistsById : !!fallbackHomePage;
+  const showHomeMissingBadge = projectPages.length === 0 || (!!homePageId && !homeExists);
   const hasAnyLiveSite = !!latestPublishId || publishStatus === 'live';
   const showRepublishCta = !!latestPublishId && hasUnpublishedChanges;
   const publishStatusLabel =
@@ -852,7 +862,7 @@ export function ProjectsApiScreen({
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
             <div className="flex items-center gap-2">
-              {projectPages.length > 0 && !hasHomePage && (
+              {showHomeMissingBadge && (
                 <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-amber-700">
                   Home page missing
                 </span>
