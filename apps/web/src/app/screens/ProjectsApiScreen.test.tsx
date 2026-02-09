@@ -800,6 +800,9 @@ describe('ProjectsApiScreen toasts', () => {
 
     const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-old' });
     fireEvent.click(makeLiveButton);
+    const confirmDialog = await screen.findByRole('dialog');
+    expect(within(confirmDialog).getByText('This will set this publish as Live.')).not.toBeNull();
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Make Live' }));
 
     await waitFor(() => {
       expect(publishApi.setLatest).toHaveBeenCalledWith('project-1', { publishId: 'pub-old' });
@@ -818,17 +821,29 @@ describe('ProjectsApiScreen toasts', () => {
       ],
     });
 
-    vi.mocked(projectsApi.get).mockResolvedValueOnce({
-      project: {
-        id: 'project-1',
-        name: 'Main site',
-        status: 'published',
-        defaultLocale: 'en',
-        latestPublishId: 'pub-old',
-        publishedAt: '2026-02-09T11:00:00.000Z',
-        hasUnpublishedChanges: false,
-      },
-    });
+    vi.mocked(projectsApi.get)
+      .mockResolvedValueOnce({
+        project: {
+          id: 'project-1',
+          name: 'Main site',
+          status: 'draft',
+          defaultLocale: 'en',
+          latestPublishId: null,
+          publishedAt: null,
+          hasUnpublishedChanges: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        project: {
+          id: 'project-1',
+          name: 'Main site',
+          status: 'published',
+          defaultLocale: 'en',
+          latestPublishId: 'pub-old',
+          publishedAt: '2026-02-09T11:00:00.000Z',
+          hasUnpublishedChanges: false,
+        },
+      });
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
       publishId: 'pub-old',
       status: 'live',
@@ -849,10 +864,17 @@ describe('ProjectsApiScreen toasts', () => {
 
     const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-old' });
     fireEvent.click(makeLiveButton);
+    const confirmDialog = await screen.findByRole('dialog');
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Make Live' }));
 
     await waitFor(() => {
       expect(screen.getByLabelText('Live publish pub-old')).not.toBeNull();
     });
+
+    const liveLink = await screen.findByRole('link', { name: 'Open published site' });
+    expect(liveLink.getAttribute('href')).toBe(
+      'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-old/index.html',
+    );
   });
 
   it('Make Live error shows toast and UI does not crash', async () => {
@@ -892,6 +914,8 @@ describe('ProjectsApiScreen toasts', () => {
 
     const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-error' });
     fireEvent.click(makeLiveButton);
+    const confirmDialog = await screen.findByRole('dialog');
+    fireEvent.click(within(confirmDialog).getByRole('button', { name: 'Make Live' }));
 
     await waitFor(() => {
       expect(appToast.error).toHaveBeenCalledWith(
