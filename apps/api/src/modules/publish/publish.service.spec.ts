@@ -11,6 +11,7 @@ import { PublishService } from './publish.service';
 
 type MockPublishModel = {
   create: jest.Mock;
+  find: jest.Mock;
 };
 
 type MockPageModel = {
@@ -61,6 +62,7 @@ describe('PublishService pretty URLs', () => {
 
     publishModel = {
       create: jest.fn().mockResolvedValue(publishDoc),
+      find: jest.fn(),
     };
 
     pageModel = {
@@ -201,5 +203,28 @@ describe('PublishService pretty URLs', () => {
         },
       },
     );
+  });
+
+  it('lists publishes scoped to project/user sorted by createdAt desc with limit', async () => {
+    const exec = jest.fn().mockResolvedValue([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
+    const limit = jest.fn().mockReturnValue({ exec });
+    const sort = jest.fn().mockReturnValue({ limit });
+    publishModel.find.mockReturnValue({ sort });
+
+    const result = await service.listByProjectScoped({
+      tenantId: 'default',
+      projectId: 'project-1',
+      ownerUserId: 'user-1',
+      limit: 10,
+    });
+
+    expect(publishModel.find).toHaveBeenCalledWith({
+      tenantId: 'default',
+      projectId: 'project-1',
+      ownerUserId: 'user-1',
+    });
+    expect(sort).toHaveBeenCalledWith({ createdAt: -1 });
+    expect(limit).toHaveBeenCalledWith(10);
+    expect(result).toEqual([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
   });
 });
