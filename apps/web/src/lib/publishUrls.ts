@@ -62,3 +62,45 @@ export function buildPublishPageUrl(params: PublishPageUrlInput): string {
 
   return `${buildPublishBaseUrl(params)}/${normalizedSlug}/index.html`;
 }
+
+export function parsePublishBaseUrl(baseUrl: string): PublishUrlBuilderInput | null {
+  const raw = baseUrl.trim();
+  if (!raw) return null;
+
+  try {
+    const parsed = new URL(raw);
+    const pathSegments = parsed.pathname.split('/').filter(Boolean);
+    const rootIndex = pathSegments.indexOf('buildaweb-sites');
+    if (rootIndex < 0) return null;
+
+    const markerTenant = pathSegments[rootIndex + 1];
+    const tenantId = pathSegments[rootIndex + 2];
+    const markerProject = pathSegments[rootIndex + 3];
+    const projectId = pathSegments[rootIndex + 4];
+    const markerPublish = pathSegments[rootIndex + 5];
+    const publishId = pathSegments[rootIndex + 6];
+
+    if (
+      markerTenant !== 'tenants' ||
+      markerProject !== 'projects' ||
+      markerPublish !== 'publishes' ||
+      !tenantId ||
+      !projectId ||
+      !publishId
+    ) {
+      return null;
+    }
+
+    const beforeRoot = pathSegments.slice(0, rootIndex);
+    const minioBaseUrl = `${parsed.origin}${beforeRoot.length > 0 ? `/${beforeRoot.join('/')}` : ''}`;
+
+    return {
+      minioBaseUrl,
+      tenantId: decodeURIComponent(tenantId),
+      projectId: decodeURIComponent(projectId),
+      publishId: decodeURIComponent(publishId),
+    };
+  } catch {
+    return null;
+  }
+}
