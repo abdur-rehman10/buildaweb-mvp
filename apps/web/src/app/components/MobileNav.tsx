@@ -5,6 +5,7 @@ import {
   Home, 
   FolderOpen, 
   LayoutTemplate, 
+  Images,
   BarChart3, 
   Users,
   Settings,
@@ -27,6 +28,7 @@ export function MobileNav({ currentScreen, onNavigate, onLogout }: MobileNavProp
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'project-folders', label: 'Projects', icon: FolderOpen },
     { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+    { id: 'assets', label: 'Assets', icon: Images },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'team', label: 'Team', icon: Users },
   ];
