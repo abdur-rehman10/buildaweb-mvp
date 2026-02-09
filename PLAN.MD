@@ -1,29 +1,30 @@
 # PLAN.md
 
 ## Branch
-feat/assets-library
+feat/publish-rollback-ux
 
 ## Goal
-Add a central assets library so users can browse and reuse uploaded images across project pages.
+Polish publish rollback UX so making an older publish live is clear, safe, and correctly updates live badges and status.
 
 ## In Scope
 - Frontend:
-  - Add an `Assets` screen/panel using existing app navigation patterns.
-  - List project assets with thumbnail, filename, createdAt, mimeType, and size when available.
-  - Add `Copy URL` action for each asset.
-  - Add `Use in page` selection flow from image picker/replace UI so existing assets can be reused.
+  - Publish History shows `Make Live` for non-live rows.
+  - Add confirmation dialog: `This will set this publish as Live.`
+  - On success:
+    - Live badge moves to selected publish row.
+    - Project live banner updates from latest publish state.
+    - Draft-vs-live status updates correctly after rollback.
 - Backend:
-  - Reuse existing assets list endpoint if already present.
-  - If missing, add minimal read-only `GET /api/v1/projects/:projectId/assets`.
-  - Keep AGENTS response contract (`{ ok: true, data }` / `{ ok: false, error }`).
+  - Reuse existing rollback endpoint/behavior if present.
+  - If missing, add minimal `POST /api/v1/projects/:projectId/publishes/:publishId/make-live` that updates `latestPublishId` and `publishedAt` following API response contract.
 
 ## Out of Scope
-- Asset delete
-- Folders, tags, search, or filtering enhancements beyond current behavior
-- Storage system changes
+- Diff view
+- Publish deletion
+- Background jobs
 
 ## Definition of Done
-- Uploaded editor images appear in the central assets library.
-- User can copy asset URL from the library.
-- User can select an existing library asset in image replace flow.
-- Selected image renders correctly and remains correct after refresh.
+- User can safely confirm rollback from Publish History.
+- Selected publish becomes live in both history badge and live banner.
+- Live URL points to selected publish id.
+- Draft-vs-live badge remains correct after rollback.
