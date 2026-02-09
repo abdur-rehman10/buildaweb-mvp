@@ -33,6 +33,31 @@ export class ProjectsService {
       .exec();
   }
 
+  async setLatestPublish(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+    publishId: string;
+    publishedAt: Date;
+  }) {
+    return this.projectModel
+      .findOneAndUpdate(
+        {
+          _id: params.projectId,
+          tenantId: params.tenantId,
+          ownerUserId: params.ownerUserId,
+        },
+        {
+          $set: {
+            latestPublishId: params.publishId,
+            publishedAt: params.publishedAt,
+          },
+        },
+        { new: true },
+      )
+      .exec();
+  }
+
   async setHomePage(params: { tenantId: string; ownerUserId: string; projectId: string; pageId: string }) {
     if (!Types.ObjectId.isValid(params.pageId)) {
       throw new NotFoundException('Page not found');

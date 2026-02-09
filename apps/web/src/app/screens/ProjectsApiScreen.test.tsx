@@ -43,6 +43,7 @@ vi.mock('../../lib/api', () => {
     publishApi: {
       create: vi.fn(),
       list: vi.fn(),
+      setLatest: vi.fn(),
       getLatest: vi.fn(),
       getStatus: vi.fn(),
     },
@@ -134,6 +135,16 @@ describe('ProjectsApiScreen toasts', () => {
     });
     vi.mocked(publishApi.list).mockResolvedValue({
       publishes: [],
+    });
+    vi.mocked(publishApi.setLatest).mockResolvedValue({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'published',
+        defaultLocale: 'en',
+        latestPublishId: 'publish-1',
+        publishedAt: '2026-02-09T10:00:00.000Z',
+      },
     });
     vi.mocked(pagesApi.duplicate).mockResolvedValue({
       page_id: 'page-home-copy',
@@ -565,5 +576,164 @@ describe('ProjectsApiScreen toasts', () => {
 
     const openLink = await screen.findByRole('link', { name: 'Open publish pub-open' });
     expect(openLink.getAttribute('href')).toBe('http://localhost:9000/buildaweb-sites/tenant/project/pub-open/index.html');
+  });
+
+  it('live publish row shows Live badge and disabled Make Live button', async () => {
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'published',
+        defaultLocale: 'en',
+        latestPublishId: 'pub-live',
+        publishedAt: '2026-02-09T10:00:00.000Z',
+      },
+    });
+    vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
+      publishId: 'pub-live',
+      status: 'live',
+      url: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-live/',
+    });
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-live',
+          status: 'live',
+          createdAt: '2026-02-09T10:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-live/',
+        },
+        {
+          publishId: 'pub-old',
+          status: 'live',
+          createdAt: '2026-02-09T09:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-live' });
+    expect((makeLiveButton as HTMLButtonElement).disabled).toBe(true);
+    expect(await screen.findByLabelText('Live publish pub-live')).not.toBeNull();
+  });
+
+  it('clicking Make Live calls API with correct publishId', async () => {
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-old',
+          status: 'live',
+          createdAt: '2026-02-09T09:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-old' });
+    fireEvent.click(makeLiveButton);
+
+    await waitFor(() => {
+      expect(publishApi.setLatest).toHaveBeenCalledWith('project-1', { publishId: 'pub-old' });
+    });
+  });
+
+  it('after Make Live success, UI reflects new live publish row', async () => {
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-old',
+          status: 'live',
+          createdAt: '2026-02-09T09:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+        },
+      ],
+    });
+
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'published',
+        defaultLocale: 'en',
+        latestPublishId: 'pub-old',
+        publishedAt: '2026-02-09T11:00:00.000Z',
+      },
+    });
+    vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
+      publishId: 'pub-old',
+      status: 'live',
+      url: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+    });
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-old',
+          status: 'live',
+          createdAt: '2026-02-09T09:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-old' });
+    fireEvent.click(makeLiveButton);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Live publish pub-old')).not.toBeNull();
+    });
+  });
+
+  it('Make Live error shows toast and UI does not crash', async () => {
+    vi.mocked(projectsApi.get).mockReset();
+    vi.mocked(projectsApi.get).mockResolvedValue({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
+
+    vi.mocked(publishApi.list).mockReset();
+    vi.mocked(publishApi.list).mockResolvedValue({
+      publishes: [
+        {
+          publishId: 'pub-error',
+          status: 'live',
+          createdAt: '2026-02-09T09:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-error/',
+        },
+      ],
+    });
+    vi.mocked(publishApi.setLatest).mockRejectedValueOnce(
+      new ApiError({
+        status: 500,
+        code: 'SERVER_ERROR',
+        message: 'Unable to set latest publish',
+      }),
+    );
+
+    renderScreen();
+
+    const makeLiveButton = await screen.findByRole('button', { name: 'Make live pub-error' });
+    fireEvent.click(makeLiveButton);
+
+    await waitFor(() => {
+      expect(appToast.error).toHaveBeenCalledWith(
+        'Unable to set latest publish',
+        expect.objectContaining({
+          eventKey: 'publish-make-live-error:project-1:pub-error',
+        }),
+      );
+    });
+
+    expect(screen.getByText('Publish History')).not.toBeNull();
   });
 });
