@@ -48,6 +48,18 @@ describe('PublishService pretty URLs', () => {
   let minio: MockMinioService;
   let config: MockConfigService;
 
+  const mockLeanExec = <T>(value: T) => ({
+    select: jest.fn().mockReturnThis(),
+    lean: jest.fn().mockReturnThis(),
+    exec: jest.fn().mockResolvedValue(value),
+  });
+
+  const baseParams = {
+    tenantId: 'default',
+    projectId: 'project-1',
+    ownerUserId: 'user-1',
+  };
+
   beforeEach(() => {
     const publishDoc = {
       _id: '507f1f77bcf86cd799439011',
@@ -66,10 +78,8 @@ describe('PublishService pretty URLs', () => {
     };
 
     pageModel = {
-      find: jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        lean: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([
+      find: jest.fn().mockReturnValue(
+        mockLeanExec([
           {
             _id: '507f1f77bcf86cd799439021',
             title: 'Home',
@@ -105,20 +115,18 @@ describe('PublishService pretty URLs', () => {
             },
           },
         ]),
-      }),
+      ),
     };
 
     navigationModel = {
-      findOne: jest.fn().mockReturnValue({
-        select: jest.fn().mockReturnThis(),
-        lean: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue({
+      findOne: jest.fn().mockReturnValue(
+        mockLeanExec({
           itemsJson: [
             { label: 'Home', pageId: '507f1f77bcf86cd799439021' },
             { label: 'About', pageId: '507f1f77bcf86cd799439022' },
           ],
         }),
-      }),
+      ),
     };
 
     projectModel = {
@@ -155,12 +163,96 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
-  it('uploads published HTML with directory-style navigation links', async () => {
-    const result = await service.createAndPublish({
-      tenantId: 'default',
-      projectId: 'project-1',
-      ownerUserId: 'user-1',
+  it('fails preflight when there are no pages', async () => {
+    pageModel.find.mockReturnValueOnce(mockLeanExec([]));
+
+    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
+      name: 'PublishPreflightError',
+      code: 'PUBLISH_PREFLIGHT_FAILED',
+      details: ['At least one page is required to publish.'],
     });
+
+    expect(publishModel.create).not.toHaveBeenCalled();
+    expect(minio.upload).not.toHaveBeenCalled();
+  });
+
+  it('fails preflight when duplicate slugs exist', async () => {
+    pageModel.find.mockReturnValueOnce(
+      mockLeanExec([
+        {
+          _id: '507f1f77bcf86cd799439031',
+          title: 'Home',
+          slug: '/',
+          isHome: true,
+          editorJson: {},
+        },
+        {
+          _id: '507f1f77bcf86cd799439032',
+          title: 'About',
+          slug: '/About',
+          isHome: false,
+          editorJson: {},
+        },
+        {
+          _id: '507f1f77bcf86cd799439033',
+          title: 'About 2',
+          slug: 'about',
+          isHome: false,
+          editorJson: {},
+        },
+      ]),
+    );
+    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+
+    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
+      code: 'PUBLISH_PREFLIGHT_FAILED',
+      details: expect.arrayContaining([expect.stringContaining('Duplicate slug "about"')]),
+    });
+
+    expect(publishModel.create).not.toHaveBeenCalled();
+    expect(minio.upload).not.toHaveBeenCalled();
+  });
+
+  it('fails preflight when no home page exists', async () => {
+    pageModel.find.mockReturnValueOnce(
+      mockLeanExec([
+        {
+          _id: '507f1f77bcf86cd799439041',
+          title: 'About',
+          slug: '/about',
+          isHome: false,
+          editorJson: {},
+        },
+      ]),
+    );
+    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+
+    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
+      code: 'PUBLISH_PREFLIGHT_FAILED',
+      details: expect.arrayContaining([expect.stringContaining('Exactly one home page is required')]),
+    });
+
+    expect(publishModel.create).not.toHaveBeenCalled();
+  });
+
+  it('fails preflight when navigation references missing pageId', async () => {
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({
+        itemsJson: [{ label: 'Ghost', pageId: '507f1f77bcf86cd799439099' }],
+      }),
+    );
+
+    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
+      code: 'PUBLISH_PREFLIGHT_FAILED',
+      details: expect.arrayContaining([expect.stringContaining('Navigation item 1 references missing pageId')]),
+    });
+
+    expect(publishModel.create).not.toHaveBeenCalled();
+    expect(minio.upload).not.toHaveBeenCalled();
+  });
+
+  it('uploads published HTML with directory-style navigation links', async () => {
+    const result = await service.createAndPublish(baseParams);
 
     expect(result.status).toBe('live');
     expect(result.url).toBe(
