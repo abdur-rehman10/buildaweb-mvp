@@ -18,6 +18,12 @@ import {
 import { useLatestPublish } from '../hooks/useLatestPublish';
 import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 import { appToast } from '../../lib/toast';
+import {
+  buildPublishIndexUrl,
+  buildPublishPageUrl,
+  parsePublishBaseUrl,
+  type PublishUrlBuilderInput,
+} from '../../lib/publishUrls';
 
 interface ProjectsApiScreenProps {
   activeProjectId: string | null;
@@ -27,18 +33,8 @@ interface ProjectsApiScreenProps {
   onOpenPage: (projectId: string, pageId: string) => void;
 }
 
-function normalizePublishedBaseUrl(baseUrl: string): string {
-  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
-}
-
-function parseBooleanEnv(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
-}
-
 function toPublishedDisplayBaseUrl(baseUrl: string): string {
-  const normalizedBase = normalizePublishedBaseUrl(baseUrl);
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   const proxyBase = (import.meta.env.VITE_PRETTY_URL_PROXY_BASE_URL as string | undefined)?.trim();
   if (!proxyBase) return normalizedBase;
 
@@ -51,53 +47,12 @@ function toPublishedDisplayBaseUrl(baseUrl: string): string {
   }
 }
 
-function shouldUsePrettySubpageUrls(displayBaseUrl: string): boolean {
-  const envPrettyUrls = parseBooleanEnv(import.meta.env.VITE_PUBLISH_PRETTY_SUBPAGE_URLS as string | undefined);
-  if (envPrettyUrls) return true;
-
-  try {
-    const parsed = new URL(displayBaseUrl);
-    return parsed.port === '8080';
-  } catch {
-    return false;
-  }
-}
-
-function toPublishedHomeUrl(baseUrl: string): string {
-  const normalizedBase = normalizePublishedBaseUrl(baseUrl);
-  return `${normalizedBase}index.html`;
-}
-
 function normalizeSlugToken(slug?: string): string {
   return (slug ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
 }
 
-function normalizePublishedPagePath(params: { slug?: string; isHome?: boolean }) {
-  const slugToken = normalizeSlugToken(params.slug);
-  if (params.isHome || slugToken === '' || slugToken === 'home') return '';
-  return `${slugToken}/`;
-}
-
-function toPublishedPageUrl(params: {
-  baseUrl: string;
-  page: Pick<PageMetaSummary, 'slug' | 'isHome'>;
-  usePrettySubpageUrls: boolean;
-}) {
-  const { baseUrl, page, usePrettySubpageUrls } = params;
-  const normalizedBase = normalizePublishedBaseUrl(baseUrl);
-  const pagePath = normalizePublishedPagePath({
-    slug: page.slug,
-    isHome: page.isHome,
-  });
-  if (!pagePath) {
-    return toPublishedHomeUrl(normalizedBase);
-  }
-
-  if (usePrettySubpageUrls) {
-    return `${normalizedBase}${pagePath}`;
-  }
-
-  return `${normalizedBase}${pagePath}index.html`;
+function toPublishUrlInput(baseUrl: string): PublishUrlBuilderInput | null {
+  return parsePublishBaseUrl(toPublishedDisplayBaseUrl(baseUrl));
 }
 
 function hasPagesEditedAfterPublish(params: { pages: PageMetaSummary[]; publishedAt: string | null }): boolean {
@@ -163,9 +118,8 @@ export function ProjectsApiScreen({
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
   const { latestPublish, latestPublishId, publishedAt, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
     useLatestPublish(activeProjectId);
-  const publishedBaseUrl = publishedUrl ? toPublishedDisplayBaseUrl(publishedUrl) : null;
-  const usePrettySubpageUrls = publishedBaseUrl ? shouldUsePrettySubpageUrls(publishedBaseUrl) : false;
-  const publishedHomeUrl = publishedBaseUrl ? toPublishedHomeUrl(publishedBaseUrl) : null;
+  const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
+  const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : null;
   const hasUnpublishedChanges = hasPagesEditedAfterPublish({
     pages: projectPages,
     publishedAt,
@@ -924,7 +878,7 @@ export function ProjectsApiScreen({
                   {latestPublishError}
                 </p>
               )}
-              {publishStatus === 'live' && publishedBaseUrl && publishedHomeUrl && (
+              {publishStatus === 'live' && publishedHomeUrl && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <a
@@ -941,11 +895,17 @@ export function ProjectsApiScreen({
                   </div>
                   <div className="space-y-1">
                     {projectPages.map((page) => {
-                      const pageUrl = toPublishedPageUrl({
-                        baseUrl: publishedBaseUrl,
-                        page,
-                        usePrettySubpageUrls,
-                      });
+                      if (!publishedUrlInput) return null;
+                      let pageUrl: string;
+                      try {
+                        pageUrl = buildPublishPageUrl({
+                          ...publishedUrlInput,
+                          slug: page.slug,
+                          isHome: page.isHome,
+                        });
+                      } catch {
+                        return null;
+                      }
                       return (
                         <div key={`published-url-${page.id}`} className="flex items-center gap-2 text-xs">
                           <span className="min-w-24 text-muted-foreground">{page.title}</span>
@@ -990,8 +950,9 @@ export function ProjectsApiScreen({
             {!loadingPublishHistory && publishHistory.length > 0 && (
               <div className="space-y-2">
                 {publishHistory.map((entry) => {
-                  const baseUrl = toPublishedDisplayBaseUrl(entry.baseUrl);
-                  const homeUrl = toPublishedHomeUrl(baseUrl);
+                  const entryUrlInput = toPublishUrlInput(entry.baseUrl);
+                  if (!entryUrlInput) return null;
+                  const homeUrl = buildPublishIndexUrl(entryUrlInput);
                   const isLivePublish = !!latestPublishId && entry.publishId === latestPublishId;
                   return (
                     <div key={`publish-history-${entry.publishId}`} className="border rounded-md p-2">
