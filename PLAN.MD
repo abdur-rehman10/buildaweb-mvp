@@ -1,23 +1,24 @@
 # PLAN.md
 
 ## Branch
-fix/publish-url-builder
+fix/publish-preflight
 
 ## Goal
-Eliminate inconsistent publish URL generation by introducing a canonical URL builder.
+Add preflight validation before publish so broken inputs are caught early.
 
 ## In Scope
-- Add a single utility function to generate:
-  - publish root URL
-  - per-page publish URL
-- Replace all ad-hoc string concatenations in the web app with this function.
-- Ensure Home never maps to `/home/index.html`.
-- Ensure MinIO-compatible links always include `index.html`.
+- Backend: validate pages + navigation before generating/uploading.
+- Frontend: surface friendly validation errors and block publish until resolved.
 
 ## Out of Scope
-- Proxy pretty URLs.
-- Infrastructure changes.
+- Auto-fixing slugs.
+- AI suggestions.
+- SEO features.
 
 ## Definition of Done
-- All publish links in UI (publish result, live banner, publish history, page link list) are correct and consistent.
-- Home link never 404s.
+- Publish fails fast with clear errors when:
+  - no home page exists
+  - duplicate slugs exist
+  - slug is empty/invalid
+  - navigation references missing pages
+- UI shows these errors and does not start publish until resolved.
