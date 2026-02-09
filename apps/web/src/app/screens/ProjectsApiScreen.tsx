@@ -139,6 +139,7 @@ export function ProjectsApiScreen({
   const [savingNavigation, setSavingNavigation] = useState(false);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const [publishStarting, setPublishStarting] = useState(false);
+  const [previewDraftLoading, setPreviewDraftLoading] = useState(false);
   const [publishId, setPublishId] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -181,6 +182,7 @@ export function ProjectsApiScreen({
       : projectPages.length === 0
         ? 'Create at least one page before publishing.'
         : null;
+  const previewDisabledReason = projectPages.length === 0 ? 'Create at least one page before previewing.' : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -522,6 +524,57 @@ export function ProjectsApiScreen({
     await loadNavigation(projectId);
   };
 
+  const resolvePreviewTargetPageId = () => {
+    if (activePageId && projectPages.some((page) => page.id === activePageId)) {
+      return activePageId;
+    }
+
+    const homePage = projectPages.find((page) => page.isHome || normalizeSlugToken(page.slug) === 'home');
+    if (homePage) {
+      return homePage.id;
+    }
+
+    return projectPages[0]?.id ?? null;
+  };
+
+  const previewDraft = async () => {
+    if (!activeProjectId) return;
+
+    const targetPageId = resolvePreviewTargetPageId();
+    if (!targetPageId) {
+      appToast.error('Create at least one page before previewing', {
+        eventKey: `preview-draft-missing-page:${activeProjectId}`,
+      });
+      return;
+    }
+
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      appToast.error('Pop-up blocked. Please allow pop-ups and try again.', {
+        eventKey: `preview-draft-popup-blocked:${activeProjectId}`,
+      });
+      return;
+    }
+
+    setPreviewDraftLoading(true);
+    try {
+      const preview = await pagesApi.preview(activeProjectId, targetPageId);
+      const srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`;
+      previewWindow.document.open();
+      previewWindow.document.write(srcdoc);
+      previewWindow.document.close();
+      previewWindow.document.title = 'Draft Preview';
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load preview');
+      appToast.error(message, {
+        eventKey: `preview-draft-error:${activeProjectId}:${targetPageId}`,
+      });
+      previewWindow.close();
+    } finally {
+      setPreviewDraftLoading(false);
+    }
+  };
+
   const showPublishCard =
     loadingLatestPublish || publishStatus !== null || !!publishError || !!publishedHomeUrl || !!publishMessage || !latestPublish;
 
@@ -746,6 +799,15 @@ export function ProjectsApiScreen({
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void previewDraft()}
+                disabled={previewDraftLoading || !!previewDisabledReason}
+                title={previewDisabledReason ?? undefined}
+              >
+                {previewDraftLoading ? 'Loading Preview...' : 'Preview Draft'}
+              </Button>
               <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
                 {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
               </Button>
