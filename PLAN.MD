@@ -1,24 +1,24 @@
 # PLAN.md
 
 ## Branch
-fix/publish-preflight
+feat/seo-ui
 
 ## Goal
-Add preflight validation before publish so broken inputs are caught early.
+Implement basic SEO settings per page and ensure preview/publish outputs include the tags.
 
 ## In Scope
-- Backend: validate pages + navigation before generating/uploading.
-- Frontend: surface friendly validation errors and block publish until resolved.
+- Frontend page settings panel for `seoJson`.
+- Backend already stores `seoJson`; ensure `PUT` page updates it.
+- Preview renderer injects `title`/`meta`/`og` tags.
+- Publish generator injects the same tags.
 
 ## Out of Scope
-- Auto-fixing slugs.
-- AI suggestions.
-- SEO features.
+- `sitemap.xml`.
+- `robots.txt`.
+- `Schema.org` JSON-LD.
+- Multi-language SEO.
 
 ## Definition of Done
-- Publish fails fast with clear errors when:
-  - no home page exists
-  - duplicate slugs exist
-  - slug is empty/invalid
-  - navigation references missing pages
-- UI shows these errors and does not start publish until resolved.
+- Editing SEO fields persists in `seoJson`.
+- Preview page HTML contains correct tags.
+- Published HTML contains correct tags.
