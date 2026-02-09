@@ -199,17 +199,56 @@ export class PreviewRendererService {
     return `<nav class="baw-nav">${links}</nav>`;
   }
 
+  private renderSeoHeadTags(params: {
+    seoJson: unknown;
+    pageTitle: string;
+    assetUrlById: Record<string, string>;
+  }): string {
+    const seo = this.asRecord(params.seoJson) ?? {};
+    const fallbackTitle = params.pageTitle.trim() || 'Buildaweb Site';
+    const title = this.readString(seo.title).trim() || fallbackTitle;
+    const description = this.readString(seo.description).trim();
+    const ogTitle = this.readString(seo.ogTitle).trim() || title;
+    const ogDescription = this.readString(seo.ogDescription).trim() || description;
+    const ogImageAssetId = this.readString(seo.ogImageAssetId).trim();
+    const ogImageFromAssetId = ogImageAssetId ? this.readString(params.assetUrlById[ogImageAssetId]).trim() : '';
+    const ogImage = ogImageFromAssetId || this.readString(seo.ogImage).trim();
+
+    const tags = [`<title>${this.escapeHtml(title)}</title>`];
+    if (description) {
+      tags.push(`<meta name="description" content="${this.escapeHtml(description)}" />`);
+    }
+    if (ogTitle) {
+      tags.push(`<meta property="og:title" content="${this.escapeHtml(ogTitle)}" />`);
+    }
+    if (ogDescription) {
+      tags.push(`<meta property="og:description" content="${this.escapeHtml(ogDescription)}" />`);
+    }
+    if (ogImage) {
+      tags.push(`<meta property="og:image" content="${this.escapeHtml(ogImage)}" />`);
+    }
+    return tags.join('\n');
+  }
+
   render(params: {
     pageId: string;
     editorJson: unknown;
     assetUrlById?: Record<string, string>;
     navLinks?: RenderNavLink[];
     currentSlug?: string;
+    pageTitle?: string;
+    seoJson?: unknown;
   }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
     const navLinks = params.navLinks ?? [];
     const currentSlug = this.normalizeSlug(params.currentSlug ?? '/');
+    const pageTitle = this.readString(params.pageTitle, 'Buildaweb Site') || 'Buildaweb Site';
+    const headTags = this.renderSeoHeadTags({
+      seoJson: params.seoJson,
+      pageTitle,
+      assetUrlById,
+    });
     const navHtml = this.renderNavigation(navLinks, currentSlug);
     const sections = this.asArray(pageRecord.sections)
       .map((section) => this.renderSection(section, assetUrlById, currentSlug))
@@ -219,8 +258,8 @@ export class PreviewRendererService {
     const css = this.baseCss;
     const pageJsonString = this.stableStringify(pageRecord);
     const navString = this.stableStringify(navLinks);
-    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css).digest('hex');
+    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css + headTags).digest('hex');
 
-    return { html, css, hash };
+    return { html, css, hash, headTags };
   }
 }

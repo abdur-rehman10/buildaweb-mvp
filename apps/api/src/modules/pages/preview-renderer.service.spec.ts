@@ -57,4 +57,30 @@ describe('PreviewRendererService pretty URLs', () => {
     expect(preview.html).toContain('href="/"');
     expect(preview.html).not.toContain('index.html');
   });
+
+  it('renders seo title, description, and og tags with og image resolved from assets map', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      pageTitle: 'Fallback Title',
+      seoJson: {
+        title: 'SEO Title',
+        description: 'SEO Description',
+        ogTitle: 'OG Title',
+        ogDescription: 'OG Description',
+        ogImageAssetId: 'asset-1',
+      },
+      assetUrlById: {
+        'asset-1': 'http://localhost:9000/buildaweb/assets/hero.png',
+      },
+      editorJson: { sections: [] },
+    });
+
+    expect(preview.headTags).toContain('<title>SEO Title</title>');
+    expect(preview.headTags).toContain('<meta name="description" content="SEO Description" />');
+    expect(preview.headTags).toContain('<meta property="og:title" content="OG Title" />');
+    expect(preview.headTags).toContain('<meta property="og:description" content="OG Description" />');
+    expect(preview.headTags).toContain(
+      '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/hero.png" />',
+    );
+  });
 });
