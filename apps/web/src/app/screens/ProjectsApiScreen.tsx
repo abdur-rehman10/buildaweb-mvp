@@ -35,6 +35,7 @@ interface ProjectsApiScreenProps {
   onSelectActivePageId: (pageId: string | null) => void;
   onSelectProject: (projectId: string) => void;
   onOpenPage: (projectId: string, pageId: string) => void;
+  onOpenAssetsLibrary: (projectId: string) => void;
 }
 
 type ProjectSettingsAssetField = 'logoAssetId' | 'faviconAssetId' | 'defaultOgImageAssetId';
@@ -91,6 +92,7 @@ export function ProjectsApiScreen({
   onSelectActivePageId,
   onSelectProject,
   onOpenPage,
+  onOpenAssetsLibrary,
 }: ProjectsApiScreenProps) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1026,6 +1028,13 @@ export function ProjectsApiScreen({
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenAssetsLibrary(activeProjectId)}
+              >
+                Assets
+              </Button>
               {showHomeMissingBadge && (
                 <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-amber-700">
                   Home page missing

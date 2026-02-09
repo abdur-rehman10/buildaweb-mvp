@@ -7,6 +7,7 @@ import {
   Users, 
   HelpCircle,
   Bell,
+  Images,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -28,6 +29,7 @@ export function Sidebar({ currentScreen, onNavigate, onLogout }: SidebarProps) {
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'project-folders', label: 'Projects', icon: FolderOpen },
     { id: 'templates', label: 'Templates', icon: LayoutTemplate },
+    { id: 'assets', label: 'Assets', icon: Images },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'team', label: 'Team', icon: Users },
   ];

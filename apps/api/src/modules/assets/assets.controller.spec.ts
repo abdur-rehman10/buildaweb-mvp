@@ -45,6 +45,7 @@ describe('AssetsController.list', () => {
       {
         id: '507f1f77bcf86cd799439021',
         fileName: 'hero.jpg',
+        mimeType: 'image/jpeg',
         size: 12345,
         publicUrl: 'http://localhost:9000/bucket/hero.jpg',
         createdAt,
@@ -62,6 +63,7 @@ describe('AssetsController.list', () => {
           {
             id: '507f1f77bcf86cd799439021',
             fileName: 'hero.jpg',
+            mimeType: 'image/jpeg',
             size: 12345,
             publicUrl: 'http://localhost:9000/bucket/hero.jpg',
             createdAt,
