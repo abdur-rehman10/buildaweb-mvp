@@ -42,6 +42,7 @@ vi.mock('../../lib/api', () => {
     },
     publishApi: {
       create: vi.fn(),
+      list: vi.fn(),
       getLatest: vi.fn(),
       getStatus: vi.fn(),
     },
@@ -130,6 +131,9 @@ describe('ProjectsApiScreen toasts', () => {
       publishId: 'publish-1',
       status: 'publishing',
       url: 'http://localhost:9000/buildaweb-sites/example/',
+    });
+    vi.mocked(publishApi.list).mockResolvedValue({
+      publishes: [],
     });
     vi.mocked(pagesApi.duplicate).mockResolvedValue({
       page_id: 'page-home-copy',
@@ -483,5 +487,83 @@ describe('ProjectsApiScreen toasts', () => {
 
     const republishButton = await screen.findByRole('button', { name: 'Republish to update live site' });
     expect((republishButton as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('renders publish history empty state', async () => {
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [],
+    });
+
+    renderScreen();
+
+    expect(await screen.findByText('Publish History')).not.toBeNull();
+    expect(await screen.findByText('No publishes yet')).not.toBeNull();
+  });
+
+  it('renders publish history rows with created time and status', async () => {
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-1',
+          status: 'live',
+          createdAt: '2026-02-09T10:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-1/',
+        },
+        {
+          publishId: 'pub-2',
+          status: 'failed',
+          createdAt: '2026-02-09T09:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-2/',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    expect((await screen.findAllByText(/Created:/)).length).toBe(2);
+    expect(screen.getByText('live')).not.toBeNull();
+    expect(screen.getByText('failed')).not.toBeNull();
+  });
+
+  it('copy button in publish history copies index.html URL', async () => {
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-copy',
+          status: 'live',
+          createdAt: '2026-02-09T10:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-copy/',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    const copyButton = await screen.findByRole('button', { name: 'Copy publish URL pub-copy' });
+    fireEvent.click(copyButton);
+
+    await waitFor(() => {
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
+        'http://localhost:9000/buildaweb-sites/tenant/project/pub-copy/index.html',
+      );
+    });
+  });
+
+  it('open link in publish history points to index.html URL', async () => {
+    vi.mocked(publishApi.list).mockResolvedValueOnce({
+      publishes: [
+        {
+          publishId: 'pub-open',
+          status: 'live',
+          createdAt: '2026-02-09T10:00:00.000Z',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-open/',
+        },
+      ],
+    });
+
+    renderScreen();
+
+    const openLink = await screen.findByRole('link', { name: 'Open publish pub-open' });
+    expect(openLink.getAttribute('href')).toBe('http://localhost:9000/buildaweb-sites/tenant/project/pub-open/index.html');
   });
 });
