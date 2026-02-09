@@ -16,6 +16,7 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -34,7 +35,9 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
       newErrors.password = 'Password must be at least 8 characters';
     }
 
-    if (password !== confirmPassword) {
+    if (!confirmPassword) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (password !== confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
 
@@ -43,8 +46,13 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
       return;
     }
 
+    setErrors({});
+    setIsSubmitting(true);
     toast.success('Account created successfully!');
-    setTimeout(() => onSignUp(), 500);
+    setTimeout(() => {
+      setIsSubmitting(false);
+      onSignUp();
+    }, 500);
   };
 
   const handleGoogleSignUp = () => {
@@ -119,6 +127,9 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+            <p className="text-xs text-muted-foreground" role="note">
+              Password must be at least 8 characters.
+            </p>
 
             <div className="relative">
               <Input
@@ -142,8 +153,8 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
               </button>
             </div>
 
-            <Button type="submit" fullWidth size="lg">
-              Sign up
+            <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating account...' : 'Sign up'}
             </Button>
 
             <div className="relative">
