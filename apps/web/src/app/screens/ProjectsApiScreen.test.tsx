@@ -123,6 +123,7 @@ describe('ProjectsApiScreen toasts', () => {
         name: 'Main site',
         status: 'draft',
         defaultLocale: 'en',
+        homePageId: null,
         latestPublishId: null,
         publishedAt: null,
       },
@@ -292,7 +293,26 @@ describe('ProjectsApiScreen toasts', () => {
     expect(setHomeButtons[0].getAttribute('title')).toBe('This page is already the home page.');
   });
 
-  it('shows a home-missing warning badge when no home page is present', async () => {
+  it('does not show home-missing badge when legacy fallback finds Home page', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({
+      pages: [
+        {
+          id: 'page-home',
+          title: 'Home',
+          slug: 'home',
+          isHome: false,
+          version: 1,
+        },
+      ],
+    });
+
+    renderScreen();
+
+    await screen.findByRole('button', { name: 'Publish' });
+    expect(screen.queryByText('Home page missing')).toBeNull();
+  });
+
+  it('does not show home-missing badge when project.homePageId points to an existing page', async () => {
     vi.mocked(pagesApi.list).mockResolvedValueOnce({
       pages: [
         {
@@ -304,6 +324,44 @@ describe('ProjectsApiScreen toasts', () => {
         },
       ],
     });
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        homePageId: 'page-about',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
+
+    renderScreen();
+
+    await screen.findByRole('button', { name: 'Publish' });
+    expect(screen.queryByText('Home page missing')).toBeNull();
+  });
+
+  it('shows home-missing badge when project.homePageId points to a missing page', async () => {
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        homePageId: 'missing-page-id',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
+
+    renderScreen();
+
+    expect(await screen.findByText('Home page missing')).not.toBeNull();
+  });
+
+  it('shows home-missing badge when project has zero pages', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({ pages: [] });
 
     renderScreen();
 
