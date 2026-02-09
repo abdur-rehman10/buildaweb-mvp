@@ -322,6 +322,14 @@ export type ListPublishesResult = {
   publishes: PublishHistoryItem[];
 };
 
+export type SetLatestPublishInput = {
+  publishId: string;
+};
+
+export type SetLatestPublishResult = {
+  project: ProjectSummary;
+};
+
 export const authApi = {
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/api/v1/auth/login', {
@@ -478,6 +486,12 @@ export const publishApi = {
         method: 'GET',
       },
     );
+  },
+  setLatest(projectId: string, input: SetLatestPublishInput) {
+    return apiRequest<SetLatestPublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
   },
   getLatest(projectId: string) {
     return apiRequest<LatestPublishResult | null>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
