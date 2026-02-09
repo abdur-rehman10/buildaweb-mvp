@@ -110,6 +110,24 @@ describe('PageApiScreen SEO panel', () => {
     expect(await screen.findByDisplayValue('Initial SEO Title')).not.toBeNull();
     expect(screen.getByDisplayValue('Initial SEO Description')).not.toBeNull();
     expect(screen.getByText('Meta Description')).not.toBeNull();
+    expect(screen.getByText(/Recommended 30-60/)).not.toBeNull();
+    expect(screen.getByText(/Recommended 70-160/)).not.toBeNull();
+  });
+
+  it('updates search preview snippet while typing', async () => {
+    renderScreen();
+    await screen.findByDisplayValue('Initial SEO Title');
+
+    fireEvent.change(screen.getByPlaceholderText('SEO title'), {
+      target: { value: 'Polished SEO Title' },
+    });
+    fireEvent.change(screen.getByPlaceholderText('Meta description'), {
+      target: { value: 'A polished SEO description snippet for the preview card.' },
+    });
+
+    expect(screen.getByText('Search preview')).not.toBeNull();
+    expect(screen.getByText('Polished SEO Title')).not.toBeNull();
+    expect(screen.getAllByText('A polished SEO description snippet for the preview card.').length).toBeGreaterThan(0);
   });
 
   it('saves seoJson via pages update payload', async () => {
