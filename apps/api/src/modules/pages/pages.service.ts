@@ -162,6 +162,7 @@ export class PagesService {
         },
         {
           $set: setPayload,
+          $currentDate: { updatedAt: true },
           $inc: { version: 1 },
         },
         { new: true },
