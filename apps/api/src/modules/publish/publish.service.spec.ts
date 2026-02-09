@@ -108,7 +108,27 @@ describe('PublishService pretty URLs', () => {
                 {
                   blocks: [
                     {
-                      nodes: [{ type: 'button', label: 'Go home', href: '/' }],
+                      nodes: [
+                        { type: 'button', label: 'Go home', href: '/' },
+                        { type: 'button', label: 'Go services', href: 'services' },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            _id: '507f1f77bcf86cd799439023',
+            title: 'Services',
+            slug: '/services',
+            isHome: false,
+            editorJson: {
+              sections: [
+                {
+                  blocks: [
+                    {
+                      nodes: [{ type: 'text', content: 'Services page' }],
                     },
                   ],
                 },
@@ -125,6 +145,7 @@ describe('PublishService pretty URLs', () => {
           itemsJson: [
             { label: 'Home', pageId: '507f1f77bcf86cd799439021' },
             { label: 'About', pageId: '507f1f77bcf86cd799439022' },
+            { label: 'Services', pageId: '507f1f77bcf86cd799439023' },
           ],
         }),
       ),
@@ -282,11 +303,17 @@ describe('PublishService pretty URLs', () => {
 
     const homeHtml = homeUpload!.buffer.toString('utf-8');
     expect(homeHtml).toContain('<nav class="baw-nav">');
-    expect(homeHtml).toContain('href="/about/index.html"');
+    expect(homeHtml).toContain('href="about/index.html"');
+    expect(homeHtml).toContain('href="services/index.html"');
+    expect(homeHtml).not.toContain('href="about/"');
+    expect(homeHtml).not.toContain('href="/about/"');
     expect(homeHtml).not.toContain('href="/home/index.html"');
 
     const aboutHtml = aboutUpload!.buffer.toString('utf-8');
-    expect(aboutHtml).toContain('href="/index.html"');
+    expect(aboutHtml).toContain('href="../index.html"');
+    expect(aboutHtml).toContain('href="../services/index.html"');
+    expect(aboutHtml).toContain('class="baw-node-button" href="../index.html"');
+    expect(aboutHtml).toContain('class="baw-node-button" href="../services/index.html"');
     expect(aboutHtml).toContain('<span>About</span>');
     expect(aboutHtml).toContain('href="../styles.css"');
     expect(aboutHtml).not.toContain('href="/home/index.html"');
@@ -310,7 +337,7 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
-  it('keeps external button links unchanged in published html', async () => {
+  it('keeps external and hash button links unchanged in published html', async () => {
     pageModel.find.mockReturnValueOnce(
       mockLeanExec([
         {
@@ -323,7 +350,10 @@ describe('PublishService pretty URLs', () => {
               {
                 blocks: [
                   {
-                    nodes: [{ type: 'button', label: 'External', href: 'https://example.com/docs' }],
+                    nodes: [
+                      { type: 'button', label: 'External', href: 'https://example.com/docs' },
+                      { type: 'button', label: 'Hash', href: '#features' },
+                    ],
                   },
                 ],
               },
@@ -342,6 +372,7 @@ describe('PublishService pretty URLs', () => {
     expect(homeUpload).toBeDefined();
     const html = homeUpload!.buffer.toString('utf-8');
     expect(html).toContain('href="https://example.com/docs"');
+    expect(html).toContain('href="#features"');
   });
 
   it('injects seo title and description meta tags into published html', async () => {
