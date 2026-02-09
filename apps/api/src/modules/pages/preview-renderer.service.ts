@@ -208,8 +208,8 @@ export class PreviewRendererService {
     const fallbackTitle = params.pageTitle.trim() || 'Buildaweb Site';
     const title = this.readString(seo.title).trim() || fallbackTitle;
     const description = this.readString(seo.description).trim();
-    const ogTitle = this.readString(seo.ogTitle).trim() || title;
-    const ogDescription = this.readString(seo.ogDescription).trim() || description;
+    const ogTitle = this.readString(seo.ogTitle).trim();
+    const ogDescription = this.readString(seo.ogDescription).trim();
     const ogImageAssetId = this.readString(seo.ogImageAssetId).trim();
     const ogImageFromAssetId = ogImageAssetId ? this.readString(params.assetUrlById[ogImageAssetId]).trim() : '';
     const ogImage = ogImageFromAssetId || this.readString(seo.ogImage).trim();

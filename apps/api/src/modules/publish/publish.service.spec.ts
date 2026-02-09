@@ -341,6 +341,36 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
+  it('uses page title fallback and omits optional seo tags when seoJson is empty', async () => {
+    pageModel.find.mockReturnValueOnce(
+      mockLeanExec([
+        {
+          _id: '507f1f77bcf86cd799439071',
+          title: 'Fallback Home',
+          slug: '/',
+          isHome: true,
+          seoJson: {},
+          editorJson: { sections: [] },
+        },
+      ]),
+    );
+    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+
+    await service.createAndPublish(baseParams);
+
+    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
+    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+
+    expect(homeUpload).toBeDefined();
+
+    const html = homeUpload!.buffer.toString('utf-8');
+    expect(html).toContain('<title>Fallback Home</title>');
+    expect(html).not.toContain('name="description"');
+    expect(html).not.toContain('property="og:title"');
+    expect(html).not.toContain('property="og:description"');
+    expect(html).not.toContain('property="og:image"');
+  });
+
   it('lists publishes scoped to project/user sorted by createdAt desc with limit', async () => {
     const exec = jest.fn().mockResolvedValue([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
     const limit = jest.fn().mockReturnValue({ exec });

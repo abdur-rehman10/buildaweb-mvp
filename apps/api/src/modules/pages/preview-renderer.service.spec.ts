@@ -83,4 +83,19 @@ describe('PreviewRendererService pretty URLs', () => {
       '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/hero.png" />',
     );
   });
+
+  it('falls back title to page title and omits optional meta tags when seoJson is empty', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      pageTitle: 'Fallback Title',
+      seoJson: {},
+      editorJson: { sections: [] },
+    });
+
+    expect(preview.headTags).toContain('<title>Fallback Title</title>');
+    expect(preview.headTags).not.toContain('name="description"');
+    expect(preview.headTags).not.toContain('property="og:title"');
+    expect(preview.headTags).not.toContain('property="og:description"');
+    expect(preview.headTags).not.toContain('property="og:image"');
+  });
 });
