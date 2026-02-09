@@ -215,6 +215,57 @@ describe('PagesService', () => {
         { new: true },
       );
     });
+
+    it('persists seoJson and returns updated page doc', async () => {
+      const updatedDoc = {
+        _id: 'page-1',
+        version: 4,
+        seoJson: {
+          title: 'SEO title',
+          description: 'SEO description',
+        },
+      };
+
+      pageModel.findOneAndUpdate.mockReturnValue({
+        exec: jest.fn().mockResolvedValue(updatedDoc),
+      });
+
+      const result = await service.updatePageJson({
+        tenantId: 'default',
+        projectId: 'project-1',
+        pageId: 'page-1',
+        page: {
+          editorJson: { sections: [{ id: 'hero' }] },
+          seoJson: {
+            title: 'SEO title',
+            description: 'SEO description',
+          },
+        },
+        version: 3,
+      });
+
+      expect(result).toBe(updatedDoc);
+      expect(pageModel.findOneAndUpdate).toHaveBeenCalledWith(
+        {
+          _id: 'page-1',
+          tenantId: 'default',
+          projectId: 'project-1',
+          version: 3,
+        },
+        {
+          $set: {
+            editorJson: { sections: [{ id: 'hero' }] },
+            seoJson: {
+              title: 'SEO title',
+              description: 'SEO description',
+            },
+          },
+          $currentDate: { updatedAt: true },
+          $inc: { version: 1 },
+        },
+        { new: true },
+      );
+    });
   });
 
   describe('deletePage', () => {
