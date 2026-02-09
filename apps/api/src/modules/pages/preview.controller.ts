@@ -253,7 +253,7 @@ export class PreviewController {
       assetUrlById,
       navLinks,
       currentSlug,
-      pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+      pageTitle: this.readString(page.title) || 'Buildaweb Site',
       seoJson: page.seoJson,
       siteName: this.readString(project.siteName),
       faviconUrl: faviconAssetId ? this.readString(assetUrlById[faviconAssetId]) : '',
