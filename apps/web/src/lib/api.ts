@@ -1,7 +1,7 @@
 import { getAuthToken } from './auth';
 
 type ApiSuccess<T> = { ok: true; data: T };
-type ApiFailure = { ok: false; error: { code: string; message: string } };
+type ApiFailure = { ok: false; error: { code: string; message: string; details?: string[] } };
 type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
 
 type JsonRecord = Record<string, unknown>;
@@ -29,12 +29,14 @@ function isApiFailure(value: unknown): value is ApiFailure {
 export class ApiError extends Error {
   status: number;
   code: string;
+  details?: string[];
 
-  constructor(params: { status: number; code: string; message: string }) {
+  constructor(params: { status: number; code: string; message: string; details?: string[] }) {
     super(params.message);
     this.name = 'ApiError';
     this.status = params.status;
     this.code = params.code;
+    this.details = params.details;
   }
 }
 
@@ -78,10 +80,15 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const body = (await parseJson(response)) as ApiEnvelope<T> | null;
 
   if (body && isApiFailure(body)) {
+    const details =
+      Array.isArray(body.error.details) && body.error.details.every((item) => typeof item === 'string')
+        ? body.error.details
+        : undefined;
     throw new ApiError({
       status: response.status,
       code: body.error.code,
       message: body.error.message,
+      details,
     });
   }
 
