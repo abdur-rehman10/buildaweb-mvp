@@ -1,46 +1,29 @@
 # PLAN.md
 
 ## Branch
-feat/draft-live-diff
+feat/assets-library
 
 ## Goal
-Implement accurate draft-vs-live change detection so each project exposes a deterministic `hasUnpublishedChanges` flag and the frontend status/actions reflect it.
+Add a central assets library so users can browse and reuse uploaded images across project pages.
 
 ## In Scope
-- Backend:
-  - Compute `hasUnpublishedChanges` per project.
-  - Rule:
-    - `latestPublishId == null` -> `hasUnpublishedChanges = true`
-    - Else compare current draft vs latest publish snapshot deterministically for:
-      - pages (count, slug, title, editorJson, seoJson)
-      - navigation (deep compare)
-      - output-affecting project settings (`siteName`, `favicon`, `locale`, `defaultOgImage`)
-  - Ignore timestamps and non-output metadata.
-  - Include `hasUnpublishedChanges` in:
-    - `GET /projects`
-    - `GET /projects/:projectId`
 - Frontend:
-  - Use backend `hasUnpublishedChanges` to drive publish status labels:
-    - no publish -> `Not published`
-    - published + false -> `Live (up to date)`
-    - published + true -> `Live (outdated)`
-  - Disable publish button when published and up to date.
-  - Show republish CTA only when outdated.
+  - Add an `Assets` screen/panel using existing app navigation patterns.
+  - List project assets with thumbnail, filename, createdAt, mimeType, and size when available.
+  - Add `Copy URL` action for each asset.
+  - Add `Use in page` selection flow from image picker/replace UI so existing assets can be reused.
+- Backend:
+  - Reuse existing assets list endpoint if already present.
+  - If missing, add minimal read-only `GET /api/v1/projects/:projectId/assets`.
+  - Keep AGENTS response contract (`{ ok: true, data }` / `{ ok: false, error }`).
 
 ## Out of Scope
-- HTML diffing
-- New endpoints
-- Publish pipeline behavior changes
-- Polling hacks
-- Per-page visual diff or history browsing
+- Asset delete
+- Folders, tags, search, or filtering enhancements beyond current behavior
+- Storage system changes
 
 ## Definition of Done
-- `hasUnpublishedChanges` is deterministic and correct for list/detail project responses.
-- UI states and publish button behavior match the flag.
-- Manual tests pass:
-  1. New project (no publish) -> `Not published`
-  2. Publish with no changes -> `Live (up to date)` and publish disabled
-  3. Edit content -> `Live (outdated)` and publish enabled
-  4. Revert to published state -> back to `Live (up to date)`
-  5. Navigation/settings changes mark project outdated
-  6. Publish returns project to `Live (up to date)`
+- Uploaded editor images appear in the central assets library.
+- User can copy asset URL from the library.
+- User can select an existing library asset in image replace flow.
+- Selected image renders correctly and remains correct after refresh.
