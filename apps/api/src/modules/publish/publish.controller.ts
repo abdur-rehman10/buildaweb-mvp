@@ -4,7 +4,7 @@ import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
 import { SetLatestPublishDto } from './dto/set-latest-publish.dto';
-import { PublishService } from './publish.service';
+import { PublishPreflightError, PublishService } from './publish.service';
 
 @Controller('projects/:projectId/publish')
 @UseGuards(JwtAuthGuard)
@@ -28,6 +28,20 @@ export class PublishController {
       const result = await this.publish.createAndPublish({ tenantId, projectId, ownerUserId });
       return ok(result);
     } catch (error) {
+      if (error instanceof PublishPreflightError) {
+        throw new HttpException(
+          {
+            ok: false,
+            error: {
+              code: error.code,
+              message: error.message,
+              details: error.details,
+            },
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       const message = error instanceof Error ? error.message : 'Failed to publish site';
       throw new HttpException(fail('PUBLISH_FAILED', message), HttpStatus.INTERNAL_SERVER_ERROR);
     }

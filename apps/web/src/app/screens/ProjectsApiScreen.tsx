@@ -51,6 +51,13 @@ function normalizeSlugToken(slug?: string): string {
   return (slug ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
 }
 
+function hasLegacyHomeMarker(page: Pick<PageMetaSummary, 'slug' | 'title'>): boolean {
+  const rawSlug = (page.slug ?? '').trim().toLowerCase();
+  const normalizedSlug = rawSlug.replace(/^\/+/, '').replace(/\/+$/, '');
+  const normalizedTitle = (page.title ?? '').trim().toLowerCase();
+  return rawSlug === '/' || normalizedSlug === 'home' || normalizedTitle === 'home';
+}
+
 function toPublishUrlInput(baseUrl: string): PublishUrlBuilderInput | null {
   return parsePublishBaseUrl(toPublishedDisplayBaseUrl(baseUrl));
 }
@@ -111,12 +118,13 @@ export function ProjectsApiScreen({
   const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishPreflightDetails, setPublishPreflightDetails] = useState<string[]>([]);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [duplicatingPageId, setDuplicatingPageId] = useState<string | null>(null);
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
-  const { latestPublish, latestPublishId, publishedAt, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
+  const { latestPublish, latestPublishId, publishedAt, homePageId, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
     useLatestPublish(activeProjectId);
   const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
   const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : null;
@@ -124,6 +132,10 @@ export function ProjectsApiScreen({
     pages: projectPages,
     publishedAt,
   });
+  const homePageExistsById = homePageId ? projectPages.some((page) => page.id === homePageId) : false;
+  const fallbackHomePage = projectPages.find((page) => hasLegacyHomeMarker(page)) ?? projectPages[0] ?? null;
+  const homeExists = homePageId ? homePageExistsById : !!fallbackHomePage;
+  const showHomeMissingBadge = projectPages.length === 0 || (!!homePageId && !homeExists);
   const hasAnyLiveSite = !!latestPublishId || publishStatus === 'live';
   const showRepublishCta = !!latestPublishId && hasUnpublishedChanges;
   const publishStatusLabel =
@@ -142,9 +154,13 @@ export function ProjectsApiScreen({
       : showRepublishCta
         ? 'Republish to update live site'
         : 'Publish';
+  const preflightDisabledReason =
+    publishPreflightDetails.length > 0 ? 'Fix publish issues listed below before retrying.' : null;
   const publishDisabledReason =
     publishStarting || publishStatus === 'publishing'
       ? 'Publishing is already in progress.'
+      : preflightDisabledReason
+        ? preflightDisabledReason
       : projectPages.length === 0
         ? 'Create at least one page before publishing.'
         : null;
@@ -273,6 +289,7 @@ export function ProjectsApiScreen({
     setPublishStatus(null);
     setPublishedUrl(null);
     setPublishError(null);
+    setPublishPreflightDetails([]);
     setPublishMessage(null);
   }, [activeProjectId]);
 
@@ -434,6 +451,7 @@ export function ProjectsApiScreen({
       const res = await navigationApi.update(activeProjectId, {
         items: navigationItems.map((item) => ({ label: item.label.trim(), pageId: item.pageId })),
       });
+      setPublishPreflightDetails([]);
       setNavigationItems(normalizeNavigationItems(res.items));
       setNavigationMessage('Navigation saved');
       appToast.success('Navigation saved', {
@@ -455,12 +473,14 @@ export function ProjectsApiScreen({
 
     setPublishStarting(true);
     setPublishError(null);
+    setPublishPreflightDetails([]);
     setPublishMessage(null);
     try {
       const result = await publishApi.create(activeProjectId);
       setPublishId(result.publishId);
       setPublishStatus(result.status);
       setPublishedUrl(result.url);
+      setPublishPreflightDetails([]);
       appToast.success('Publish started', {
         eventKey: `publish-started:${result.publishId}`,
       });
@@ -476,6 +496,17 @@ export function ProjectsApiScreen({
         void loadPublishHistory(activeProjectId);
       }
     } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      if (apiError?.code === 'PUBLISH_PREFLIGHT_FAILED') {
+        const details = Array.isArray(apiError.details) && apiError.details.length > 0 ? apiError.details : [apiError.message];
+        setPublishPreflightDetails(details);
+        setPublishMessage(null);
+        appToast.error('Fix publish issues before publishing', {
+          eventKey: `publish-preflight-error:${activeProjectId}`,
+        });
+        return;
+      }
+
       const message = getUserFriendlyErrorMessage(err, 'Failed to publish project');
       setPublishError(message);
       setPublishStatus('failed');
@@ -638,6 +669,7 @@ export function ProjectsApiScreen({
       }
 
       await refreshPagesAndNavigation(activeProjectId);
+      setPublishPreflightDetails([]);
       appToast.success(`Deleted "${page.title}"`, {
         eventKey: `page-deleted:${activeProjectId}:${page.id}`,
       });
@@ -668,6 +700,7 @@ export function ProjectsApiScreen({
     try {
       await projectsApi.setHome(activeProjectId, { pageId: page.id });
       await refreshPagesAndNavigation(activeProjectId);
+      setPublishPreflightDetails([]);
       appToast.success(`"${page.title}" set as home page`, {
         eventKey: `page-home-set:${activeProjectId}:${page.id}`,
       });
@@ -726,6 +759,7 @@ export function ProjectsApiScreen({
       setNewPageTitle('');
       setNewPageSlug('');
       await loadProjectPages(activeProjectId);
+      setPublishPreflightDetails([]);
 
       onOpenPage(activeProjectId, res.page_id);
       appToast.success('Page created', {
@@ -828,6 +862,11 @@ export function ProjectsApiScreen({
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
             <div className="flex items-center gap-2">
+              {showHomeMissingBadge && (
+                <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                  Home page missing
+                </span>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -877,6 +916,16 @@ export function ProjectsApiScreen({
                 <p className="text-sm text-destructive" role="alert">
                   {latestPublishError}
                 </p>
+              )}
+              {publishPreflightDetails.length > 0 && (
+                <div className="border border-amber-400/70 rounded-md p-3 bg-amber-50/70 text-amber-900" role="alert">
+                  <p className="text-sm font-medium">Fix before publishing</p>
+                  <ul className="list-disc list-inside text-sm mt-2 space-y-1">
+                    {publishPreflightDetails.map((detail, index) => (
+                      <li key={`publish-preflight-${index}`}>{detail}</li>
+                    ))}
+                  </ul>
+                </div>
               )}
               {publishStatus === 'live' && publishedHomeUrl && (
                 <div className="space-y-2">
