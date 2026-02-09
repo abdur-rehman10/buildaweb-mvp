@@ -166,6 +166,7 @@ export type ProjectSummary = {
   homePageId?: string | null;
   latestPublishId?: string | null;
   publishedAt?: string | null;
+  hasUnpublishedChanges?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };

@@ -9,6 +9,7 @@ import { Page, PageDocument } from '../pages/page.schema';
 import { PreviewRendererService } from '../pages/preview-renderer.service';
 import { Project, ProjectDocument } from '../projects/project.schema';
 import { Publish, PublishDocument } from './publish.schema';
+import { buildPublishDraftSnapshot } from './publish-snapshot.util';
 
 export class PublishPreflightError extends Error {
   readonly code = 'PUBLISH_PREFLIGHT_FAILED';
@@ -363,6 +364,11 @@ ${params.bodyHtml}
       projectId: params.projectId,
       publishId: new Types.ObjectId().toString(),
     });
+    const draftSnapshot = buildPublishDraftSnapshot({
+      project,
+      pages,
+      navigationItems,
+    });
 
     const publish = await this.publishModel.create({
       tenantId: params.tenantId,
@@ -371,6 +377,7 @@ ${params.bodyHtml}
       status: 'publishing',
       baseUrl,
       errorMessage: null,
+      draftSnapshot,
     });
 
     publish.baseUrl = this.publishBaseUrl({

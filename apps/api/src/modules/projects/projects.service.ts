@@ -3,7 +3,29 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
 import { Page, PageDocument } from '../pages/page.schema';
+import { Publish, PublishDocument } from '../publish/publish.schema';
+import { buildPublishDraftSnapshot, snapshotSignature, type PublishDraftSnapshot } from '../publish/publish-snapshot.util';
 import { Project, ProjectDocument } from './project.schema';
+
+type ProjectWithDraftStatus = {
+  project: {
+    _id: unknown;
+    name: string;
+    status: 'draft' | 'published' | 'archived';
+    defaultLocale: string;
+    homePageId?: unknown;
+    latestPublishId?: string | null;
+    publishedAt?: Date | null;
+    siteName?: string | null;
+    logoAssetId?: string | null;
+    faviconAssetId?: string | null;
+    defaultOgImageAssetId?: string | null;
+    locale?: string | null;
+    createdAt?: Date;
+    updatedAt?: Date;
+  };
+  hasUnpublishedChanges: boolean;
+};
 
 @Injectable()
 export class ProjectsService {
@@ -11,6 +33,7 @@ export class ProjectsService {
     @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
     @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
   ) {}
 
   private normalizeOptionalString(value: unknown): string | null {
@@ -48,10 +71,197 @@ export class ProjectsService {
     return this.projectModel.find({ tenantId: params.tenantId, ownerUserId: params.ownerUserId }).exec();
   }
 
+  private normalizeLatestPublishId(value: unknown): string | null {
+    const normalized = this.normalizeOptionalString(value);
+    if (!normalized) return null;
+    return Types.ObjectId.isValid(normalized) ? normalized : null;
+  }
+
+  private buildCurrentDraftSnapshot(params: {
+    project: {
+      defaultLocale?: unknown;
+      locale?: unknown;
+      siteName?: unknown;
+      faviconAssetId?: unknown;
+      defaultOgImageAssetId?: unknown;
+    };
+    pages: Array<{
+      _id?: unknown;
+      title?: unknown;
+      slug?: unknown;
+      isHome?: boolean;
+      editorJson?: unknown;
+      seoJson?: unknown;
+    }>;
+    navigationItems: unknown[];
+  }): PublishDraftSnapshot {
+    return buildPublishDraftSnapshot({
+      project: params.project,
+      pages: params.pages,
+      navigationItems: params.navigationItems,
+    });
+  }
+
+  private async computeDraftStatus(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projects: Array<{
+      _id: unknown;
+      latestPublishId?: string | null;
+      defaultLocale?: unknown;
+      locale?: unknown;
+      siteName?: unknown;
+      faviconAssetId?: unknown;
+      defaultOgImageAssetId?: unknown;
+    }>;
+  }) {
+    const projectIds = params.projects.map((project) => String(project._id));
+    if (projectIds.length === 0) {
+      return new Map<string, boolean>();
+    }
+
+    const [pages, navigations] = await Promise.all([
+      this.pageModel
+        .find({
+          tenantId: params.tenantId,
+          projectId: { $in: projectIds },
+        })
+        .select('_id projectId title slug isHome editorJson seoJson')
+        .lean()
+        .exec(),
+      this.navigationModel
+        .find({
+          tenantId: params.tenantId,
+          projectId: { $in: projectIds },
+        })
+        .select('projectId itemsJson')
+        .lean()
+        .exec(),
+    ]);
+
+    const pagesByProjectId = new Map<string, typeof pages>();
+    for (const page of pages) {
+      const projectId = String(page.projectId);
+      const existing = pagesByProjectId.get(projectId);
+      if (existing) {
+        existing.push(page);
+      } else {
+        pagesByProjectId.set(projectId, [page]);
+      }
+    }
+
+    const navigationItemsByProjectId = new Map<string, unknown[]>();
+    for (const navigation of navigations) {
+      navigationItemsByProjectId.set(String(navigation.projectId), Array.isArray(navigation.itemsJson) ? navigation.itemsJson : []);
+    }
+
+    const currentSnapshotByProjectId = new Map<string, PublishDraftSnapshot>();
+    for (const project of params.projects) {
+      const projectId = String(project._id);
+      currentSnapshotByProjectId.set(
+        projectId,
+        this.buildCurrentDraftSnapshot({
+          project,
+          pages: pagesByProjectId.get(projectId) ?? [],
+          navigationItems: navigationItemsByProjectId.get(projectId) ?? [],
+        }),
+      );
+    }
+
+    const latestPublishIds = params.projects
+      .map((project) => this.normalizeLatestPublishId(project.latestPublishId))
+      .filter((value): value is string => value !== null);
+
+    const publishSnapshotById = new Map<string, PublishDraftSnapshot>();
+    if (latestPublishIds.length > 0) {
+      const publishes = await this.publishModel
+        .find({
+          _id: { $in: latestPublishIds },
+          tenantId: params.tenantId,
+          ownerUserId: params.ownerUserId,
+          projectId: { $in: projectIds },
+          status: 'live',
+        })
+        .select('_id draftSnapshot')
+        .lean()
+        .exec();
+
+      for (const publish of publishes) {
+        if (publish.draftSnapshot) {
+          publishSnapshotById.set(String(publish._id), publish.draftSnapshot as PublishDraftSnapshot);
+        }
+      }
+    }
+
+    const hasUnpublishedChangesByProjectId = new Map<string, boolean>();
+    for (const project of params.projects) {
+      const projectId = String(project._id);
+      const latestPublishId = this.normalizeLatestPublishId(project.latestPublishId);
+
+      if (!latestPublishId) {
+        hasUnpublishedChangesByProjectId.set(projectId, true);
+        continue;
+      }
+
+      const liveSnapshot = publishSnapshotById.get(latestPublishId);
+      if (!liveSnapshot) {
+        hasUnpublishedChangesByProjectId.set(projectId, true);
+        continue;
+      }
+
+      const currentSnapshot = currentSnapshotByProjectId.get(projectId);
+      hasUnpublishedChangesByProjectId.set(
+        projectId,
+        snapshotSignature(currentSnapshot) !== snapshotSignature(liveSnapshot),
+      );
+    }
+
+    return hasUnpublishedChangesByProjectId;
+  }
+
+  async listByOwnerWithDraftStatus(params: { tenantId: string; ownerUserId: string }): Promise<ProjectWithDraftStatus[]> {
+    const projects = await this.projectModel
+      .find({ tenantId: params.tenantId, ownerUserId: params.ownerUserId })
+      .lean()
+      .exec();
+
+    const hasUnpublishedChangesByProjectId = await this.computeDraftStatus({
+      tenantId: params.tenantId,
+      ownerUserId: params.ownerUserId,
+      projects,
+    });
+
+    return projects.map((project) => ({
+      project,
+      hasUnpublishedChanges: hasUnpublishedChangesByProjectId.get(String(project._id)) ?? true,
+    }));
+  }
+
   async getByIdScoped(params: { tenantId: string; ownerUserId: string; projectId: string }) {
     return this.projectModel
       .findOne({ _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId })
       .exec();
+  }
+
+  async getByIdScopedWithDraftStatus(
+    params: { tenantId: string; ownerUserId: string; projectId: string },
+  ): Promise<ProjectWithDraftStatus | null> {
+    const project = await this.projectModel
+      .findOne({ _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId })
+      .lean()
+      .exec();
+    if (!project) return null;
+
+    const hasUnpublishedChangesByProjectId = await this.computeDraftStatus({
+      tenantId: params.tenantId,
+      ownerUserId: params.ownerUserId,
+      projects: [project],
+    });
+
+    return {
+      project,
+      hasUnpublishedChanges: hasUnpublishedChangesByProjectId.get(String(project._id)) ?? true,
+    };
   }
 
   async getSettings(params: { tenantId: string; ownerUserId: string; projectId: string }) {

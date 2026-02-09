@@ -36,16 +36,25 @@ export class ProjectsController {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const projects = await this.projects.listByOwner({ tenantId, ownerUserId });
+    const projects = await this.projects.listByOwnerWithDraftStatus({ tenantId, ownerUserId });
 
     return ok({
-      projects: projects.map((project) => ({
-        id: String(project._id),
-        name: project.name,
-        status: project.status,
-        defaultLocale: project.defaultLocale,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
+      projects: projects.map((entry) => ({
+        id: String(entry.project._id),
+        name: entry.project.name,
+        status: entry.project.status,
+        defaultLocale: entry.project.defaultLocale,
+        homePageId: entry.project.homePageId ? String(entry.project.homePageId) : null,
+        latestPublishId: entry.project.latestPublishId ? String(entry.project.latestPublishId) : null,
+        publishedAt: entry.project.publishedAt ?? null,
+        siteName: entry.project.siteName ?? null,
+        logoAssetId: entry.project.logoAssetId ?? null,
+        faviconAssetId: entry.project.faviconAssetId ?? null,
+        defaultOgImageAssetId: entry.project.defaultOgImageAssetId ?? null,
+        locale: entry.project.locale ?? entry.project.defaultLocale ?? 'en',
+        hasUnpublishedChanges: entry.hasUnpublishedChanges,
+        createdAt: entry.project.createdAt,
+        updatedAt: entry.project.updatedAt,
       })),
     });
   }
@@ -55,11 +64,12 @@ export class ProjectsController {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
-    if (!project) {
+    const projectResult = await this.projects.getByIdScopedWithDraftStatus({ tenantId, ownerUserId, projectId });
+    if (!projectResult) {
       throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
+    const project = projectResult.project;
     return ok({
       project: {
         id: String(project._id),
@@ -74,6 +84,7 @@ export class ProjectsController {
         faviconAssetId: project.faviconAssetId ?? null,
         defaultOgImageAssetId: project.defaultOgImageAssetId ?? null,
         locale: project.locale ?? project.defaultLocale ?? 'en',
+        hasUnpublishedChanges: projectResult.hasUnpublishedChanges,
         createdAt: project.createdAt,
         updatedAt: project.updatedAt,
       },
