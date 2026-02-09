@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
@@ -78,26 +78,53 @@ export class ProjectsService {
       return null;
     }
 
+    const originalHomePageId = project.homePageId ? String(project.homePageId) : null;
+    const setPayload: {
+      siteName?: string | null;
+      logoAssetId?: string | null;
+      faviconAssetId?: string | null;
+      defaultOgImageAssetId?: string | null;
+      locale?: string;
+    } = {};
+
     if (Object.prototype.hasOwnProperty.call(params, 'siteName')) {
-      project.siteName = this.normalizeOptionalString(params.siteName);
+      setPayload.siteName = this.normalizeOptionalString(params.siteName);
     }
     if (Object.prototype.hasOwnProperty.call(params, 'logoAssetId')) {
-      project.logoAssetId = this.normalizeOptionalString(params.logoAssetId);
+      setPayload.logoAssetId = this.normalizeOptionalString(params.logoAssetId);
     }
     if (Object.prototype.hasOwnProperty.call(params, 'faviconAssetId')) {
-      project.faviconAssetId = this.normalizeOptionalString(params.faviconAssetId);
+      setPayload.faviconAssetId = this.normalizeOptionalString(params.faviconAssetId);
     }
     if (Object.prototype.hasOwnProperty.call(params, 'defaultOgImageAssetId')) {
-      project.defaultOgImageAssetId = this.normalizeOptionalString(params.defaultOgImageAssetId);
+      setPayload.defaultOgImageAssetId = this.normalizeOptionalString(params.defaultOgImageAssetId);
     }
     if (Object.prototype.hasOwnProperty.call(params, 'locale')) {
-      project.locale = this.normalizeLocale(params.locale, this.normalizeLocale(project.defaultLocale, 'en'));
+      setPayload.locale = this.normalizeLocale(params.locale, this.normalizeLocale(project.defaultLocale, 'en'));
     } else if (!this.normalizeOptionalString(project.locale)) {
-      project.locale = this.normalizeLocale(project.defaultLocale, 'en');
+      setPayload.locale = this.normalizeLocale(project.defaultLocale, 'en');
     }
 
-    await project.save();
-    return this.mapSettings(project);
+    if (Object.keys(setPayload).length > 0) {
+      await this.projectModel
+        .updateOne(
+          { _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId },
+          { $set: setPayload },
+        )
+        .exec();
+    }
+
+    const refreshedProject = await this.getByIdScoped(params);
+    if (!refreshedProject) {
+      return null;
+    }
+
+    const refreshedHomePageId = refreshedProject.homePageId ? String(refreshedProject.homePageId) : null;
+    if (refreshedHomePageId !== originalHomePageId) {
+      throw new InternalServerErrorException('Project home page changed unexpectedly while updating settings');
+    }
+
+    return this.mapSettings(refreshedProject);
   }
 
   async setLatestPublish(params: {

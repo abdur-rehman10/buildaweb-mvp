@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { Model } from 'mongoose';
 import { NavigationDocument } from '../navigation/navigation.schema';
 import { PageDocument } from '../pages/page.schema';
@@ -192,19 +192,30 @@ describe('ProjectsService.settings', () => {
     });
   });
 
-  it('updates and persists settings', async () => {
-    const save = jest.fn().mockResolvedValue(undefined);
+  it('updates settings with $set patch semantics and preserves homePageId', async () => {
     projectModel.findOne.mockReturnValue({
-      exec: jest.fn().mockResolvedValue({
-        _id: 'project-1',
-        siteName: 'Old Name',
-        logoAssetId: null,
-        faviconAssetId: null,
-        defaultOgImageAssetId: null,
-        locale: 'en',
-        defaultLocale: 'en',
-        save,
-      }),
+      exec: jest
+        .fn()
+        .mockResolvedValueOnce({
+          _id: 'project-1',
+          siteName: 'Old Name',
+          logoAssetId: null,
+          faviconAssetId: null,
+          defaultOgImageAssetId: null,
+          locale: 'en',
+          defaultLocale: 'en',
+          homePageId: '507f1f77bcf86cd799439011',
+        })
+        .mockResolvedValueOnce({
+          _id: 'project-1',
+          siteName: 'New Name',
+          logoAssetId: 'logo-asset',
+          faviconAssetId: 'favicon-asset',
+          defaultOgImageAssetId: 'og-asset',
+          locale: 'fr',
+          defaultLocale: 'en',
+          homePageId: '507f1f77bcf86cd799439011',
+        }),
     });
 
     const settings = await service.updateSettings({
@@ -218,7 +229,22 @@ describe('ProjectsService.settings', () => {
       locale: 'fr',
     });
 
-    expect(save).toHaveBeenCalledTimes(1);
+    expect(projectModel.updateOne).toHaveBeenCalledWith(
+      {
+        _id: 'project-1',
+        tenantId: 'default',
+        ownerUserId: 'user-1',
+      },
+      {
+        $set: {
+          siteName: 'New Name',
+          logoAssetId: 'logo-asset',
+          faviconAssetId: 'favicon-asset',
+          defaultOgImageAssetId: 'og-asset',
+          locale: 'fr',
+        },
+      },
+    );
     expect(settings).toEqual({
       siteName: 'New Name',
       logoAssetId: 'logo-asset',
@@ -226,5 +252,41 @@ describe('ProjectsService.settings', () => {
       defaultOgImageAssetId: 'og-asset',
       locale: 'fr',
     });
+  });
+
+  it('throws when homePageId changes during settings update', async () => {
+    projectModel.findOne.mockReturnValue({
+      exec: jest
+        .fn()
+        .mockResolvedValueOnce({
+          _id: 'project-1',
+          siteName: 'Old Name',
+          logoAssetId: null,
+          faviconAssetId: null,
+          defaultOgImageAssetId: null,
+          locale: 'en',
+          defaultLocale: 'en',
+          homePageId: '507f1f77bcf86cd799439011',
+        })
+        .mockResolvedValueOnce({
+          _id: 'project-1',
+          siteName: 'New Name',
+          logoAssetId: null,
+          faviconAssetId: null,
+          defaultOgImageAssetId: null,
+          locale: 'en',
+          defaultLocale: 'en',
+          homePageId: '507f1f77bcf86cd799439012',
+        }),
+    });
+
+    await expect(
+      service.updateSettings({
+        tenantId: 'default',
+        ownerUserId: 'user-1',
+        projectId: 'project-1',
+        siteName: 'New Name',
+      }),
+    ).rejects.toBeInstanceOf(InternalServerErrorException);
   });
 });
