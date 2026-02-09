@@ -65,6 +65,7 @@ export class ProjectsController {
         name: project.name,
         status: project.status,
         defaultLocale: project.defaultLocale,
+        homePageId: project.homePageId ? String(project.homePageId) : null,
         latestPublishId: project.latestPublishId ? String(project.latestPublishId) : null,
         publishedAt: project.publishedAt ?? null,
         createdAt: project.createdAt,
