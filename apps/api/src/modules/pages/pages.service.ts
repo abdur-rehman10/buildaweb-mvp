@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
+import { Project, ProjectDocument } from '../projects/project.schema';
 import { Page, PageDocument } from './page.schema';
 
 export class PageSlugConflictException extends ConflictException {}
@@ -12,6 +13,7 @@ export class PagesService {
   constructor(
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
     @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
   ) {}
 
   private normalizeSlug(slug: string) {
@@ -349,6 +351,8 @@ export class PagesService {
       .exec();
 
     if (deletedWasHome) {
+      let nextHomePageId: string | null = null;
+
       await this.pageModel
         .updateMany(
           {
@@ -371,6 +375,7 @@ export class PagesService {
         .exec();
 
       if (earliestRemaining?._id) {
+        nextHomePageId = String(earliestRemaining._id);
         await this.pageModel
           .updateOne(
             {
@@ -384,6 +389,20 @@ export class PagesService {
           )
           .exec();
       }
+
+      await this.projectModel
+        .updateOne(
+          {
+            _id: params.projectId,
+            tenantId: params.tenantId,
+          },
+          {
+            $set: {
+              homePageId: nextHomePageId,
+            },
+          },
+        )
+        .exec();
     }
   }
 }
