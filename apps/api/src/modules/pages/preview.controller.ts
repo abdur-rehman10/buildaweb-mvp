@@ -169,7 +169,7 @@ export class PreviewController {
       .filter((item): item is { label: string; targetSlug: string } => item !== null);
   }
 
-  private collectAssetRefs(editorJson: unknown): string[] {
+  private collectAssetRefs(editorJson: unknown, seoJson?: unknown): string[] {
     const page = this.asRecord(editorJson);
     const sections = this.asArray(page?.sections);
     const refs = new Set<string>();
@@ -195,6 +195,12 @@ export class PreviewController {
           }
         }
       }
+    }
+
+    const seo = this.asRecord(seoJson);
+    const ogImageAssetId = this.readString(seo?.ogImageAssetId).trim();
+    if (ogImageAssetId) {
+      refs.add(ogImageAssetId);
     }
 
     return [...refs];
@@ -224,7 +230,7 @@ export class PreviewController {
       throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
-    const assetRefs = this.collectAssetRefs(page.editorJson);
+    const assetRefs = this.collectAssetRefs(page.editorJson, page.seoJson);
     const validAssetIds = assetRefs.filter((assetId) => Types.ObjectId.isValid(assetId));
     const assets = await this.assets.getByIdsScoped({
       tenantId,
@@ -244,6 +250,8 @@ export class PreviewController {
       assetUrlById,
       navLinks,
       currentSlug,
+      pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+      seoJson: page.seoJson,
     });
 
     return ok(preview);

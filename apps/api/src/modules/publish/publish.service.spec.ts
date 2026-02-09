@@ -297,6 +297,50 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
+  it('injects seo meta tags into published html and resolves og:image from asset id', async () => {
+    pageModel.find.mockReturnValueOnce(
+      mockLeanExec([
+        {
+          _id: '507f1f77bcf86cd799439061',
+          title: 'Home',
+          slug: '/',
+          isHome: true,
+          seoJson: {
+            title: 'SEO Home',
+            description: 'Home description',
+            ogTitle: 'Home OG',
+            ogDescription: 'Home OG Description',
+            ogImageAssetId: '507f1f77bcf86cd799439099',
+          },
+          editorJson: { sections: [] },
+        },
+      ]),
+    );
+    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    assets.getByIdsScoped.mockResolvedValueOnce([
+      {
+        _id: '507f1f77bcf86cd799439099',
+        publicUrl: 'http://localhost:9000/buildaweb/tenants/default/projects/project-1/assets/hero.png',
+      },
+    ]);
+
+    await service.createAndPublish(baseParams);
+
+    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
+    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+
+    expect(homeUpload).toBeDefined();
+
+    const html = homeUpload!.buffer.toString('utf-8');
+    expect(html).toContain('<title>SEO Home</title>');
+    expect(html).toContain('<meta name="description" content="Home description" />');
+    expect(html).toContain('<meta property="og:title" content="Home OG" />');
+    expect(html).toContain('<meta property="og:description" content="Home OG Description" />');
+    expect(html).toContain(
+      '<meta property="og:image" content="http://localhost:9000/buildaweb/tenants/default/projects/project-1/assets/hero.png" />',
+    );
+  });
+
   it('lists publishes scoped to project/user sorted by createdAt desc with limit', async () => {
     const exec = jest.fn().mockResolvedValue([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
     const limit = jest.fn().mockReturnValue({ exec });
