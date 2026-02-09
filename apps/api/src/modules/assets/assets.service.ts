@@ -82,13 +82,14 @@ export class AssetsService {
         projectId: params.projectId,
       })
       .sort({ createdAt: -1 })
-      .select('_id fileName storagePath sizeBytes publicUrl createdAt')
+      .select('_id fileName storagePath mimeType sizeBytes publicUrl createdAt')
       .lean()
       .exec();
 
     return assets.map((asset) => ({
       id: String(asset._id),
       fileName: (asset.fileName || '').trim() || basename(asset.storagePath || ''),
+      mimeType: asset.mimeType ?? null,
       size: asset.sizeBytes,
       publicUrl: asset.publicUrl,
       createdAt: asset.createdAt,

@@ -99,6 +99,7 @@ function renderScreen() {
       onSelectActivePageId={() => {}}
       onSelectProject={() => {}}
       onOpenPage={() => {}}
+      onOpenAssetsLibrary={() => {}}
     />,
   );
 }

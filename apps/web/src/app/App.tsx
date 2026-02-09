@@ -23,6 +23,7 @@ import { Help } from './screens/Help';
 import { Notifications } from './screens/Notifications';
 import { ProjectsApiScreen } from './screens/ProjectsApiScreen';
 import { PageApiScreen } from './screens/PageApiScreen';
+import { MediaLibrary } from './screens/MediaLibrary';
 import { clearAuthToken, getAuthToken } from '../lib/auth';
 import { authApi } from '../lib/api';
 
@@ -41,6 +42,7 @@ type Screen =
   | 'account-settings'
   | 'help'
   | 'notifications'
+  | 'assets'
   | 'page-api';
 
 export default function App() {
@@ -254,6 +256,10 @@ export default function App() {
                 setActivePageId(pageId);
                 navigate('page-api');
               }}
+              onOpenAssetsLibrary={(projectId) => {
+                setActiveProjectId(projectId);
+                navigate('assets');
+              }}
             />
           )}
 
@@ -309,6 +315,13 @@ export default function App() {
           
           {currentScreen === 'notifications' && (
             <Notifications />
+          )}
+
+          {currentScreen === 'assets' && (
+            <MediaLibrary
+              projectId={activeProjectId}
+              onBack={() => navigate('dashboard')}
+            />
           )}
         </main>
 
