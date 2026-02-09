@@ -2,7 +2,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsApiScreen } from './ProjectsApiScreen';
-import { ApiError, navigationApi, pagesApi, projectsApi, publishApi } from '../../lib/api';
+import { ApiError, assetsApi, navigationApi, pagesApi, projectsApi, publishApi } from '../../lib/api';
 import { appToast } from '../../lib/toast';
 
 vi.mock('../../lib/api', () => {
@@ -26,6 +26,8 @@ vi.mock('../../lib/api', () => {
       list: vi.fn(),
       create: vi.fn(),
       get: vi.fn(),
+      getSettings: vi.fn(),
+      updateSettings: vi.fn(),
       setHome: vi.fn(),
     },
     pagesApi: {
@@ -48,6 +50,11 @@ vi.mock('../../lib/api', () => {
       setLatest: vi.fn(),
       getLatest: vi.fn(),
       getStatus: vi.fn(),
+    },
+    assetsApi: {
+      resolve: vi.fn(),
+      upload: vi.fn(),
+      list: vi.fn(),
     },
   };
 });
@@ -128,6 +135,16 @@ describe('ProjectsApiScreen toasts', () => {
         publishedAt: null,
       },
     });
+    vi.mocked(projectsApi.getSettings).mockResolvedValue({
+      settings: {
+        siteName: null,
+        logoAssetId: null,
+        faviconAssetId: null,
+        defaultOgImageAssetId: null,
+        locale: 'en',
+      },
+    });
+    vi.mocked(assetsApi.resolve).mockResolvedValue({ items: [] });
     vi.mocked(navigationApi.get).mockResolvedValue({
       items: [],
     });

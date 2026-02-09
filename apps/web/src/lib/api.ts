@@ -143,6 +143,11 @@ export type ProjectSummary = {
   name: string;
   status: ProjectStatus;
   defaultLocale: string;
+  siteName?: string | null;
+  logoAssetId?: string | null;
+  faviconAssetId?: string | null;
+  defaultOgImageAssetId?: string | null;
+  locale?: string | null;
   homePageId?: string | null;
   latestPublishId?: string | null;
   publishedAt?: string | null;
@@ -174,6 +179,30 @@ export type SetProjectHomeInput = {
 export type SetProjectHomeResult = {
   homePageId: string;
   slug: '/';
+};
+
+export type ProjectSettings = {
+  siteName: string | null;
+  logoAssetId: string | null;
+  faviconAssetId: string | null;
+  defaultOgImageAssetId: string | null;
+  locale: string;
+};
+
+export type GetProjectSettingsResult = {
+  settings: ProjectSettings;
+};
+
+export type UpdateProjectSettingsInput = {
+  siteName?: string | null;
+  logoAssetId?: string | null;
+  faviconAssetId?: string | null;
+  defaultOgImageAssetId?: string | null;
+  locale?: string | null;
+};
+
+export type UpdateProjectSettingsResult = {
+  settings: ProjectSettings;
 };
 
 export type CreatePageInput = {
@@ -255,6 +284,8 @@ export type PagePreviewResult = {
   html: string;
   css: string;
   hash: string;
+  headTags?: string;
+  lang?: string;
 };
 
 export type UploadAssetResult = {
@@ -372,6 +403,17 @@ export const projectsApi = {
   },
   setHome(projectId: string, input: SetProjectHomeInput) {
     return apiRequest<SetProjectHomeResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/home`, {
+      method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+  getSettings(projectId: string) {
+    return apiRequest<GetProjectSettingsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`, {
+      method: 'GET',
+    });
+  },
+  updateSettings(projectId: string, input: UpdateProjectSettingsInput) {
+    return apiRequest<UpdateProjectSettingsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });

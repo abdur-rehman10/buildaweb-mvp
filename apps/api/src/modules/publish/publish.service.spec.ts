@@ -23,6 +23,7 @@ type MockNavigationModel = {
 };
 
 type MockProjectModel = {
+  findOne: jest.Mock;
   updateOne: jest.Mock;
 };
 
@@ -130,6 +131,17 @@ describe('PublishService pretty URLs', () => {
     };
 
     projectModel = {
+      findOne: jest.fn().mockReturnValue(
+        mockLeanExec({
+          _id: 'project-1',
+          name: 'Main Site',
+          defaultLocale: 'en',
+          locale: 'en',
+          siteName: null,
+          faviconAssetId: null,
+          defaultOgImageAssetId: null,
+        }),
+      ),
       updateOne: jest.fn().mockReturnValue({
         exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
       }),
@@ -356,6 +368,58 @@ describe('PublishService pretty URLs', () => {
     expect(html).not.toContain('property="og:title"');
     expect(html).not.toContain('property="og:description"');
     expect(html).not.toContain('property="og:image"');
+  });
+
+  it('applies project settings for title fallback, favicon, og:image, and html lang', async () => {
+    projectModel.findOne.mockReturnValueOnce(
+      mockLeanExec({
+        _id: 'project-1',
+        name: 'Main Site',
+        defaultLocale: 'en',
+        locale: 'fr',
+        siteName: 'Project Site Name',
+        faviconAssetId: '507f1f77bcf86cd799439091',
+        defaultOgImageAssetId: '507f1f77bcf86cd799439092',
+      }),
+    );
+    pageModel.find.mockReturnValueOnce(
+      mockLeanExec([
+        {
+          _id: '507f1f77bcf86cd799439081',
+          title: 'Page Title Fallback',
+          slug: '/',
+          isHome: true,
+          seoJson: {},
+          editorJson: { sections: [] },
+        },
+      ]),
+    );
+    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    assets.getByIdsScoped.mockResolvedValueOnce([
+      {
+        _id: '507f1f77bcf86cd799439091',
+        publicUrl: 'http://localhost:9000/buildaweb/assets/favicon.png',
+      },
+      {
+        _id: '507f1f77bcf86cd799439092',
+        publicUrl: 'http://localhost:9000/buildaweb/assets/default-og.png',
+      },
+    ]);
+
+    await service.createAndPublish(baseParams);
+
+    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
+    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+
+    expect(homeUpload).toBeDefined();
+
+    const html = homeUpload!.buffer.toString('utf-8');
+    expect(html).toContain('<html lang="fr">');
+    expect(html).toContain('<title>Project Site Name</title>');
+    expect(html).toContain('<link rel="icon" href="http://localhost:9000/buildaweb/assets/favicon.png" />');
+    expect(html).toContain(
+      '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/default-og.png" />',
+    );
   });
 
   it('lists publishes scoped to project/user sorted by createdAt desc with limit', async () => {

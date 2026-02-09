@@ -201,16 +201,27 @@ export class PreviewRendererService {
 
   private renderSeoHeadTags(params: {
     seoJson: unknown;
+    siteName?: string;
     pageTitle: string;
+    faviconUrl?: string;
+    defaultOgImageUrl?: string;
   }): string {
     const seo = this.asRecord(params.seoJson) ?? {};
-    const fallbackTitle = params.pageTitle.trim() || 'Buildaweb Site';
+    const fallbackTitle = this.readString(params.siteName).trim() || params.pageTitle.trim() || 'Buildaweb Site';
     const title = this.readString(seo.title).trim() || fallbackTitle;
     const description = this.readString(seo.description).trim();
+    const faviconUrl = this.readString(params.faviconUrl).trim();
+    const defaultOgImageUrl = this.readString(params.defaultOgImageUrl).trim();
 
     const tags = [`<title>${this.escapeHtml(title)}</title>`];
     if (description) {
       tags.push(`<meta name="description" content="${this.escapeHtml(description)}" />`);
+    }
+    if (faviconUrl) {
+      tags.push(`<link rel="icon" href="${this.escapeHtml(faviconUrl)}" />`);
+    }
+    if (defaultOgImageUrl) {
+      tags.push(`<meta property="og:image" content="${this.escapeHtml(defaultOgImageUrl)}" />`);
     }
     return tags.join('\n');
   }
@@ -223,6 +234,10 @@ export class PreviewRendererService {
     currentSlug?: string;
     pageTitle?: string;
     seoJson?: unknown;
+    siteName?: string;
+    faviconUrl?: string;
+    defaultOgImageUrl?: string;
+    locale?: string;
   }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
@@ -231,8 +246,13 @@ export class PreviewRendererService {
     const pageTitle = this.readString(params.pageTitle, 'Buildaweb Site') || 'Buildaweb Site';
     const headTags = this.renderSeoHeadTags({
       seoJson: params.seoJson,
+      siteName: params.siteName,
       pageTitle,
+      faviconUrl: params.faviconUrl,
+      defaultOgImageUrl: params.defaultOgImageUrl,
     });
+    const langCandidate = this.readString(params.locale).trim() || 'en';
+    const lang = /^[A-Za-z0-9-]+$/.test(langCandidate) ? langCandidate : 'en';
     const navHtml = this.renderNavigation(navLinks, currentSlug);
     const sections = this.asArray(pageRecord.sections)
       .map((section) => this.renderSection(section, assetUrlById, currentSlug))
@@ -242,8 +262,8 @@ export class PreviewRendererService {
     const css = this.baseCss;
     const pageJsonString = this.stableStringify(pageRecord);
     const navString = this.stableStringify(navLinks);
-    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css + headTags).digest('hex');
+    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css + headTags + lang).digest('hex');
 
-    return { html, css, hash, headTags };
+    return { html, css, hash, headTags, lang };
   }
 }

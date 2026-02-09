@@ -192,9 +192,9 @@ export class PublishService {
     return `${'../'.repeat(depth)}styles.css`;
   }
 
-  private staticHtmlDocument(params: { headTags: string; cssHref: string; bodyHtml: string }) {
+  private staticHtmlDocument(params: { headTags: string; cssHref: string; bodyHtml: string; lang: string }) {
     return `<!doctype html>
-<html lang="en">
+<html lang="${params.lang}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -263,11 +263,18 @@ ${params.bodyHtml}
   private async resolveAssetUrlById(params: {
     tenantId: string;
     projectId: string;
-    pages: Array<{ editorJson: unknown; seoJson?: unknown }>;
+    pages: Array<{ editorJson: unknown }>;
+    settingsAssetIds?: string[];
   }) {
     const refs = new Set<string>();
     for (const page of params.pages) {
       this.collectAssetRefsFromPageJson(page.editorJson, refs);
+    }
+    for (const settingsAssetId of params.settingsAssetIds ?? []) {
+      const normalized = this.readString(settingsAssetId).trim();
+      if (normalized) {
+        refs.add(normalized);
+      }
     }
 
     const validAssetIds = [...refs].filter((id) => Types.ObjectId.isValid(id));
@@ -309,6 +316,19 @@ ${params.bodyHtml}
   }
 
   async createAndPublish(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+    const project = await this.projectModel
+      .findOne({
+        _id: params.projectId,
+        tenantId: params.tenantId,
+        ownerUserId: params.ownerUserId,
+      })
+      .select('_id name defaultLocale locale siteName faviconAssetId defaultOgImageAssetId')
+      .lean()
+      .exec();
+    if (!project) {
+      throw new Error('Project not found');
+    }
+
     const pages = await this.pageModel
       .find({ tenantId: params.tenantId, projectId: params.projectId })
       .select('_id title slug isHome editorJson seoJson')
@@ -361,15 +381,22 @@ ${params.bodyHtml}
     await publish.save();
 
     try {
+      const faviconAssetId = this.readString(project.faviconAssetId).trim();
+      const defaultOgImageAssetId = this.readString(project.defaultOgImageAssetId).trim();
       const assetUrlById = await this.resolveAssetUrlById({
         tenantId: params.tenantId,
         projectId: params.projectId,
         pages,
+        settingsAssetIds: [faviconAssetId, defaultOgImageAssetId],
       });
       const navLinks = this.resolveNavigationLinks({
         pages,
         navigationItems,
       });
+      const faviconUrl = faviconAssetId ? this.readString(assetUrlById[faviconAssetId]).trim() : '';
+      const defaultOgImageUrl = defaultOgImageAssetId ? this.readString(assetUrlById[defaultOgImageAssetId]).trim() : '';
+      const locale = this.readString(project.locale).trim() || this.readString(project.defaultLocale).trim() || 'en';
+      const siteName = this.readString(project.siteName).trim();
 
       let sharedCss = '';
       const publishRoot = this.publishRootPath({
@@ -397,6 +424,10 @@ ${params.bodyHtml}
           currentSlug,
           pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
           seoJson: page.seoJson,
+          siteName,
+          faviconUrl,
+          defaultOgImageUrl,
+          locale,
         });
 
         if (!sharedCss) {
@@ -407,6 +438,7 @@ ${params.bodyHtml}
           headTags: render.headTags,
           cssHref: this.cssHrefForDepth(depth),
           bodyHtml: render.html,
+          lang: render.lang,
         });
 
         await this.minio.upload({
@@ -423,6 +455,7 @@ ${params.bodyHtml}
           editorJson: homePage.editorJson,
           navLinks,
           currentSlug: '/',
+          locale,
         }).css;
       }
 

@@ -7,12 +7,16 @@ describe('ProjectsController.setProjectHomePage', () => {
   let projects: {
     getByIdScoped: jest.Mock;
     setHomePage: jest.Mock;
+    getSettings: jest.Mock;
+    updateSettings: jest.Mock;
   };
 
   beforeEach(() => {
     projects = {
       getByIdScoped: jest.fn(),
       setHomePage: jest.fn(),
+      getSettings: jest.fn(),
+      updateSettings: jest.fn(),
     };
 
     controller = new ProjectsController(projects as unknown as ProjectsService);
@@ -65,12 +69,16 @@ describe('ProjectsController.getProject', () => {
   let projects: {
     getByIdScoped: jest.Mock;
     setHomePage: jest.Mock;
+    getSettings: jest.Mock;
+    updateSettings: jest.Mock;
   };
 
   beforeEach(() => {
     projects = {
       getByIdScoped: jest.fn(),
       setHomePage: jest.fn(),
+      getSettings: jest.fn(),
+      updateSettings: jest.fn(),
     };
 
     controller = new ProjectsController(projects as unknown as ProjectsService);
@@ -132,6 +140,87 @@ describe('ProjectsController.getProject', () => {
           latestPublishId: null,
           publishedAt: null,
         }),
+      },
+    });
+  });
+});
+
+describe('ProjectsController.settings', () => {
+  let controller: ProjectsController;
+  let projects: {
+    getByIdScoped: jest.Mock;
+    setHomePage: jest.Mock;
+    getSettings: jest.Mock;
+    updateSettings: jest.Mock;
+  };
+
+  beforeEach(() => {
+    projects = {
+      getByIdScoped: jest.fn(),
+      setHomePage: jest.fn(),
+      getSettings: jest.fn(),
+      updateSettings: jest.fn(),
+    };
+
+    controller = new ProjectsController(projects as unknown as ProjectsService);
+  });
+
+  it('returns project settings', async () => {
+    projects.getSettings.mockResolvedValue({
+      siteName: 'Site Name',
+      logoAssetId: 'asset-logo',
+      faviconAssetId: 'asset-favicon',
+      defaultOgImageAssetId: 'asset-og',
+      locale: 'en',
+    });
+
+    const result = await controller.getProjectSettings('507f1f77bcf86cd799439100', {
+      user: { sub: 'user-1', tenantId: 'default' },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        settings: {
+          siteName: 'Site Name',
+          logoAssetId: 'asset-logo',
+          faviconAssetId: 'asset-favicon',
+          defaultOgImageAssetId: 'asset-og',
+          locale: 'en',
+        },
+      },
+    });
+  });
+
+  it('updates project settings', async () => {
+    projects.updateSettings.mockResolvedValue({
+      siteName: 'Updated Site',
+      logoAssetId: null,
+      faviconAssetId: 'asset-favicon',
+      defaultOgImageAssetId: null,
+      locale: 'fr',
+    });
+
+    const result = await controller.updateProjectSettings(
+      '507f1f77bcf86cd799439100',
+      {
+        siteName: 'Updated Site',
+        faviconAssetId: 'asset-favicon',
+        locale: 'fr',
+      },
+      { user: { sub: 'user-1', tenantId: 'default' } },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        settings: {
+          siteName: 'Updated Site',
+          logoAssetId: null,
+          faviconAssetId: 'asset-favicon',
+          defaultOgImageAssetId: null,
+          locale: 'fr',
+        },
       },
     });
   });

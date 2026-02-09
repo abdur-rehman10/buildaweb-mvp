@@ -3,12 +3,16 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { MediaLibraryModal } from '../components/MediaLibraryModal';
 import {
   ApiError,
+  assetsApi,
   navigationApi,
   pagesApi,
   projectsApi,
   publishApi,
+  type ProjectAsset,
+  type ProjectSettings,
   type PublishHistoryItem,
   type PageMetaSummary,
   type NavigationItem,
@@ -32,6 +36,8 @@ interface ProjectsApiScreenProps {
   onSelectProject: (projectId: string) => void;
   onOpenPage: (projectId: string, pageId: string) => void;
 }
+
+type ProjectSettingsAssetField = 'logoAssetId' | 'faviconAssetId' | 'defaultOgImageAssetId';
 
 function toPublishedDisplayBaseUrl(baseUrl: string): string {
   const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
@@ -81,6 +87,16 @@ function formatPublishHistoryTime(value?: string | null): string {
   return new Date(ts).toLocaleString();
 }
 
+function emptyProjectSettings(locale = 'en'): ProjectSettings {
+  return {
+    siteName: null,
+    logoAssetId: null,
+    faviconAssetId: null,
+    defaultOgImageAssetId: null,
+    locale,
+  };
+}
+
 export function ProjectsApiScreen({
   activeProjectId,
   activePageId,
@@ -120,6 +136,14 @@ export function ProjectsApiScreen({
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishPreflightDetails, setPublishPreflightDetails] = useState<string[]>([]);
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [projectSettings, setProjectSettings] = useState<ProjectSettings>(emptyProjectSettings());
+  const [loadingProjectSettings, setLoadingProjectSettings] = useState(false);
+  const [savingProjectSettings, setSavingProjectSettings] = useState(false);
+  const [projectSettingsMessage, setProjectSettingsMessage] = useState<string | null>(null);
+  const [projectSettingsAssetUrls, setProjectSettingsAssetUrls] = useState<Record<string, string>>({});
+  const [projectSettingsMediaTarget, setProjectSettingsMediaTarget] = useState<ProjectSettingsAssetField | null>(null);
+  const [uploadingProjectSettingsTarget, setUploadingProjectSettingsTarget] = useState<ProjectSettingsAssetField | null>(null);
+  const [projectSettingsUploadNonce, setProjectSettingsUploadNonce] = useState(0);
   const [duplicatingPageId, setDuplicatingPageId] = useState<string | null>(null);
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
@@ -165,6 +189,7 @@ export function ProjectsApiScreen({
         ? 'Create at least one page before publishing.'
         : null;
   const previewDisabledReason = projectPages.length === 0 ? 'Create at least one page before previewing.' : null;
+  const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -231,6 +256,138 @@ export function ProjectsApiScreen({
     }
   };
 
+  const resolveProjectSettingsAssetUrls = async (projectId: string, settings: ProjectSettings) => {
+    const assetIds = [settings.logoAssetId, settings.faviconAssetId, settings.defaultOgImageAssetId]
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter((value): value is string => !!value);
+
+    if (assetIds.length === 0) {
+      setProjectSettingsAssetUrls({});
+      return;
+    }
+
+    try {
+      const resolved = await assetsApi.resolve(projectId, [...new Set(assetIds)]);
+      const urlById: Record<string, string> = {};
+      for (const item of resolved.items) {
+        if (item.assetId && item.publicUrl) {
+          urlById[item.assetId] = item.publicUrl;
+        }
+      }
+      setProjectSettingsAssetUrls(urlById);
+    } catch (err) {
+      setProjectSettingsAssetUrls({});
+      const message = getUserFriendlyErrorMessage(err, 'Failed to resolve project setting assets');
+      setProjectSettingsMessage(message);
+    }
+  };
+
+  const loadProjectSettings = async (projectId: string, fallbackLocale = 'en') => {
+    setLoadingProjectSettings(true);
+    setProjectSettingsMessage(null);
+    try {
+      const res = await projectsApi.getSettings(projectId);
+      const settings = {
+        siteName: res.settings.siteName ?? null,
+        logoAssetId: res.settings.logoAssetId ?? null,
+        faviconAssetId: res.settings.faviconAssetId ?? null,
+        defaultOgImageAssetId: res.settings.defaultOgImageAssetId ?? null,
+        locale: (res.settings.locale || fallbackLocale || 'en').trim() || 'en',
+      };
+      setProjectSettings(settings);
+      await resolveProjectSettingsAssetUrls(projectId, settings);
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load project settings');
+      setProjectSettingsMessage(message);
+      const fallback = emptyProjectSettings(fallbackLocale || 'en');
+      setProjectSettings(fallback);
+      setProjectSettingsAssetUrls({});
+    } finally {
+      setLoadingProjectSettings(false);
+    }
+  };
+
+  const saveProjectSettings = async () => {
+    if (!activeProjectId) return;
+
+    setSavingProjectSettings(true);
+    setProjectSettingsMessage(null);
+    try {
+      const payload = {
+        siteName: projectSettings.siteName?.trim() ? projectSettings.siteName.trim() : null,
+        logoAssetId: projectSettings.logoAssetId?.trim() ? projectSettings.logoAssetId.trim() : null,
+        faviconAssetId: projectSettings.faviconAssetId?.trim() ? projectSettings.faviconAssetId.trim() : null,
+        defaultOgImageAssetId: projectSettings.defaultOgImageAssetId?.trim()
+          ? projectSettings.defaultOgImageAssetId.trim()
+          : null,
+        locale: projectSettings.locale?.trim() ? projectSettings.locale.trim() : 'en',
+      };
+
+      const res = await projectsApi.updateSettings(activeProjectId, payload);
+      setProjectSettings({
+        siteName: res.settings.siteName ?? null,
+        logoAssetId: res.settings.logoAssetId ?? null,
+        faviconAssetId: res.settings.faviconAssetId ?? null,
+        defaultOgImageAssetId: res.settings.defaultOgImageAssetId ?? null,
+        locale: (res.settings.locale || 'en').trim() || 'en',
+      });
+      await resolveProjectSettingsAssetUrls(activeProjectId, {
+        siteName: res.settings.siteName ?? null,
+        logoAssetId: res.settings.logoAssetId ?? null,
+        faviconAssetId: res.settings.faviconAssetId ?? null,
+        defaultOgImageAssetId: res.settings.defaultOgImageAssetId ?? null,
+        locale: (res.settings.locale || 'en').trim() || 'en',
+      });
+      setProjectSettingsMessage('Project settings saved');
+      appToast.success('Project settings saved', {
+        eventKey: `project-settings-saved:${activeProjectId}`,
+      });
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to save project settings');
+      setProjectSettingsMessage(message);
+      appToast.error(message, {
+        eventKey: `project-settings-save-error:${activeProjectId}`,
+      });
+    } finally {
+      setSavingProjectSettings(false);
+    }
+  };
+
+  const uploadProjectSettingsAsset = async (target: ProjectSettingsAssetField, file: File) => {
+    if (!activeProjectId) return;
+
+    setUploadingProjectSettingsTarget(target);
+    setProjectSettingsMessage(null);
+    try {
+      const uploaded = await assetsApi.upload(activeProjectId, file);
+      setProjectSettings((prev) => ({ ...prev, [target]: uploaded.assetId }));
+      setProjectSettingsAssetUrls((prev) => ({ ...prev, [uploaded.assetId]: uploaded.publicUrl }));
+      setProjectSettingsMessage('Asset uploaded. Save project settings to persist.');
+      appToast.success('Asset uploaded', {
+        eventKey: `project-settings-asset-uploaded:${activeProjectId}:${target}:${uploaded.assetId}`,
+      });
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to upload asset');
+      setProjectSettingsMessage(message);
+      appToast.error(message, {
+        eventKey: `project-settings-asset-upload-error:${activeProjectId}:${target}`,
+      });
+    } finally {
+      setProjectSettingsUploadNonce((prev) => prev + 1);
+      setUploadingProjectSettingsTarget(null);
+    }
+  };
+
+  const selectProjectSettingsAssetFromLibrary = (target: ProjectSettingsAssetField, asset: ProjectAsset) => {
+    setProjectSettings((prev) => ({ ...prev, [target]: asset.id }));
+    setProjectSettingsAssetUrls((prev) => ({ ...prev, [asset.id]: asset.publicUrl }));
+    setProjectSettingsMediaTarget(null);
+    setProjectSettingsMessage('Asset selected. Save project settings to persist.');
+    appToast.success('Asset selected', {
+      eventKey: `project-settings-asset-selected:${activeProjectId ?? 'unknown'}:${target}:${asset.id}`,
+    });
+  };
+
   const loadNavigation = async (projectId: string) => {
     setLoadingNavigation(true);
     setNavigationMessage(null);
@@ -269,6 +426,9 @@ export function ProjectsApiScreen({
     if (!activeProjectId) {
       setLastPageId(null);
       setProjectPages([]);
+      setProjectSettings(emptyProjectSettings());
+      setProjectSettingsAssetUrls({});
+      setProjectSettingsMessage(null);
       setIsNavigationEditorOpen(false);
       setNavigationItems([]);
       setNavigationMessage(null);
@@ -280,6 +440,7 @@ export function ProjectsApiScreen({
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
     void loadProjectPages(activeProjectId);
+    void loadProjectSettings(activeProjectId, activeProject?.defaultLocale ?? 'en');
     void loadPublishHistory(activeProjectId);
   }, [activeProjectId, activePageId]);
 
@@ -619,7 +780,9 @@ export function ProjectsApiScreen({
     setPreviewDraftLoading(true);
     try {
       const preview = await pagesApi.preview(activeProjectId, targetPageId);
-      const srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`;
+      const lang = typeof preview.lang === 'string' && preview.lang.trim().length > 0 ? preview.lang.trim() : 'en';
+      const headTags = typeof preview.headTags === 'string' ? preview.headTags : '';
+      const srcdoc = `<!doctype html><html lang="${lang}"><head><meta charset="utf-8">${headTags}<style>${preview.css}</style></head><body>${preview.html}</body></html>`;
       previewWindow.document.open();
       previewWindow.document.write(srcdoc);
       previewWindow.document.close();
@@ -894,6 +1057,231 @@ export function ProjectsApiScreen({
               {publishDisabledReason}
             </p>
           )}
+
+          <div className="border rounded-md p-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">Project Settings</h3>
+              <Button
+                type="button"
+                onClick={() => void saveProjectSettings()}
+                disabled={savingProjectSettings || loadingProjectSettings}
+              >
+                {savingProjectSettings ? 'Saving...' : 'Save Settings'}
+              </Button>
+            </div>
+
+            {loadingProjectSettings && (
+              <p className="text-sm text-muted-foreground">Loading project settings...</p>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                label="Site Name"
+                value={projectSettings.siteName ?? ''}
+                onChange={(e) =>
+                  setProjectSettings((prev) => ({
+                    ...prev,
+                    siteName: e.target.value,
+                  }))
+                }
+                placeholder="My website"
+              />
+              <Input
+                label="Locale"
+                value={projectSettings.locale}
+                onChange={(e) =>
+                  setProjectSettings((prev) => ({
+                    ...prev,
+                    locale: e.target.value,
+                  }))
+                }
+                placeholder="en"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div className="border rounded-md p-3 space-y-2">
+                <Input
+                  label="Logo Asset ID"
+                  value={projectSettings.logoAssetId ?? ''}
+                  onChange={(e) =>
+                    setProjectSettings((prev) => ({
+                      ...prev,
+                      logoAssetId: e.target.value.trim() ? e.target.value.trim() : null,
+                    }))
+                  }
+                  placeholder="Select or upload asset"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setProjectSettingsMediaTarget('logoAssetId')}>
+                    Select
+                  </Button>
+                  <label className="inline-flex">
+                    <input
+                      key={`project-settings-logo-upload-${projectSettingsUploadNonce}`}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          void uploadProjectSettingsAsset('logoAssetId', file);
+                        }
+                      }}
+                    />
+                    <span className="inline-flex h-9 items-center rounded-md border px-3 text-sm cursor-pointer">
+                      {uploadingProjectSettingsTarget === 'logoAssetId' ? 'Uploading...' : 'Upload'}
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProjectSettings((prev) => ({ ...prev, logoAssetId: null }))}
+                    disabled={!projectSettings.logoAssetId}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {projectSettings.logoAssetId && projectSettingsAssetUrls[projectSettings.logoAssetId] && (
+                  <a
+                    href={projectSettingsAssetUrls[projectSettings.logoAssetId]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs underline text-primary break-all"
+                  >
+                    {projectSettingsAssetUrls[projectSettings.logoAssetId]}
+                  </a>
+                )}
+              </div>
+
+              <div className="border rounded-md p-3 space-y-2">
+                <Input
+                  label="Favicon Asset ID"
+                  value={projectSettings.faviconAssetId ?? ''}
+                  onChange={(e) =>
+                    setProjectSettings((prev) => ({
+                      ...prev,
+                      faviconAssetId: e.target.value.trim() ? e.target.value.trim() : null,
+                    }))
+                  }
+                  placeholder="Select or upload asset"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProjectSettingsMediaTarget('faviconAssetId')}
+                  >
+                    Select
+                  </Button>
+                  <label className="inline-flex">
+                    <input
+                      key={`project-settings-favicon-upload-${projectSettingsUploadNonce}`}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          void uploadProjectSettingsAsset('faviconAssetId', file);
+                        }
+                      }}
+                    />
+                    <span className="inline-flex h-9 items-center rounded-md border px-3 text-sm cursor-pointer">
+                      {uploadingProjectSettingsTarget === 'faviconAssetId' ? 'Uploading...' : 'Upload'}
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProjectSettings((prev) => ({ ...prev, faviconAssetId: null }))}
+                    disabled={!projectSettings.faviconAssetId}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {projectSettings.faviconAssetId && projectSettingsAssetUrls[projectSettings.faviconAssetId] && (
+                  <a
+                    href={projectSettingsAssetUrls[projectSettings.faviconAssetId]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs underline text-primary break-all"
+                  >
+                    {projectSettingsAssetUrls[projectSettings.faviconAssetId]}
+                  </a>
+                )}
+              </div>
+
+              <div className="border rounded-md p-3 space-y-2">
+                <Input
+                  label="Default OG Image Asset ID"
+                  value={projectSettings.defaultOgImageAssetId ?? ''}
+                  onChange={(e) =>
+                    setProjectSettings((prev) => ({
+                      ...prev,
+                      defaultOgImageAssetId: e.target.value.trim() ? e.target.value.trim() : null,
+                    }))
+                  }
+                  placeholder="Select or upload asset"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProjectSettingsMediaTarget('defaultOgImageAssetId')}
+                  >
+                    Select
+                  </Button>
+                  <label className="inline-flex">
+                    <input
+                      key={`project-settings-og-upload-${projectSettingsUploadNonce}`}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          void uploadProjectSettingsAsset('defaultOgImageAssetId', file);
+                        }
+                      }}
+                    />
+                    <span className="inline-flex h-9 items-center rounded-md border px-3 text-sm cursor-pointer">
+                      {uploadingProjectSettingsTarget === 'defaultOgImageAssetId' ? 'Uploading...' : 'Upload'}
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setProjectSettings((prev) => ({ ...prev, defaultOgImageAssetId: null }))}
+                    disabled={!projectSettings.defaultOgImageAssetId}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {projectSettings.defaultOgImageAssetId && projectSettingsAssetUrls[projectSettings.defaultOgImageAssetId] && (
+                  <a
+                    href={projectSettingsAssetUrls[projectSettings.defaultOgImageAssetId]}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs underline text-primary break-all"
+                  >
+                    {projectSettingsAssetUrls[projectSettings.defaultOgImageAssetId]}
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {projectSettingsMessage && (
+              <p className="text-sm" role="status">
+                {projectSettingsMessage}
+              </p>
+            )}
+          </div>
 
           {showPublishCard && (
             <div className="border rounded-md p-3 space-y-1">
@@ -1282,6 +1670,18 @@ export function ProjectsApiScreen({
             </div>
           )}
         </Card>
+      )}
+
+      {activeProjectId && (
+        <MediaLibraryModal
+          isOpen={!!projectSettingsMediaTarget}
+          projectId={activeProjectId}
+          onClose={() => setProjectSettingsMediaTarget(null)}
+          onSelect={(asset) => {
+            if (!projectSettingsMediaTarget) return;
+            selectProjectSettingsAssetFromLibrary(projectSettingsMediaTarget, asset);
+          }}
+        />
       )}
 
       <ConfirmDialog
