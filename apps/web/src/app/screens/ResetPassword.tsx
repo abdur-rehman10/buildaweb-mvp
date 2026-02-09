@@ -16,10 +16,12 @@ export function ResetPassword({ initialToken, onNavigateToLogin }: ResetPassword
   const [newPassword, setNewPassword] = useState('');
   const [tokenError, setTokenError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [submitError, setSubmitError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setSubmitError('');
 
     let hasError = false;
     if (!token.trim()) {
@@ -44,7 +46,9 @@ export function ResetPassword({ initialToken, onNavigateToLogin }: ResetPassword
       appToast.success('Password reset successfully. Please log in.');
       onNavigateToLogin();
     } catch (err) {
-      appToast.error(toApiErrorMessage(err, 'Unable to reset password.'), {
+      const message = toApiErrorMessage(err, 'Unable to reset password.');
+      setSubmitError(message);
+      appToast.error(message, {
         eventKey: 'reset-password-error',
       });
     } finally {
@@ -81,6 +85,7 @@ export function ResetPassword({ initialToken, onNavigateToLogin }: ResetPassword
               onChange={(event) => {
                 setToken(event.target.value);
                 setTokenError('');
+                if (submitError) setSubmitError('');
               }}
               error={tokenError}
             />
@@ -96,11 +101,21 @@ export function ResetPassword({ initialToken, onNavigateToLogin }: ResetPassword
               onChange={(event) => {
                 setNewPassword(event.target.value);
                 setPasswordError('');
+                if (submitError) setSubmitError('');
               }}
               error={passwordError}
             />
             <Lock className="absolute right-3 top-[38px] h-5 w-5 text-muted-foreground pointer-events-none" />
           </div>
+          <p className="text-xs text-muted-foreground" role="note">
+            Password must be at least 8 characters.
+          </p>
+
+          {submitError && (
+            <p className="text-sm text-destructive" role="alert">
+              {submitError}
+            </p>
+          )}
 
           <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
             {isSubmitting ? 'Resetting...' : 'Reset password'}
