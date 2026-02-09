@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -10,8 +10,22 @@ import { PreviewRendererService } from '../pages/preview-renderer.service';
 import { Project, ProjectDocument } from '../projects/project.schema';
 import { Publish, PublishDocument } from './publish.schema';
 
+export class PublishPreflightError extends Error {
+  readonly code = 'PUBLISH_PREFLIGHT_FAILED';
+  readonly details: string[];
+
+  constructor(details: string[]) {
+    super('Publish preflight validation failed');
+    this.name = 'PublishPreflightError';
+    this.details = details;
+  }
+}
+
 @Injectable()
 export class PublishService {
+  private readonly publishSlugPattern = /^[A-Za-z0-9_-]+$/;
+  private readonly reservedPublishSlugs = new Set(['index.html', 'assets', '.', '..']);
+
   constructor(
     @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
@@ -78,6 +92,94 @@ export class PublishService {
     return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
   }
 
+  private isHomePageCandidate(page: { isHome?: boolean; slug?: string }) {
+    const slug = this.readString(page.slug).trim();
+    return page.isHome === true || slug === '/';
+  }
+
+  private validatePublishPreflight(params: {
+    pages: Array<{ _id: unknown; title?: string; slug?: string; isHome?: boolean }>;
+    navigationItems: unknown[];
+  }) {
+    const details: string[] = [];
+
+    if (params.pages.length === 0) {
+      return ['At least one page is required to publish.'];
+    }
+
+    let homeCount = 0;
+    const pageIds = new Set<string>();
+    const slugToPageIds = new Map<string, string[]>();
+
+    for (const page of params.pages) {
+      const pageId = String(page._id);
+      pageIds.add(pageId);
+
+      const pageLabel = this.readString(page.title).trim() || pageId;
+      const rawSlug = this.readString(page.slug).trim();
+      const normalizedSlug = this.normalizeSlug(rawSlug);
+      const slugKey = (normalizedSlug || '/').toLowerCase();
+      const isHome = this.isHomePageCandidate(page);
+
+      if (isHome) {
+        homeCount += 1;
+      }
+
+      if (!isHome) {
+        if (!normalizedSlug) {
+          details.push(`Page "${pageLabel}" has an empty slug.`);
+        } else {
+          if (!this.publishSlugPattern.test(normalizedSlug)) {
+            details.push(
+              `Page "${pageLabel}" has invalid slug "${rawSlug}". Slugs may contain only letters, numbers, hyphen, and underscore.`,
+            );
+          }
+
+          if (this.reservedPublishSlugs.has(slugKey)) {
+            details.push(`Page "${pageLabel}" uses reserved slug "${normalizedSlug}".`);
+          }
+        }
+      } else if (normalizedSlug) {
+        if (!this.publishSlugPattern.test(normalizedSlug)) {
+          details.push(
+            `Home page "${pageLabel}" has invalid slug "${rawSlug}". Slugs may contain only letters, numbers, hyphen, and underscore.`,
+          );
+        }
+
+        if (this.reservedPublishSlugs.has(slugKey)) {
+          details.push(`Home page "${pageLabel}" uses reserved slug "${normalizedSlug}".`);
+        }
+      }
+
+      const existing = slugToPageIds.get(slugKey) ?? [];
+      existing.push(pageId);
+      slugToPageIds.set(slugKey, existing);
+    }
+
+    if (homeCount === 0) {
+      details.push('Exactly one home page is required, but none was found.');
+    } else if (homeCount > 1) {
+      details.push(`Exactly one home page is required, but found ${homeCount}.`);
+    }
+
+    for (const [slugKey, ids] of slugToPageIds.entries()) {
+      if (ids.length > 1) {
+        const duplicateSlug = slugKey === '/' ? '/' : slugKey;
+        details.push(`Duplicate slug "${duplicateSlug}" found on ${ids.length} pages.`);
+      }
+    }
+
+    for (const [index, item] of params.navigationItems.entries()) {
+      const record = this.asRecord(item);
+      const pageId = this.readString(record?.pageId).trim();
+      if (!pageId || !pageIds.has(pageId)) {
+        details.push(`Navigation item ${index + 1} references missing pageId "${pageId || '(empty)'}".`);
+      }
+    }
+
+    return [...new Set(details)];
+  }
+
   private toPageSlug(params: { slug: string; isHome?: boolean }) {
     if (params.isHome || params.slug.trim() === '/') return '/';
     const normalized = this.normalizeSlug(params.slug);
@@ -120,21 +222,11 @@ ${params.bodyHtml}
     return pages[0];
   }
 
-  private async resolveNavigationLinks(params: {
-    tenantId: string;
-    projectId: string;
+  private resolveNavigationLinks(params: {
     pages: Array<{ _id: unknown; title?: string; slug?: string; isHome?: boolean }>;
+    navigationItems: unknown[];
   }) {
-    const nav = await this.navigationModel
-      .findOne({
-        tenantId: params.tenantId,
-        projectId: params.projectId,
-      })
-      .select('itemsJson')
-      .lean()
-      .exec();
-
-    const itemsRaw = Array.isArray(nav?.itemsJson) ? nav.itemsJson : [];
+    const itemsRaw = params.navigationItems;
     if (itemsRaw.length === 0) return [];
 
     const homePage = this.resolveHomePage(params.pages);
@@ -213,6 +305,35 @@ ${params.bodyHtml}
   }
 
   async createAndPublish(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+    const pages = await this.pageModel
+      .find({ tenantId: params.tenantId, projectId: params.projectId })
+      .select('_id title slug isHome editorJson')
+      .lean()
+      .exec();
+
+    const nav = await this.navigationModel
+      .findOne({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      })
+      .select('itemsJson')
+      .lean()
+      .exec();
+
+    const navigationItems = Array.isArray(nav?.itemsJson) ? nav.itemsJson : [];
+    const preflightErrors = this.validatePublishPreflight({
+      pages,
+      navigationItems,
+    });
+    if (preflightErrors.length > 0) {
+      throw new PublishPreflightError(preflightErrors);
+    }
+
+    const homePage = this.resolveHomePage(pages);
+    if (!homePage) {
+      throw new PublishPreflightError(['Exactly one home page is required, but none was found.']);
+    }
+
     const baseUrl = this.publishBaseUrl({
       tenantId: params.tenantId,
       projectId: params.projectId,
@@ -236,30 +357,14 @@ ${params.bodyHtml}
     await publish.save();
 
     try {
-      const pages = await this.pageModel
-        .find({ tenantId: params.tenantId, projectId: params.projectId })
-        .select('_id title slug isHome editorJson')
-        .lean()
-        .exec();
-
-      if (pages.length === 0) {
-        throw new NotFoundException('No pages found for project');
-      }
-
-      const homePage = this.resolveHomePage(pages);
-      if (!homePage) {
-        throw new NotFoundException('No pages found for project');
-      }
-
       const assetUrlById = await this.resolveAssetUrlById({
         tenantId: params.tenantId,
         projectId: params.projectId,
         pages,
       });
-      const navLinks = await this.resolveNavigationLinks({
-        tenantId: params.tenantId,
-        projectId: params.projectId,
+      const navLinks = this.resolveNavigationLinks({
         pages,
+        navigationItems,
       });
 
       let sharedCss = '';

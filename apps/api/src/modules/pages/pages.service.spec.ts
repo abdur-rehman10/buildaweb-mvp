@@ -1,6 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { Model } from 'mongoose';
 import { NavigationDocument } from '../navigation/navigation.schema';
+import { ProjectDocument } from '../projects/project.schema';
 import { PageDocument } from './page.schema';
 import { PagesService } from './pages.service';
 
@@ -16,6 +17,10 @@ type MockPageModel = {
 
 type MockNavigationModel = {
   updateMany: jest.Mock;
+};
+
+type MockProjectModel = {
+  updateOne: jest.Mock;
 };
 
 function createSelectQueryMock<T>(value: T) {
@@ -38,6 +43,7 @@ describe('PagesService', () => {
   let service: PagesService;
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
+  let projectModel: MockProjectModel;
 
   beforeEach(() => {
     pageModel = {
@@ -54,9 +60,14 @@ describe('PagesService', () => {
       updateMany: jest.fn(),
     };
 
+    projectModel = {
+      updateOne: jest.fn(),
+    };
+
     service = new PagesService(
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
+      projectModel as unknown as Model<ProjectDocument>,
     );
   });
 
@@ -240,6 +251,7 @@ describe('PagesService', () => {
       pageModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
       pageModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
       navigationModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
+      projectModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
 
       await service.deletePage({
         tenantId: 'default',
@@ -283,6 +295,17 @@ describe('PagesService', () => {
           $set: { isHome: true },
         },
       );
+      expect(projectModel.updateOne).toHaveBeenCalledWith(
+        {
+          _id: 'project-1',
+          tenantId: 'default',
+        },
+        {
+          $set: {
+            homePageId: 'page-2',
+          },
+        },
+      );
     });
 
     it('throws conflict when provided version does not match stored version', async () => {
@@ -310,6 +333,56 @@ describe('PagesService', () => {
 
       expect(pageModel.deleteOne).not.toHaveBeenCalled();
       expect(navigationModel.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('sets project.homePageId to null if deleted home has no replacement page', async () => {
+      const existingPage = {
+        _id: 'page-1',
+        tenantId: 'default',
+        projectId: 'project-1',
+        slug: '/',
+        isHome: true,
+        version: 2,
+      };
+
+      pageModel.findOne.mockImplementation((filter: Record<string, unknown>) => {
+        if (filter._id === 'page-1') {
+          return {
+            exec: jest.fn().mockResolvedValue(existingPage),
+          };
+        }
+
+        if (!filter._id && filter.tenantId === 'default' && filter.projectId === 'project-1') {
+          return createFindOneWithSortMock(null);
+        }
+
+        throw new Error(`Unexpected findOne filter: ${JSON.stringify(filter)}`);
+      });
+
+      pageModel.countDocuments.mockResolvedValue(2);
+      pageModel.deleteOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ deletedCount: 1 }) });
+      pageModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
+      navigationModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
+      projectModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
+
+      await service.deletePage({
+        tenantId: 'default',
+        projectId: 'project-1',
+        pageId: 'page-1',
+        version: 2,
+      });
+
+      expect(projectModel.updateOne).toHaveBeenCalledWith(
+        {
+          _id: 'project-1',
+          tenantId: 'default',
+        },
+        {
+          $set: {
+            homePageId: null,
+          },
+        },
+      );
     });
   });
 });

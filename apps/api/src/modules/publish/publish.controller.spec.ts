@@ -1,6 +1,6 @@
 import { HttpException } from '@nestjs/common';
 import { PublishController } from './publish.controller';
-import { PublishService } from './publish.service';
+import { PublishPreflightError, PublishService } from './publish.service';
 import { ProjectsService } from '../projects/projects.service';
 
 describe('PublishController', () => {
@@ -10,7 +10,7 @@ describe('PublishController', () => {
 
   let controller: PublishController;
   let projects: { getByIdScoped: jest.Mock; setLatestPublish: jest.Mock };
-  let publish: { getByIdScoped: jest.Mock };
+  let publish: { getByIdScoped: jest.Mock; createAndPublish: jest.Mock };
 
   beforeEach(() => {
     projects = {
@@ -20,6 +20,7 @@ describe('PublishController', () => {
 
     publish = {
       getByIdScoped: jest.fn(),
+      createAndPublish: jest.fn(),
     };
 
     controller = new PublishController(
@@ -92,6 +93,75 @@ describe('PublishController', () => {
           },
         },
       } as Partial<HttpException>);
+    });
+  });
+
+  describe('publishProject', () => {
+    it('returns publish result when publish succeeds', async () => {
+      projects.getByIdScoped.mockResolvedValue({ _id: projectId });
+      publish.createAndPublish.mockResolvedValue({
+        publishId: '507f1f77bcf86cd799439099',
+        status: 'live',
+        url: 'http://localhost:9000/buildaweb/path/',
+      });
+
+      const res = await controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } });
+
+      expect(publish.createAndPublish).toHaveBeenCalledWith({ tenantId, projectId, ownerUserId });
+      expect(res).toEqual({
+        ok: true,
+        data: {
+          publishId: '507f1f77bcf86cd799439099',
+          status: 'live',
+          url: 'http://localhost:9000/buildaweb/path/',
+        },
+      });
+    });
+
+    it('returns 400 with preflight details when validation fails', async () => {
+      projects.getByIdScoped.mockResolvedValue({ _id: projectId });
+      publish.createAndPublish.mockRejectedValue(
+        new PublishPreflightError([
+          'Exactly one home page is required, but none was found.',
+          'Duplicate slug "about" found on 2 pages.',
+        ]),
+      );
+
+      await expect(
+        controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } }),
+      ).rejects.toMatchObject({
+        status: 400,
+        response: {
+          ok: false,
+          error: {
+            code: 'PUBLISH_PREFLIGHT_FAILED',
+            message: 'Publish preflight validation failed',
+            details: [
+              'Exactly one home page is required, but none was found.',
+              'Duplicate slug "about" found on 2 pages.',
+            ],
+          },
+        },
+      } as Partial<HttpException>);
+    });
+
+    it('returns 404 when project is not found', async () => {
+      projects.getByIdScoped.mockResolvedValue(null);
+
+      await expect(
+        controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } }),
+      ).rejects.toMatchObject({
+        status: 404,
+        response: {
+          ok: false,
+          error: {
+            code: 'NOT_FOUND',
+            message: 'Not found',
+          },
+        },
+      } as Partial<HttpException>);
+
+      expect(publish.createAndPublish).not.toHaveBeenCalled();
     });
   });
 

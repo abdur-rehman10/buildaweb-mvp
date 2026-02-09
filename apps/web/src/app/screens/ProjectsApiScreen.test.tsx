@@ -9,12 +9,14 @@ vi.mock('../../lib/api', () => {
   class MockApiError extends Error {
     status: number;
     code: string;
+    details?: string[];
 
-    constructor(params: { status: number; code: string; message: string }) {
+    constructor(params: { status: number; code: string; message: string; details?: string[] }) {
       super(params.message);
       this.name = 'ApiError';
       this.status = params.status;
       this.code = params.code;
+      this.details = params.details;
     }
   }
 
@@ -121,6 +123,7 @@ describe('ProjectsApiScreen toasts', () => {
         name: 'Main site',
         status: 'draft',
         defaultLocale: 'en',
+        homePageId: null,
         latestPublishId: null,
         publishedAt: null,
       },
@@ -248,12 +251,121 @@ describe('ProjectsApiScreen toasts', () => {
     expect((publishingButton as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it('shows preflight errors and does not enter polling state when publish preflight fails', async () => {
+    vi.mocked(publishApi.create).mockRejectedValue(
+      new ApiError({
+        status: 400,
+        code: 'PUBLISH_PREFLIGHT_FAILED',
+        message: 'Publish preflight validation failed',
+        details: ['Exactly one home page is required, but none was found.', 'Duplicate slug "about" found on 2 pages.'],
+      }),
+    );
+
+    renderScreen();
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    fireEvent.click(publishButton);
+
+    expect(await screen.findByText('Fix before publishing')).not.toBeNull();
+    expect(screen.getByText('Exactly one home page is required, but none was found.')).not.toBeNull();
+    expect(screen.getByText('Duplicate slug "about" found on 2 pages.')).not.toBeNull();
+
+    expect(screen.queryByRole('button', { name: 'Publishing...' })).toBeNull();
+    expect(publishApi.getStatus).not.toHaveBeenCalled();
+
+    const blockedPublishButton = screen.getByRole('button', { name: 'Publish' });
+    expect((blockedPublishButton as HTMLButtonElement).disabled).toBe(true);
+
+    await waitFor(() => {
+      expect(appToast.error).toHaveBeenCalledWith(
+        'Fix publish issues before publishing',
+        expect.objectContaining({
+          eventKey: 'publish-preflight-error:project-1',
+        }),
+      );
+    });
+  });
+
   it('disables set home action for the current home page', async () => {
     renderScreen();
     const setHomeButtons = await screen.findAllByRole('button', { name: 'Set as Home' });
 
     expect((setHomeButtons[0] as HTMLButtonElement).disabled).toBe(true);
     expect(setHomeButtons[0].getAttribute('title')).toBe('This page is already the home page.');
+  });
+
+  it('does not show home-missing badge when legacy fallback finds Home page', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({
+      pages: [
+        {
+          id: 'page-home',
+          title: 'Home',
+          slug: 'home',
+          isHome: false,
+          version: 1,
+        },
+      ],
+    });
+
+    renderScreen();
+
+    await screen.findByRole('button', { name: 'Publish' });
+    expect(screen.queryByText('Home page missing')).toBeNull();
+  });
+
+  it('does not show home-missing badge when project.homePageId points to an existing page', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({
+      pages: [
+        {
+          id: 'page-about',
+          title: 'About',
+          slug: '/about',
+          isHome: false,
+          version: 1,
+        },
+      ],
+    });
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        homePageId: 'page-about',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
+
+    renderScreen();
+
+    await screen.findByRole('button', { name: 'Publish' });
+    expect(screen.queryByText('Home page missing')).toBeNull();
+  });
+
+  it('shows home-missing badge when project.homePageId points to a missing page', async () => {
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'draft',
+        defaultLocale: 'en',
+        homePageId: 'missing-page-id',
+        latestPublishId: null,
+        publishedAt: null,
+      },
+    });
+
+    renderScreen();
+
+    expect(await screen.findByText('Home page missing')).not.toBeNull();
+  });
+
+  it('shows home-missing badge when project has zero pages', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({ pages: [] });
+
+    renderScreen();
+
+    expect(await screen.findByText('Home page missing')).not.toBeNull();
   });
 
   it('shows published root and subpage links with index.html by default and copies those URLs', async () => {

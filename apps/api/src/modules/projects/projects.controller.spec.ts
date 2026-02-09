@@ -83,6 +83,7 @@ describe('ProjectsController.getProject', () => {
       name: 'Main Site',
       status: 'published',
       defaultLocale: 'en',
+      homePageId: '507f1f77bcf86cd799439011',
       latestPublishId: '507f1f77bcf86cd799439200',
       publishedAt,
       createdAt: new Date('2026-02-08T09:00:00.000Z'),
@@ -98,6 +99,7 @@ describe('ProjectsController.getProject', () => {
       data: {
         project: expect.objectContaining({
           id: '507f1f77bcf86cd799439100',
+          homePageId: '507f1f77bcf86cd799439011',
           latestPublishId: '507f1f77bcf86cd799439200',
           publishedAt,
         }),
@@ -111,6 +113,7 @@ describe('ProjectsController.getProject', () => {
       name: 'Draft Site',
       status: 'draft',
       defaultLocale: 'en',
+      homePageId: null,
       latestPublishId: null,
       publishedAt: null,
       createdAt: new Date('2026-02-08T09:00:00.000Z'),
@@ -125,6 +128,7 @@ describe('ProjectsController.getProject', () => {
       ok: true,
       data: {
         project: expect.objectContaining({
+          homePageId: null,
           latestPublishId: null,
           publishedAt: null,
         }),

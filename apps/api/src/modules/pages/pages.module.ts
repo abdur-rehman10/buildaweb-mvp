@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AssetsModule } from '../assets/assets.module';
 import { Navigation, NavigationSchema } from '../navigation/navigation.schema';
+import { Project, ProjectSchema } from '../projects/project.schema';
 import { Page, PageSchema } from './page.schema';
 import { PagesService } from './pages.service';
 import { ProjectsModule } from '../projects/projects.module';
@@ -14,6 +15,7 @@ import { PreviewRendererService } from './preview-renderer.service';
     MongooseModule.forFeature([
       { name: Page.name, schema: PageSchema },
       { name: Navigation.name, schema: NavigationSchema },
+      { name: Project.name, schema: ProjectSchema },
     ]),
     ProjectsModule,
     AssetsModule,
