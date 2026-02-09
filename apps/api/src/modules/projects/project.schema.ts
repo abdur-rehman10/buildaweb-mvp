@@ -24,6 +24,12 @@ export class Project {
   @Prop({ type: Types.ObjectId, ref: 'Page', default: null })
   homePageId?: Types.ObjectId | null;
 
+  @Prop({ type: String, default: null })
+  latestPublishId?: string | null;
+
+  @Prop({ type: Date, default: null })
+  publishedAt?: Date | null;
+
   // from @Schema({ timestamps: true })
   createdAt?: Date;
   updatedAt?: Date;

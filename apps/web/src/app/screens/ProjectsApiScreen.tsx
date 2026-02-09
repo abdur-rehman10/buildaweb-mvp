@@ -14,6 +14,7 @@ import {
   type ProjectSummary,
   type PublishStatus,
 } from '../../lib/api';
+import { useLatestPublish } from '../hooks/useLatestPublish';
 import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 import { appToast } from '../../lib/toast';
 
@@ -66,11 +67,14 @@ function toPublishedHomeUrl(baseUrl: string): string {
   return `${normalizedBase}index.html`;
 }
 
+function normalizeSlugToken(slug?: string): string {
+  return (slug ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '').toLowerCase();
+}
+
 function normalizePublishedPagePath(params: { slug?: string; isHome?: boolean }) {
-  if (params.isHome) return '';
-  const raw = (params.slug ?? '').trim();
-  if (!raw || raw === '/') return '';
-  return `${raw.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+  const slugToken = normalizeSlugToken(params.slug);
+  if (params.isHome || slugToken === '' || slugToken === 'home') return '';
+  return `${slugToken}/`;
 }
 
 function toPublishedPageUrl(params: {
@@ -93,6 +97,18 @@ function toPublishedPageUrl(params: {
   }
 
   return `${normalizedBase}${pagePath}index.html`;
+}
+
+function hasPagesEditedAfterPublish(params: { pages: PageMetaSummary[]; publishedAt: string | null }): boolean {
+  if (!params.publishedAt) return false;
+  const publishedAtMs = Date.parse(params.publishedAt);
+  if (Number.isNaN(publishedAtMs)) return false;
+
+  return params.pages.some((page) => {
+    if (!page.updatedAt) return false;
+    const updatedAtMs = Date.parse(String(page.updatedAt));
+    return !Number.isNaN(updatedAtMs) && updatedAtMs > publishedAtMs;
+  });
 }
 
 export function ProjectsApiScreen({
@@ -123,6 +139,7 @@ export function ProjectsApiScreen({
   const [savingNavigation, setSavingNavigation] = useState(false);
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const [publishStarting, setPublishStarting] = useState(false);
+  const [previewDraftLoading, setPreviewDraftLoading] = useState(false);
   const [publishId, setPublishId] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -132,15 +149,40 @@ export function ProjectsApiScreen({
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
+  const { latestPublish, latestPublishId, publishedAt, loadingLatestPublish, latestPublishError, refreshLatestPublish } =
+    useLatestPublish(activeProjectId);
   const publishedBaseUrl = publishedUrl ? toPublishedDisplayBaseUrl(publishedUrl) : null;
   const usePrettySubpageUrls = publishedBaseUrl ? shouldUsePrettySubpageUrls(publishedBaseUrl) : false;
   const publishedHomeUrl = publishedBaseUrl ? toPublishedHomeUrl(publishedBaseUrl) : null;
+  const hasUnpublishedChanges = hasPagesEditedAfterPublish({
+    pages: projectPages,
+    publishedAt,
+  });
+  const hasAnyLiveSite = !!latestPublishId || publishStatus === 'live';
+  const showRepublishCta = !!latestPublishId && hasUnpublishedChanges;
+  const publishStatusLabel =
+    publishStatus === 'publishing'
+      ? 'Publishing'
+      : publishStatus === 'failed'
+        ? 'Failed'
+        : hasAnyLiveSite
+          ? hasUnpublishedChanges
+            ? 'Live (outdated) • Unpublished changes'
+            : 'Live (up to date)'
+          : 'Not published';
+  const publishButtonLabel =
+    publishStarting || publishStatus === 'publishing'
+      ? 'Publishing...'
+      : showRepublishCta
+        ? 'Republish to update live site'
+        : 'Publish';
   const publishDisabledReason =
     publishStarting || publishStatus === 'publishing'
       ? 'Publishing is already in progress.'
       : projectPages.length === 0
         ? 'Create at least one page before publishing.'
         : null;
+  const previewDisabledReason = projectPages.length === 0 ? 'Create at least one page before previewing.' : null;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -276,6 +318,7 @@ export function ProjectsApiScreen({
           appToast.success('Project published successfully', {
             eventKey: `publish-live:${publishId}`,
           });
+          void refreshLatestPublish();
         }
       } catch (err) {
         if (cancelled) return;
@@ -297,7 +340,26 @@ export function ProjectsApiScreen({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeProjectId, publishId, publishStatus]);
+  }, [activeProjectId, publishId, publishStatus, refreshLatestPublish]);
+
+  useEffect(() => {
+    if (publishStatus === 'publishing') return;
+
+    if (latestPublish) {
+      setPublishId(latestPublish.publishId);
+      setPublishStatus(latestPublish.status);
+      setPublishedUrl(latestPublish.url);
+      setPublishError(latestPublish.errorMessage ?? null);
+      return;
+    }
+
+    // If there is no persisted publish record and no local publish session, show "Not published".
+    if (!publishId) {
+      setPublishStatus(null);
+      setPublishedUrl(null);
+      setPublishError(null);
+    }
+  }, [latestPublish, publishId, publishStatus]);
 
   const toggleNavigationEditor = () => {
     if (!activeProjectId) return;
@@ -424,6 +486,8 @@ export function ProjectsApiScreen({
         appToast.error(message, {
           eventKey: `publish-failed:${result.publishId}`,
         });
+      } else if (result.status === 'live') {
+        void refreshLatestPublish();
       }
     } catch (err) {
       const message = getUserFriendlyErrorMessage(err, 'Failed to publish project');
@@ -459,6 +523,60 @@ export function ProjectsApiScreen({
     await loadProjectPages(projectId);
     await loadNavigation(projectId);
   };
+
+  const resolvePreviewTargetPageId = () => {
+    if (activePageId && projectPages.some((page) => page.id === activePageId)) {
+      return activePageId;
+    }
+
+    const homePage = projectPages.find((page) => page.isHome || normalizeSlugToken(page.slug) === 'home');
+    if (homePage) {
+      return homePage.id;
+    }
+
+    return projectPages[0]?.id ?? null;
+  };
+
+  const previewDraft = async () => {
+    if (!activeProjectId) return;
+
+    const targetPageId = resolvePreviewTargetPageId();
+    if (!targetPageId) {
+      appToast.error('Create at least one page before previewing', {
+        eventKey: `preview-draft-missing-page:${activeProjectId}`,
+      });
+      return;
+    }
+
+    const previewWindow = window.open('', '_blank');
+    if (!previewWindow) {
+      appToast.error('Pop-up blocked. Please allow pop-ups and try again.', {
+        eventKey: `preview-draft-popup-blocked:${activeProjectId}`,
+      });
+      return;
+    }
+
+    setPreviewDraftLoading(true);
+    try {
+      const preview = await pagesApi.preview(activeProjectId, targetPageId);
+      const srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>${preview.css}</style></head><body>${preview.html}</body></html>`;
+      previewWindow.document.open();
+      previewWindow.document.write(srcdoc);
+      previewWindow.document.close();
+      previewWindow.document.title = 'Draft Preview';
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load preview');
+      appToast.error(message, {
+        eventKey: `preview-draft-error:${activeProjectId}:${targetPageId}`,
+      });
+      previewWindow.close();
+    } finally {
+      setPreviewDraftLoading(false);
+    }
+  };
+
+  const showPublishCard =
+    loadingLatestPublish || publishStatus !== null || !!publishError || !!publishedHomeUrl || !!publishMessage || !latestPublish;
 
   const handleDuplicatePage = async (page: PageMetaSummary) => {
     if (!activeProjectId) return;
@@ -681,6 +799,15 @@ export function ProjectsApiScreen({
               <p className="text-sm text-muted-foreground">Project ID: {activeProjectId}</p>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void previewDraft()}
+                disabled={previewDraftLoading || !!previewDisabledReason}
+                title={previewDisabledReason ?? undefined}
+              >
+                {previewDraftLoading ? 'Loading Preview...' : 'Preview Draft'}
+              </Button>
               <Button type="button" variant="outline" onClick={toggleNavigationEditor}>
                 {isNavigationEditorOpen ? 'Close Navigation' : 'Edit Navigation'}
               </Button>
@@ -690,7 +817,7 @@ export function ProjectsApiScreen({
                 disabled={!!publishDisabledReason}
                 title={publishDisabledReason ?? undefined}
               >
-                {publishStarting || publishStatus === 'publishing' ? 'Publishing...' : 'Publish'}
+                {publishButtonLabel}
               </Button>
             </div>
           </div>
@@ -700,16 +827,26 @@ export function ProjectsApiScreen({
             </p>
           )}
 
-          {(publishStatus || publishError || publishedHomeUrl || publishMessage) && (
+          {showPublishCard && (
             <div className="border rounded-md p-3 space-y-1">
-              {publishStatus && (
+              {!publishStatus && loadingLatestPublish && !latestPublishId && (
                 <p className="text-sm">
-                  Publish status: <strong>{publishStatus}</strong>
+                  Publish status: <strong>Loading...</strong>
+                </p>
+              )}
+              {(!loadingLatestPublish || publishStatus || latestPublishId) && (
+                <p className="text-sm">
+                  Publish status: <strong>{publishStatusLabel}</strong>
                 </p>
               )}
               {publishError && (
                 <p className="text-sm text-destructive" role="alert">
                   {publishError}
+                </p>
+              )}
+              {!publishError && latestPublishError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {latestPublishError}
                 </p>
               )}
               {publishStatus === 'live' && publishedBaseUrl && publishedHomeUrl && (

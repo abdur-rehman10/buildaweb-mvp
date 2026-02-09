@@ -136,6 +136,8 @@ export type ProjectSummary = {
   name: string;
   status: ProjectStatus;
   defaultLocale: string;
+  latestPublishId?: string | null;
+  publishedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -301,6 +303,14 @@ export type PublishResult = {
   errorMessage?: string;
 };
 
+export type LatestPublishResult = {
+  publishId: string;
+  status: PublishStatus;
+  url: string;
+  timestamp?: string | null;
+  errorMessage?: string;
+};
+
 export const authApi = {
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/api/v1/auth/login', {
@@ -447,6 +457,11 @@ export const publishApi = {
   create(projectId: string) {
     return apiRequest<PublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish`, {
       method: 'POST',
+    });
+  },
+  getLatest(projectId: string) {
+    return apiRequest<LatestPublishResult | null>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
+      method: 'GET',
     });
   },
   getStatus(projectId: string, publishId: string) {
