@@ -136,6 +136,8 @@ export function ProjectsApiScreen({
   const [projectSettingsUploadNonce, setProjectSettingsUploadNonce] = useState(0);
   const [duplicatingPageId, setDuplicatingPageId] = useState<string | null>(null);
   const [deletingPageId, setDeletingPageId] = useState<string | null>(null);
+  const [pendingMakeLivePublish, setPendingMakeLivePublish] = useState<PublishHistoryItem | null>(null);
+  const [optimisticLatestPublishId, setOptimisticLatestPublishId] = useState<string | null>(null);
   const [settingHomePageId, setSettingHomePageId] = useState<string | null>(null);
   const [pendingDeletePage, setPendingDeletePage] = useState<PageMetaSummary | null>(null);
   const {
@@ -147,6 +149,7 @@ export function ProjectsApiScreen({
     latestPublishError,
     refreshLatestPublish,
   } = useLatestPublish(activeProjectId);
+  const effectiveLatestPublishId = optimisticLatestPublishId ?? latestPublishId;
   const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
   const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : null;
   const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
@@ -162,8 +165,8 @@ export function ProjectsApiScreen({
   const fallbackHomePage = projectPages.find((page) => hasLegacyHomeMarker(page)) ?? projectPages[0] ?? null;
   const homeExists = homePageId ? homePageExistsById : !!fallbackHomePage;
   const showHomeMissingBadge = projectPages.length === 0 || (!!homePageId && !homeExists);
-  const hasAnyLiveSite = !!latestPublishId || publishStatus === 'live';
-  const showRepublishCta = !!latestPublishId && hasUnpublishedChanges;
+  const hasAnyLiveSite = !!effectiveLatestPublishId || publishStatus === 'live';
+  const showRepublishCta = !!effectiveLatestPublishId && hasUnpublishedChanges;
   const publishStatusLabel =
     publishStatus === 'publishing'
       ? 'Publishing'
@@ -449,6 +452,7 @@ export function ProjectsApiScreen({
 
   useEffect(() => {
     setPublishStarting(false);
+    setOptimisticLatestPublishId(null);
     setPublishId(null);
     setPublishStatus(null);
     setPublishedUrl(null);
@@ -456,6 +460,13 @@ export function ProjectsApiScreen({
     setPublishPreflightDetails([]);
     setPublishMessage(null);
   }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!optimisticLatestPublishId) return;
+    if (latestPublishId === optimisticLatestPublishId) {
+      setOptimisticLatestPublishId(null);
+    }
+  }, [latestPublishId, optimisticLatestPublishId]);
 
   useEffect(() => {
     if (!activeProjectId || !publishId || publishStatus !== 'publishing') return;
@@ -714,15 +725,25 @@ export function ProjectsApiScreen({
   };
 
   const makePublishLive = async (entry: PublishHistoryItem) => {
+    setPendingMakeLivePublish(entry);
+  };
+
+  const confirmMakePublishLive = async () => {
     if (!activeProjectId) return;
-    if (latestPublishId && entry.publishId === latestPublishId) return;
+    if (!pendingMakeLivePublish) return;
+    if (effectiveLatestPublishId && pendingMakeLivePublish.publishId === effectiveLatestPublishId) return;
+
+    const entry = pendingMakeLivePublish;
 
     setMakingLivePublishId(entry.publishId);
     try {
       await publishApi.setLatest(activeProjectId, { publishId: entry.publishId });
+      setOptimisticLatestPublishId(entry.publishId);
+      setPublishId(entry.publishId);
       setPublishStatus('live');
       setPublishedUrl(entry.baseUrl);
       setPublishError(null);
+      setPublishMessage('Live publish updated');
 
       await Promise.all([
         loadPublishHistory(activeProjectId),
@@ -740,6 +761,7 @@ export function ProjectsApiScreen({
       });
     } finally {
       setMakingLivePublishId(null);
+      setPendingMakeLivePublish(null);
     }
   };
 
@@ -1400,7 +1422,7 @@ export function ProjectsApiScreen({
                   const entryUrlInput = toPublishUrlInput(entry.baseUrl);
                   if (!entryUrlInput) return null;
                   const homeUrl = buildPublishIndexUrl(entryUrlInput);
-                  const isLivePublish = !!latestPublishId && entry.publishId === latestPublishId;
+                  const isLivePublish = !!effectiveLatestPublishId && entry.publishId === effectiveLatestPublishId;
                   return (
                     <div key={`publish-history-${entry.publishId}`} className="border rounded-md p-2">
                       <div className="text-xs text-muted-foreground">Created: {formatPublishHistoryTime(entry.createdAt)}</div>
@@ -1710,6 +1732,20 @@ export function ProjectsApiScreen({
         confirmLabel="Delete"
         cancelLabel="Cancel"
         variant="danger"
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingMakeLivePublish}
+        onClose={() => setPendingMakeLivePublish(null)}
+        onConfirm={() => {
+          void confirmMakePublishLive();
+        }}
+        title="Make this publish live?"
+        description="This will set this publish as Live."
+        confirmLabel="Make Live"
+        cancelLabel="Cancel"
+        variant="warning"
+        isLoading={!!makingLivePublishId}
       />
     </div>
   );
