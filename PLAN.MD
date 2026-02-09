@@ -1,48 +1,46 @@
 # PLAN.md
 
 ## Branch
-feat/auth-forgot-password
+feat/draft-live-diff
 
 ## Goal
-Implement a minimal, secure forgot-password and reset-password flow with dev-only token output and matching frontend screens.
+Implement accurate draft-vs-live change detection so each project exposes a deterministic `hasUnpublishedChanges` flag and the frontend status/actions reflect it.
 
 ## In Scope
-- Backend endpoints:
-  - `POST /api/v1/auth/forgot-password`
-  - `POST /api/v1/auth/reset-password`
-- Forgot-password behavior:
-  - Always return `ok: true` (no user enumeration).
-  - If user exists, generate cryptographically secure token.
-  - Store only token hash with `userId`, `expiresAt`, `usedAt`, `createdAt`.
-  - Return `debugResetToken` only when `NODE_ENV !== 'production'`.
-- Reset-password behavior:
-  - Validate token hash, expiration, and unused state.
-  - Update password with existing hashing approach.
-  - Mark token `usedAt`.
-- Add password-reset token Mongo model with indexes:
-  - `tokenHash` unique
-  - `userId`
-  - TTL on `expiresAt` (recommended)
-- Frontend screens:
-  - Forgot Password form (email + generic success message)
-  - Reset Password form (token + new password + submit)
-  - Routing integrated with existing frontend style
+- Backend:
+  - Compute `hasUnpublishedChanges` per project.
+  - Rule:
+    - `latestPublishId == null` -> `hasUnpublishedChanges = true`
+    - Else compare current draft vs latest publish snapshot deterministically for:
+      - pages (count, slug, title, editorJson, seoJson)
+      - navigation (deep compare)
+      - output-affecting project settings (`siteName`, `favicon`, `locale`, `defaultOgImage`)
+  - Ignore timestamps and non-output metadata.
+  - Include `hasUnpublishedChanges` in:
+    - `GET /projects`
+    - `GET /projects/:projectId`
+- Frontend:
+  - Use backend `hasUnpublishedChanges` to drive publish status labels:
+    - no publish -> `Not published`
+    - published + false -> `Live (up to date)`
+    - published + true -> `Live (outdated)`
+  - Disable publish button when published and up to date.
+  - Show republish CTA only when outdated.
 
 ## Out of Scope
-- SMTP integration
-- Email templates
-- Refresh tokens
-- Magic-link login
-- Auth architecture refactors
-- New roles/permissions
+- HTML diffing
+- New endpoints
+- Publish pipeline behavior changes
+- Polling hacks
+- Per-page visual diff or history browsing
 
 ## Definition of Done
-- Forgot/reset endpoints exist and follow `{ ok, data } / { ok, error }` contract.
-- UI screens exist and complete the flow.
-- Forgot response never reveals account existence.
-- Reset token is never exposed in production responses.
+- `hasUnpublishedChanges` is deterministic and correct for list/detail project responses.
+- UI states and publish button behavior match the flag.
 - Manual tests pass:
-  - Existing user forgot -> dev token returned in dev only
-  - Reset with valid token updates password and login succeeds
-  - Non-existing user forgot still returns ok
-  - Invalid/expired/reused token reset fails safely
+  1. New project (no publish) -> `Not published`
+  2. Publish with no changes -> `Live (up to date)` and publish disabled
+  3. Edit content -> `Live (outdated)` and publish enabled
+  4. Revert to published state -> back to `Live (up to date)`
+  5. Navigation/settings changes mark project outdated
+  6. Publish returns project to `Live (up to date)`
