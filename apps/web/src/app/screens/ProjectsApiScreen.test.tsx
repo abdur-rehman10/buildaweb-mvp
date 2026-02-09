@@ -131,7 +131,7 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(publishApi.getStatus).mockResolvedValue({
       publishId: 'publish-1',
       status: 'publishing',
-      url: 'http://localhost:9000/buildaweb-sites/example/',
+      url: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/example/',
     });
     vi.mocked(publishApi.list).mockResolvedValue({
       publishes: [],
@@ -236,7 +236,7 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(publishApi.create).mockResolvedValue({
       publishId: 'publish-2',
       status: 'publishing',
-      url: 'http://localhost:9000/buildaweb-sites/example/',
+      url: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/example/',
     });
 
     renderScreen();
@@ -257,7 +257,7 @@ describe('ProjectsApiScreen toasts', () => {
   });
 
   it('shows published root and subpage links with index.html by default and copies those URLs', async () => {
-    const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-1/';
+    const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-1/';
     vi.mocked(publishApi.create).mockResolvedValue({
       publishId: 'publish-1',
       status: 'live',
@@ -290,8 +290,8 @@ describe('ProjectsApiScreen toasts', () => {
     });
   });
 
-  it('shows pretty directory subpage links when publish URL uses proxy port', async () => {
-    const proxyPublishedBaseUrl = 'http://localhost:8080/buildaweb-sites/tenant/project/publish-1/';
+  it('shows index.html subpage links when publish URL uses proxy port', async () => {
+    const proxyPublishedBaseUrl = 'http://localhost:8080/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-1/';
     vi.mocked(publishApi.create).mockResolvedValue({
       publishId: 'publish-1',
       status: 'live',
@@ -306,7 +306,7 @@ describe('ProjectsApiScreen toasts', () => {
     const homeLink = await screen.findByRole('link', { name: 'Open published site' });
     expect(homeLink.getAttribute('href')).toBe(`${proxyPublishedBaseUrl}index.html`);
 
-    const aboutPageUrl = `${proxyPublishedBaseUrl}about/`;
+    const aboutPageUrl = `${proxyPublishedBaseUrl}about/index.html`;
     const aboutLink = await screen.findByRole('link', { name: aboutPageUrl });
     expect(aboutLink.getAttribute('href')).toBe(aboutPageUrl);
   });
@@ -331,7 +331,7 @@ describe('ProjectsApiScreen toasts', () => {
       ],
     });
 
-    const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-home-slug/';
+    const publishedBaseUrl = 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-home-slug/';
     vi.mocked(publishApi.create).mockResolvedValue({
       publishId: 'publish-home-slug',
       status: 'live',
@@ -354,7 +354,7 @@ describe('ProjectsApiScreen toasts', () => {
   });
 
   it('shows Live (up to date) status and link on initial render when latest publish exists', async () => {
-    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-2/';
+    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-2/';
     vi.mocked(projectsApi.get).mockResolvedValueOnce({
       project: {
         id: 'project-1',
@@ -401,7 +401,7 @@ describe('ProjectsApiScreen toasts', () => {
   });
 
   it('updates to Live (up to date) when a publish completes', async () => {
-    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-3/';
+    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-3/';
     vi.mocked(projectsApi.get)
       .mockResolvedValueOnce({
         project: {
@@ -488,7 +488,7 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
       publishId: 'publish-10',
       status: 'live',
-      url: 'http://localhost:9000/buildaweb-sites/tenant/project/publish-10/',
+      url: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-10/',
     });
 
     renderScreen();
@@ -518,13 +518,13 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-1',
           status: 'live',
           createdAt: '2026-02-09T10:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-1/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-1/',
         },
         {
           publishId: 'pub-2',
           status: 'failed',
           createdAt: '2026-02-09T09:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-2/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-2/',
         },
       ],
     });
@@ -543,7 +543,7 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-copy',
           status: 'live',
           createdAt: '2026-02-09T10:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-copy/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-copy/',
         },
       ],
     });
@@ -555,7 +555,7 @@ describe('ProjectsApiScreen toasts', () => {
 
     await waitFor(() => {
       expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(
-        'http://localhost:9000/buildaweb-sites/tenant/project/pub-copy/index.html',
+        'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-copy/index.html',
       );
     });
   });
@@ -567,7 +567,7 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-open',
           status: 'live',
           createdAt: '2026-02-09T10:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-open/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-open/',
         },
       ],
     });
@@ -575,7 +575,7 @@ describe('ProjectsApiScreen toasts', () => {
     renderScreen();
 
     const openLink = await screen.findByRole('link', { name: 'Open publish pub-open' });
-    expect(openLink.getAttribute('href')).toBe('http://localhost:9000/buildaweb-sites/tenant/project/pub-open/index.html');
+    expect(openLink.getAttribute('href')).toBe('http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-open/index.html');
   });
 
   it('live publish row shows Live badge and disabled Make Live button', async () => {
@@ -592,7 +592,7 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
       publishId: 'pub-live',
       status: 'live',
-      url: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-live/',
+      url: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-live/',
     });
     vi.mocked(publishApi.list).mockResolvedValueOnce({
       publishes: [
@@ -600,13 +600,13 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-live',
           status: 'live',
           createdAt: '2026-02-09T10:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-live/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-live/',
         },
         {
           publishId: 'pub-old',
           status: 'live',
           createdAt: '2026-02-09T09:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-old/',
         },
       ],
     });
@@ -625,7 +625,7 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-old',
           status: 'live',
           createdAt: '2026-02-09T09:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-old/',
         },
       ],
     });
@@ -647,7 +647,7 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-old',
           status: 'live',
           createdAt: '2026-02-09T09:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-old/',
         },
       ],
     });
@@ -665,7 +665,7 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
       publishId: 'pub-old',
       status: 'live',
-      url: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+      url: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-old/',
     });
     vi.mocked(publishApi.list).mockResolvedValueOnce({
       publishes: [
@@ -673,7 +673,7 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-old',
           status: 'live',
           createdAt: '2026-02-09T09:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-old/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-old/',
         },
       ],
     });
@@ -708,7 +708,7 @@ describe('ProjectsApiScreen toasts', () => {
           publishId: 'pub-error',
           status: 'live',
           createdAt: '2026-02-09T09:00:00.000Z',
-          baseUrl: 'http://localhost:9000/buildaweb-sites/tenant/project/pub-error/',
+          baseUrl: 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/pub-error/',
         },
       ],
     });
