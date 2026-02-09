@@ -9,6 +9,8 @@ import { AccessibilitySettings } from './components/AccessibilitySettings';
 import { Eye } from 'lucide-react';
 import { SignUp } from './screens/SignUp';
 import { Login } from './screens/Login';
+import { ForgotPassword } from './screens/ForgotPassword';
+import { ResetPassword } from './screens/ResetPassword';
 import { Dashboard } from './screens/Dashboard';
 import { Onboarding } from './screens/Onboarding';
 import { ProjectFolders } from './screens/ProjectFolders';
@@ -27,6 +29,8 @@ import { authApi } from '../lib/api';
 type Screen = 
   | 'signup' 
   | 'login' 
+  | 'forgot-password'
+  | 'reset-password'
   | 'onboarding' 
   | 'dashboard' 
   | 'project-folders'
@@ -47,6 +51,7 @@ export default function App() {
   const [authChecking, setAuthChecking] = useState(true);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activePageId, setActivePageId] = useState<string | null>(null);
+  const [resetTokenPrefill, setResetTokenPrefill] = useState<string>('');
 
   // Announce route changes to screen readers
   useRouteAnnouncer(currentScreen);
@@ -205,8 +210,28 @@ export default function App() {
           {currentScreen === 'login' && (
             <Login 
               onNavigateToSignUp={() => navigate('signup')} 
-              onNavigateToForgotPassword={() => {}}
+              onNavigateToForgotPassword={() => navigate('forgot-password')}
               onLogin={handleLogin}
+            />
+          )}
+
+          {currentScreen === 'forgot-password' && (
+            <ForgotPassword
+              onNavigateToLogin={() => navigate('login')}
+              onNavigateToResetPassword={(token) => {
+                setResetTokenPrefill(token ?? '');
+                navigate('reset-password');
+              }}
+            />
+          )}
+
+          {currentScreen === 'reset-password' && (
+            <ResetPassword
+              initialToken={resetTokenPrefill}
+              onNavigateToLogin={() => {
+                setResetTokenPrefill('');
+                navigate('login');
+              }}
             />
           )}
           
