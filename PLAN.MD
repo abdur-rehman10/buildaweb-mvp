@@ -1,26 +1,22 @@
 # PLAN.md
 
 ## Branch
-feat/publish-status
+feat/publish-history
 
 ## Goal
-Persist the latest publish status per project so that after publishing, the project page can always show the current live state and published URL after a browser refresh.
+Show publish history per project (last N publishes) with status and URL.
 
 ## In Scope
-- Add a `latestPublishId` (or equivalent) field to the Project schema.
-- Update publish completion flow to set `latestPublishId` on the project.
-- Add an endpoint to fetch the latest publish record for a project.
-- Update the frontend project page load flow to call that endpoint and display current publish status/url.
+- Backend: list publishes by project, sorted newest first, with default limit 10.
+- Frontend: show a small publish history list/table with `Open` and `Copy` actions.
+- Keep existing publish flow unchanged.
 
 ## Out of Scope
-- Multiple concurrent publishes.
-- Historical publish list UI.
-
-## Constraints
-- Keep API response shape unchanged: `{ "ok": true, "data": {} }` and `{ "ok": false, "error": { "code": "", "message": "" } }`.
-- Respect existing optimistic concurrency behavior.
-- Follow all MVP rules and current auth/user scoping constraints.
+- Delete publish.
+- Rollback (changing `latestPublishId`).
+- Pagination UI beyond "show last 10".
 
 ## Definition of Done
-- After a successful publish, refreshing the project page still shows the project as live.
-- The published URL is still shown after refresh without requiring another publish action.
+- User can see the latest publishes for a project after refresh.
+- User can open publish URLs from history.
+- User can copy publish URLs from history.
