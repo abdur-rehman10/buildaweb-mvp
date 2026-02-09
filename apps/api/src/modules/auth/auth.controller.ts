@@ -5,6 +5,8 @@ import { LoginDto } from './dto/login.dto';
 import { ok, fail } from '../../common/api-response';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { UsersService } from '../users/users.service';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -22,6 +24,22 @@ export class AuthController {
     const res = await this.auth.login(dto);
     if (!res.ok) return fail(res.code, res.message);
     return ok({ user: res.user, accessToken: res.accessToken });
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    const res = await this.auth.forgotPassword(dto);
+    if ('debugResetToken' in res && res.debugResetToken) {
+      return ok({ debugResetToken: res.debugResetToken });
+    }
+    return ok({});
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    const res = await this.auth.resetPassword(dto);
+    if (!res.ok) return fail(res.code, res.message);
+    return ok({});
   }
 
   @UseGuards(JwtAuthGuard)

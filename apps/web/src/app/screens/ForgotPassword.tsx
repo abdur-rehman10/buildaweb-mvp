@@ -1,20 +1,24 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Logo } from '../components/Logo';
 import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
+import { authApi } from '../../lib/api';
+import { appToast, toApiErrorMessage } from '../../lib/toast';
 
 interface ForgotPasswordProps {
   onNavigateToLogin: () => void;
+  onNavigateToResetPassword: (token?: string) => void;
 }
 
-export function ForgotPassword({ onNavigateToLogin }: ForgotPasswordProps) {
+export function ForgotPassword({ onNavigateToLogin, onNavigateToResetPassword }: ForgotPasswordProps) {
   const [email, setEmail] = useState('');
+  const [debugResetToken, setDebugResetToken] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!email) {
@@ -25,8 +29,21 @@ export function ForgotPassword({ onNavigateToLogin }: ForgotPasswordProps) {
       return;
     }
 
-    toast.success('Password reset email sent!');
-    setSubmitted(true);
+    setIsSubmitting(true);
+    try {
+      const response = await authApi.forgotPassword({ email });
+      setDebugResetToken(response.debugResetToken ?? '');
+      setSubmitted(true);
+      appToast.success('If an account exists, you will receive a reset link.', {
+        eventKey: 'forgot-password-success',
+      });
+    } catch (err) {
+      appToast.error(toApiErrorMessage(err, 'Unable to send reset request.'), {
+        eventKey: 'forgot-password-error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -45,24 +62,27 @@ export function ForgotPassword({ onNavigateToLogin }: ForgotPasswordProps) {
 
           <h2 className="text-2xl font-bold mb-2">Check your email</h2>
           <p className="text-muted-foreground mb-8">
-            We've sent a password reset link to <strong>{email}</strong>
+            If an account exists for <strong>{email}</strong>, you will receive a reset link shortly.
           </p>
+
+          {debugResetToken && (
+            <div className="text-left rounded-lg border border-border bg-muted/40 p-4 mb-6">
+              <p className="text-xs text-muted-foreground mb-2">Development token (not shown in production):</p>
+              <code className="text-xs break-all">{debugResetToken}</code>
+            </div>
+          )}
 
           <div className="space-y-4">
             <Button fullWidth size="lg" onClick={onNavigateToLogin}>
               Back to login
             </Button>
-            <p className="text-sm text-muted-foreground">
-              Didn't receive the email?{' '}
-              <button
-                onClick={() => {
-                  toast.success('Email resent!');
-                }}
-                className="font-medium text-primary hover:underline"
-              >
-                Resend
-              </button>
-            </p>
+            <Button
+              variant="outline"
+              fullWidth
+              onClick={() => onNavigateToResetPassword(debugResetToken || undefined)}
+            >
+              I have a reset token
+            </Button>
           </div>
         </div>
       </div>
@@ -107,8 +127,8 @@ export function ForgotPassword({ onNavigateToLogin }: ForgotPasswordProps) {
             <Mail className="absolute right-3 top-[38px] h-5 w-5 text-muted-foreground pointer-events-none" />
           </div>
 
-          <Button type="submit" fullWidth size="lg">
-            Send reset link
+          <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
+            {isSubmitting ? 'Sending...' : 'Send reset link'}
           </Button>
         </form>
       </div>

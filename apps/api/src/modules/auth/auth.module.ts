@@ -2,14 +2,17 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
+import { MongooseModule } from '@nestjs/mongoose';
 import { UsersModule } from '../users/users.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
+import { PasswordResetToken, PasswordResetTokenSchema } from './password-reset-token.schema';
 
 @Module({
   imports: [
     UsersModule,
+    MongooseModule.forFeature([{ name: PasswordResetToken.name, schema: PasswordResetTokenSchema }]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
