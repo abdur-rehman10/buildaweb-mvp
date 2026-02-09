@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 
 type JsonRecord = Record<string, unknown>;
 type RenderNavLink = { label: string; targetSlug: string };
+type LinkRenderMode = 'preview' | 'publish';
 
 const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 
@@ -76,6 +77,51 @@ export class PreviewRendererService {
     return `${prefix}${normalizedTarget.slice(1)}/`;
   }
 
+  private isExternalHref(href: string): boolean {
+    const value = href.trim().toLowerCase();
+    return (
+      value.startsWith('http://') ||
+      value.startsWith('https://') ||
+      value.startsWith('mailto:') ||
+      value.startsWith('tel:') ||
+      value.startsWith('//')
+    );
+  }
+
+  private toPublishHref(rawHref: string): string {
+    const href = rawHref.trim();
+    if (!href) return '#';
+    if (href.startsWith('#')) return href;
+
+    const lower = href.toLowerCase();
+    if (
+      href === '/' ||
+      lower === 'home' ||
+      lower === '/home' ||
+      lower === 'index.html' ||
+      lower === '/index.html' ||
+      lower === '/home/index.html'
+    ) {
+      return '/index.html';
+    }
+
+    const withoutLeadingSlash = href.replace(/^\/+/, '');
+    const withoutTrailingSlash = withoutLeadingSlash.replace(/\/+$/, '');
+    const withoutIndex = withoutTrailingSlash.replace(/\/index\.html$/i, '').replace(/^index\.html$/i, '');
+    if (!withoutIndex || withoutIndex.toLowerCase() === 'home') {
+      return '/index.html';
+    }
+
+    return `/${withoutIndex}/index.html`;
+  }
+
+  private resolveInternalHref(currentSlug: string, href: string, mode: LinkRenderMode): string {
+    if (mode === 'publish') {
+      return this.toPublishHref(href);
+    }
+    return this.toStaticHref(currentSlug, href);
+  }
+
   private getTextTag(record: JsonRecord): 'h1' | 'h2' | 'p' {
     const explicitTag = this.readString(record.tag).toLowerCase();
     if (explicitTag === 'h1' || explicitTag === 'h2' || explicitTag === 'p') return explicitTag;
@@ -108,7 +154,7 @@ export class PreviewRendererService {
     return 0;
   }
 
-  private renderNode(node: unknown, assetUrlById: Record<string, string>, currentSlug: string): string {
+  private renderNode(node: unknown, assetUrlById: Record<string, string>, currentSlug: string, mode: LinkRenderMode): string {
     const record = this.asRecord(node);
     if (!record) return '<!-- Invalid node -->';
 
@@ -123,7 +169,12 @@ export class PreviewRendererService {
     if (type === 'button') {
       const label = this.readString(record.label, this.readString(record.text, 'Button'));
       const href = this.readString(record.href, this.readString(record.url, '#')) || '#';
-      const resolvedHref = href.startsWith('/') ? this.toStaticHref(currentSlug, href) : href;
+      const resolvedHref =
+        mode === 'publish' && !this.isExternalHref(href)
+          ? this.resolveInternalHref(currentSlug, href, mode)
+          : href.startsWith('/')
+            ? this.resolveInternalHref(currentSlug, href, mode)
+            : href;
       return `<a class="baw-node-button" href="${this.escapeHtml(resolvedHref)}">${this.escapeHtml(label)}</a>`;
     }
 
@@ -140,23 +191,23 @@ export class PreviewRendererService {
     return `<!-- Unknown node type: ${this.escapeHtml(type || 'unknown')} -->`;
   }
 
-  private renderBlock(block: unknown, assetUrlById: Record<string, string>, currentSlug: string): string {
+  private renderBlock(block: unknown, assetUrlById: Record<string, string>, currentSlug: string, mode: LinkRenderMode): string {
     const record = this.asRecord(block);
     if (!record) return '<div class="baw-block"><!-- Invalid block --></div>';
 
     const blockId = this.readId(record);
-    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node, assetUrlById, currentSlug)).join('');
+    const nodes = this.asArray(record.nodes).map((node) => this.renderNode(node, assetUrlById, currentSlug, mode)).join('');
     const attr = blockId ? ` data-block="${this.escapeHtml(blockId)}"` : '';
     return `<div class="baw-block"${attr}>${nodes}</div>`;
   }
 
-  private renderSection(section: unknown, assetUrlById: Record<string, string>, currentSlug: string): string {
+  private renderSection(section: unknown, assetUrlById: Record<string, string>, currentSlug: string, mode: LinkRenderMode): string {
     const record = this.asRecord(section);
     if (!record) return '<section class="baw-section"><!-- Invalid section --></section>';
 
     const sectionId = this.readId(record);
     const blocks = this.asArray(record.blocks)
-      .map((block) => this.renderBlock(block, assetUrlById, currentSlug))
+      .map((block) => this.renderBlock(block, assetUrlById, currentSlug, mode))
       .join('');
     const attr = sectionId ? ` data-section="${this.escapeHtml(sectionId)}"` : '';
     return `<section class="baw-section"${attr}>${blocks}</section>`;
@@ -179,7 +230,7 @@ export class PreviewRendererService {
     return JSON.stringify(visit(value));
   }
 
-  private renderNavigation(navLinks: RenderNavLink[], currentSlug: string): string {
+  private renderNavigation(navLinks: RenderNavLink[], currentSlug: string, mode: LinkRenderMode): string {
     if (!Array.isArray(navLinks) || navLinks.length === 0) return '';
 
     const links = navLinks
@@ -190,7 +241,10 @@ export class PreviewRendererService {
         if (normalizedTarget === this.normalizeSlug(currentSlug)) {
           return `<span>${this.escapeHtml(label)}</span>`;
         }
-        const href = this.toStaticHref(currentSlug, normalizedTarget);
+        const href =
+          mode === 'publish'
+            ? this.toPublishHref(normalizedTarget)
+            : this.resolveInternalHref(currentSlug, normalizedTarget, mode);
         return `<a href="${this.escapeHtml(href)}">${this.escapeHtml(label)}</a>`;
       })
       .join('');
@@ -238,11 +292,13 @@ export class PreviewRendererService {
     faviconUrl?: string;
     defaultOgImageUrl?: string;
     locale?: string;
+    linkMode?: LinkRenderMode;
   }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
     const navLinks = params.navLinks ?? [];
     const currentSlug = this.normalizeSlug(params.currentSlug ?? '/');
+    const linkMode = params.linkMode ?? 'preview';
     const pageTitle = this.readString(params.pageTitle, 'Buildaweb Site') || 'Buildaweb Site';
     const headTags = this.renderSeoHeadTags({
       seoJson: params.seoJson,
@@ -253,16 +309,18 @@ export class PreviewRendererService {
     });
     const langCandidate = this.readString(params.locale).trim() || 'en';
     const lang = /^[A-Za-z0-9-]+$/.test(langCandidate) ? langCandidate : 'en';
-    const navHtml = this.renderNavigation(navLinks, currentSlug);
+    const navHtml = this.renderNavigation(navLinks, currentSlug, linkMode);
     const sections = this.asArray(pageRecord.sections)
-      .map((section) => this.renderSection(section, assetUrlById, currentSlug))
+      .map((section) => this.renderSection(section, assetUrlById, currentSlug, linkMode))
       .join('');
 
     const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${navHtml}${sections}</div>`;
     const css = this.baseCss;
     const pageJsonString = this.stableStringify(pageRecord);
     const navString = this.stableStringify(navLinks);
-    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css + headTags + lang).digest('hex');
+    const hash = createHash('sha256')
+      .update(pageJsonString + navString + currentSlug + css + headTags + lang + linkMode)
+      .digest('hex');
 
     return { html, css, hash, headTags, lang };
   }

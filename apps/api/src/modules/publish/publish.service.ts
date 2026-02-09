@@ -422,6 +422,7 @@ ${params.bodyHtml}
           assetUrlById,
           navLinks,
           currentSlug,
+          linkMode: 'publish',
           pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
           seoJson: page.seoJson,
           siteName,
