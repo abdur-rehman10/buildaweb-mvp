@@ -2,6 +2,8 @@ import { InternalServerErrorException, NotFoundException } from '@nestjs/common'
 import { Model } from 'mongoose';
 import { NavigationDocument } from '../navigation/navigation.schema';
 import { PageDocument } from '../pages/page.schema';
+import { PublishDocument } from '../publish/publish.schema';
+import { buildPublishDraftSnapshot } from '../publish/publish-snapshot.util';
 import { ProjectDocument } from './project.schema';
 import { ProjectsService } from './projects.service';
 
@@ -14,12 +16,18 @@ type MockProjectModel = {
 
 type MockPageModel = {
   findOne: jest.Mock;
+  find: jest.Mock;
   updateMany: jest.Mock;
   updateOne: jest.Mock;
 };
 
 type MockNavigationModel = {
   findOne: jest.Mock;
+  find: jest.Mock;
+};
+
+type MockPublishModel = {
+  find: jest.Mock;
 };
 
 describe('ProjectsService.setHomePage', () => {
@@ -27,6 +35,7 @@ describe('ProjectsService.setHomePage', () => {
   let projectModel: MockProjectModel;
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
+  let publishModel: MockPublishModel;
 
   beforeEach(() => {
     projectModel = {
@@ -38,18 +47,25 @@ describe('ProjectsService.setHomePage', () => {
 
     pageModel = {
       findOne: jest.fn(),
+      find: jest.fn(),
       updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
       updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
     };
 
     navigationModel = {
       findOne: jest.fn(),
+      find: jest.fn(),
+    };
+
+    publishModel = {
+      find: jest.fn(),
     };
 
     service = new ProjectsService(
       projectModel as unknown as Model<ProjectDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
+      publishModel as unknown as Model<PublishDocument>,
     );
   });
 
@@ -138,6 +154,7 @@ describe('ProjectsService.settings', () => {
   let projectModel: MockProjectModel;
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
+  let publishModel: MockPublishModel;
 
   beforeEach(() => {
     projectModel = {
@@ -149,18 +166,25 @@ describe('ProjectsService.settings', () => {
 
     pageModel = {
       findOne: jest.fn(),
+      find: jest.fn(),
       updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
       updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
     };
 
     navigationModel = {
       findOne: jest.fn(),
+      find: jest.fn(),
+    };
+
+    publishModel = {
+      find: jest.fn(),
     };
 
     service = new ProjectsService(
       projectModel as unknown as Model<ProjectDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
+      publishModel as unknown as Model<PublishDocument>,
     );
   });
 
@@ -288,5 +312,149 @@ describe('ProjectsService.settings', () => {
         siteName: 'New Name',
       }),
     ).rejects.toBeInstanceOf(InternalServerErrorException);
+  });
+});
+
+describe('ProjectsService.draftStatus', () => {
+  let service: ProjectsService;
+  let projectModel: MockProjectModel;
+  let pageModel: MockPageModel;
+  let navigationModel: MockNavigationModel;
+  let publishModel: MockPublishModel;
+
+  beforeEach(() => {
+    projectModel = {
+      create: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      updateOne: jest.fn(),
+    };
+
+    pageModel = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      updateMany: jest.fn(),
+      updateOne: jest.fn(),
+    };
+
+    navigationModel = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+    };
+
+    publishModel = {
+      find: jest.fn(),
+    };
+
+    service = new ProjectsService(
+      projectModel as unknown as Model<ProjectDocument>,
+      pageModel as unknown as Model<PageDocument>,
+      navigationModel as unknown as Model<NavigationDocument>,
+      publishModel as unknown as Model<PublishDocument>,
+    );
+  });
+
+  it('marks project as having unpublished changes when latestPublishId is null', async () => {
+    projectModel.find.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        {
+          _id: '507f1f77bcf86cd799439100',
+          name: 'Main',
+          defaultLocale: 'en',
+          latestPublishId: null,
+        },
+      ]),
+    });
+    pageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    });
+    navigationModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    });
+    publishModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([]),
+    });
+
+    const result = await service.listByOwnerWithDraftStatus({ tenantId: 'default', ownerUserId: 'user-1' });
+    expect(result).toEqual([
+      {
+        project: expect.objectContaining({ _id: '507f1f77bcf86cd799439100' }),
+        hasUnpublishedChanges: true,
+      },
+    ]);
+  });
+
+  it('marks project up to date when current draft matches latest publish snapshot', async () => {
+    const projectId = '507f1f77bcf86cd799439100';
+    const publishId = '507f1f77bcf86cd799439200';
+    const pageId = '507f1f77bcf86cd799439011';
+    const pages = [
+      {
+        _id: pageId,
+        projectId,
+        title: 'Home',
+        slug: '/',
+        isHome: true,
+        editorJson: { sections: [{ blocks: [{ nodes: [{ type: 'text', content: 'Hello' }] }] }] },
+        seoJson: { title: 'Home' },
+      },
+    ];
+    const navigationItems = [{ label: 'Home', pageId }];
+    const draftSnapshot = buildPublishDraftSnapshot({
+      project: {
+        defaultLocale: 'en',
+        locale: 'en',
+        siteName: 'Main',
+        faviconAssetId: null,
+        defaultOgImageAssetId: null,
+      },
+      pages,
+      navigationItems,
+    });
+
+    projectModel.find.mockReturnValue({
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        {
+          _id: projectId,
+          defaultLocale: 'en',
+          locale: 'en',
+          siteName: 'Main',
+          faviconAssetId: null,
+          defaultOgImageAssetId: null,
+          latestPublishId: publishId,
+        },
+      ]),
+    });
+    pageModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(pages),
+    });
+    navigationModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([{ projectId, itemsJson: navigationItems }]),
+    });
+    publishModel.find.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      lean: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([{ _id: publishId, draftSnapshot }]),
+    });
+
+    const result = await service.listByOwnerWithDraftStatus({ tenantId: 'default', ownerUserId: 'user-1' });
+    expect(result).toEqual([
+      {
+        project: expect.objectContaining({ _id: projectId }),
+        hasUnpublishedChanges: false,
+      },
+    ]);
   });
 });

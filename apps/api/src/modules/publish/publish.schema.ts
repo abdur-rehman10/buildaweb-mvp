@@ -1,5 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { SchemaTypes } from 'mongoose';
 import { HydratedDocument } from 'mongoose';
+import { PublishDraftSnapshot } from './publish-snapshot.util';
 
 export type PublishDocument = HydratedDocument<Publish>;
 
@@ -22,6 +24,9 @@ export class Publish {
 
   @Prop({ type: String, default: null })
   errorMessage?: string | null;
+
+  @Prop({ type: SchemaTypes.Mixed, default: null })
+  draftSnapshot?: PublishDraftSnapshot | null;
 
   createdAt?: Date;
   updatedAt?: Date;

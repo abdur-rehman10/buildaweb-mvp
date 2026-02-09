@@ -133,6 +133,7 @@ describe('ProjectsApiScreen toasts', () => {
         homePageId: null,
         latestPublishId: null,
         publishedAt: null,
+        hasUnpublishedChanges: true,
       },
     });
     vi.mocked(projectsApi.getSettings).mockResolvedValue({
@@ -164,6 +165,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: 'publish-1',
         publishedAt: '2026-02-09T10:00:00.000Z',
+        hasUnpublishedChanges: false,
       },
     });
     vi.mocked(pagesApi.duplicate).mockResolvedValue({
@@ -350,6 +352,7 @@ describe('ProjectsApiScreen toasts', () => {
         homePageId: 'page-about',
         latestPublishId: null,
         publishedAt: null,
+        hasUnpublishedChanges: true,
       },
     });
 
@@ -369,6 +372,7 @@ describe('ProjectsApiScreen toasts', () => {
         homePageId: 'missing-page-id',
         latestPublishId: null,
         publishedAt: null,
+        hasUnpublishedChanges: true,
       },
     });
 
@@ -492,6 +496,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: 'publish-2',
         publishedAt: '2026-02-08T10:00:00.000Z',
+        hasUnpublishedChanges: false,
       },
     });
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
@@ -511,6 +516,32 @@ describe('ProjectsApiScreen toasts', () => {
     expect(homeLink.getAttribute('href')).toBe(`${latestUrl}index.html`);
   });
 
+  it('disables publish action when live site is up to date', async () => {
+    const latestUrl = 'http://localhost:9000/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-2/';
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'published',
+        defaultLocale: 'en',
+        latestPublishId: 'publish-2',
+        publishedAt: '2026-02-08T10:00:00.000Z',
+        hasUnpublishedChanges: false,
+      },
+    });
+    vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
+      publishId: 'publish-2',
+      status: 'live',
+      url: latestUrl,
+    });
+
+    renderScreen();
+
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+    expect(publishButton.getAttribute('title')).toBe('No unpublished changes to publish.');
+  });
+
   it('shows Not published on initial render when latest publish is null', async () => {
     vi.mocked(projectsApi.get).mockResolvedValueOnce({
       project: {
@@ -520,6 +551,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: null,
         publishedAt: null,
+        hasUnpublishedChanges: true,
       },
     });
 
@@ -540,6 +572,7 @@ describe('ProjectsApiScreen toasts', () => {
           defaultLocale: 'en',
           latestPublishId: null,
           publishedAt: null,
+          hasUnpublishedChanges: true,
         },
       })
       .mockResolvedValueOnce({
@@ -550,6 +583,7 @@ describe('ProjectsApiScreen toasts', () => {
           defaultLocale: 'en',
           latestPublishId: 'publish-3',
           publishedAt: '2026-02-08T11:00:00.000Z',
+          hasUnpublishedChanges: false,
         },
       });
 
@@ -590,7 +624,7 @@ describe('ProjectsApiScreen toasts', () => {
     expect(homeLink.getAttribute('href')).toBe(`${latestUrl}index.html`);
   });
 
-  it('shows Live (outdated) and republish CTA when pages changed after publishedAt', async () => {
+  it('shows Live (outdated) and republish CTA when backend reports unpublished changes', async () => {
     vi.mocked(pagesApi.list).mockResolvedValueOnce({
       pages: [
         {
@@ -612,6 +646,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: 'publish-10',
         publishedAt: '2026-02-09T11:00:00.000Z',
+        hasUnpublishedChanges: true,
       },
     });
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
@@ -716,6 +751,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: 'pub-live',
         publishedAt: '2026-02-09T10:00:00.000Z',
+        hasUnpublishedChanges: false,
       },
     });
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
@@ -789,6 +825,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: 'pub-old',
         publishedAt: '2026-02-09T11:00:00.000Z',
+        hasUnpublishedChanges: false,
       },
     });
     vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
@@ -827,6 +864,7 @@ describe('ProjectsApiScreen toasts', () => {
         defaultLocale: 'en',
         latestPublishId: null,
         publishedAt: null,
+        hasUnpublishedChanges: true,
       },
     });
 
