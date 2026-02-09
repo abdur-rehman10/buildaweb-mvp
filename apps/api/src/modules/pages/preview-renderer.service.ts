@@ -88,36 +88,55 @@ export class PreviewRendererService {
     );
   }
 
-  private toPublishHref(rawHref: string): string {
-    const href = rawHref.trim();
-    if (!href) return '#';
-    if (href.startsWith('#')) return href;
+  private buildPublishHref(fromPageSlug: string, toPageSlug: string): string {
+    const fromNormalized = this.normalizeSlug(fromPageSlug);
+    const toNormalized = this.normalizeSlug(toPageSlug);
+    const prefix = this.relPrefix(this.slugDepth(fromNormalized));
 
-    const lower = href.toLowerCase();
-    if (
-      href === '/' ||
-      lower === 'home' ||
-      lower === '/home' ||
-      lower === 'index.html' ||
-      lower === '/index.html' ||
-      lower === '/home/index.html'
-    ) {
-      return '/index.html';
+    if (toNormalized === '/') {
+      return `${prefix}index.html`;
     }
 
-    const withoutLeadingSlash = href.replace(/^\/+/, '');
+    return `${prefix}${toNormalized.slice(1)}/index.html`;
+  }
+
+  private extractPublishTarget(params: { rawHref: string }): { toPageSlug: string; suffix: string } | null {
+    const href = params.rawHref.trim();
+    if (!href || href.startsWith('#') || this.isExternalHref(href) || href.startsWith('./') || href.startsWith('../')) {
+      return null;
+    }
+
+    const hashIndex = href.indexOf('#');
+    const hashSuffix = hashIndex >= 0 ? href.slice(hashIndex) : '';
+    const withoutHash = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
+    const queryIndex = withoutHash.indexOf('?');
+    const querySuffix = queryIndex >= 0 ? withoutHash.slice(queryIndex) : '';
+    const pathOnly = queryIndex >= 0 ? withoutHash.slice(0, queryIndex) : withoutHash;
+
+    const withoutLeadingSlash = pathOnly.replace(/^\/+/, '');
     const withoutTrailingSlash = withoutLeadingSlash.replace(/\/+$/, '');
     const withoutIndex = withoutTrailingSlash.replace(/\/index\.html$/i, '').replace(/^index\.html$/i, '');
+
     if (!withoutIndex || withoutIndex.toLowerCase() === 'home') {
-      return '/index.html';
+      return { toPageSlug: '/', suffix: `${querySuffix}${hashSuffix}` };
     }
 
-    return `/${withoutIndex}/index.html`;
+    if (!/^[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(withoutIndex)) {
+      return null;
+    }
+
+    return { toPageSlug: `/${withoutIndex}`, suffix: `${querySuffix}${hashSuffix}` };
+  }
+
+  private toPublishHref(fromPageSlug: string, rawHref: string): string {
+    const target = this.extractPublishTarget({ rawHref });
+    if (!target) return rawHref;
+    return `${this.buildPublishHref(fromPageSlug, target.toPageSlug)}${target.suffix}`;
   }
 
   private resolveInternalHref(currentSlug: string, href: string, mode: LinkRenderMode): string {
     if (mode === 'publish') {
-      return this.toPublishHref(href);
+      return this.toPublishHref(currentSlug, href);
     }
     return this.toStaticHref(currentSlug, href);
   }
@@ -243,7 +262,7 @@ export class PreviewRendererService {
         }
         const href =
           mode === 'publish'
-            ? this.toPublishHref(normalizedTarget)
+            ? this.buildPublishHref(currentSlug, normalizedTarget)
             : this.resolveInternalHref(currentSlug, normalizedTarget, mode);
         return `<a href="${this.escapeHtml(href)}">${this.escapeHtml(label)}</a>`;
       })
