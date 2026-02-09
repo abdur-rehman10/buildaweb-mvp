@@ -149,6 +149,7 @@ export function ProjectsApiScreen({
   const [publishStarting, setPublishStarting] = useState(false);
   const [previewDraftLoading, setPreviewDraftLoading] = useState(false);
   const [loadingPublishHistory, setLoadingPublishHistory] = useState(false);
+  const [makingLivePublishId, setMakingLivePublishId] = useState<string | null>(null);
   const [publishHistory, setPublishHistory] = useState<PublishHistoryItem[]>([]);
   const [publishHistoryError, setPublishHistoryError] = useState<string | null>(null);
   const [publishId, setPublishId] = useState<string | null>(null);
@@ -563,6 +564,36 @@ export function ProjectsApiScreen({
     }
   };
 
+  const makePublishLive = async (entry: PublishHistoryItem) => {
+    if (!activeProjectId) return;
+    if (latestPublishId && entry.publishId === latestPublishId) return;
+
+    setMakingLivePublishId(entry.publishId);
+    try {
+      await publishApi.setLatest(activeProjectId, { publishId: entry.publishId });
+      setPublishStatus('live');
+      setPublishedUrl(entry.baseUrl);
+      setPublishError(null);
+
+      await Promise.all([
+        loadPublishHistory(activeProjectId),
+        refreshLatestPublish(),
+        loadProjects(),
+      ]);
+
+      appToast.success('Live publish updated', {
+        eventKey: `publish-make-live-success:${activeProjectId}:${entry.publishId}`,
+      });
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to set live publish');
+      appToast.error(message, {
+        eventKey: `publish-make-live-error:${activeProjectId}:${entry.publishId}`,
+      });
+    } finally {
+      setMakingLivePublishId(null);
+    }
+  };
+
   const refreshPagesAndNavigation = async (projectId: string) => {
     await loadProjectPages(projectId);
     await loadNavigation(projectId);
@@ -961,6 +992,7 @@ export function ProjectsApiScreen({
                 {publishHistory.map((entry) => {
                   const baseUrl = toPublishedDisplayBaseUrl(entry.baseUrl);
                   const homeUrl = toPublishedHomeUrl(baseUrl);
+                  const isLivePublish = !!latestPublishId && entry.publishId === latestPublishId;
                   return (
                     <div key={`publish-history-${entry.publishId}`} className="border rounded-md p-2">
                       <div className="text-xs text-muted-foreground">Created: {formatPublishHistoryTime(entry.createdAt)}</div>
@@ -989,6 +1021,24 @@ export function ProjectsApiScreen({
                         >
                           Copy URL
                         </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void makePublishLive(entry)}
+                          disabled={isLivePublish || makingLivePublishId === entry.publishId}
+                          aria-label={`Make live ${entry.publishId}`}
+                        >
+                          {makingLivePublishId === entry.publishId ? 'Making Live...' : 'Make Live'}
+                        </Button>
+                        {isLivePublish && (
+                          <span
+                            className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
+                            aria-label={`Live publish ${entry.publishId}`}
+                          >
+                            Live
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
