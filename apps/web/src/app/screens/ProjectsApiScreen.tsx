@@ -9,6 +9,7 @@ import {
   pagesApi,
   projectsApi,
   publishApi,
+  type PublishHistoryItem,
   type PageMetaSummary,
   type NavigationItem,
   type ProjectSummary,
@@ -111,6 +112,13 @@ function hasPagesEditedAfterPublish(params: { pages: PageMetaSummary[]; publishe
   });
 }
 
+function formatPublishHistoryTime(value?: string | null): string {
+  if (!value) return 'Unknown';
+  const ts = Date.parse(value);
+  if (Number.isNaN(ts)) return 'Unknown';
+  return new Date(ts).toLocaleString();
+}
+
 export function ProjectsApiScreen({
   activeProjectId,
   activePageId,
@@ -140,6 +148,9 @@ export function ProjectsApiScreen({
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const [publishStarting, setPublishStarting] = useState(false);
   const [previewDraftLoading, setPreviewDraftLoading] = useState(false);
+  const [loadingPublishHistory, setLoadingPublishHistory] = useState(false);
+  const [publishHistory, setPublishHistory] = useState<PublishHistoryItem[]>([]);
+  const [publishHistoryError, setPublishHistoryError] = useState<string | null>(null);
   const [publishId, setPublishId] = useState<string | null>(null);
   const [publishStatus, setPublishStatus] = useState<PublishStatus | null>(null);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
@@ -264,6 +275,21 @@ export function ProjectsApiScreen({
     }
   };
 
+  const loadPublishHistory = async (projectId: string) => {
+    setLoadingPublishHistory(true);
+    setPublishHistoryError(null);
+    try {
+      const res = await publishApi.list(projectId, 10);
+      setPublishHistory(res.publishes ?? []);
+    } catch (err) {
+      const message = getUserFriendlyErrorMessage(err, 'Failed to load publish history');
+      setPublishHistory([]);
+      setPublishHistoryError(message);
+    } finally {
+      setLoadingPublishHistory(false);
+    }
+  };
+
   useEffect(() => {
     void loadProjects();
   }, []);
@@ -275,12 +301,15 @@ export function ProjectsApiScreen({
       setIsNavigationEditorOpen(false);
       setNavigationItems([]);
       setNavigationMessage(null);
+      setPublishHistory([]);
+      setPublishHistoryError(null);
       return;
     }
 
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
     void loadProjectPages(activeProjectId);
+    void loadPublishHistory(activeProjectId);
   }, [activeProjectId, activePageId]);
 
   useEffect(() => {
@@ -319,6 +348,7 @@ export function ProjectsApiScreen({
             eventKey: `publish-live:${publishId}`,
           });
           void refreshLatestPublish();
+          void loadPublishHistory(activeProjectId);
         }
       } catch (err) {
         if (cancelled) return;
@@ -488,6 +518,7 @@ export function ProjectsApiScreen({
         });
       } else if (result.status === 'live') {
         void refreshLatestPublish();
+        void loadPublishHistory(activeProjectId);
       }
     } catch (err) {
       const message = getUserFriendlyErrorMessage(err, 'Failed to publish project');
@@ -515,6 +546,19 @@ export function ProjectsApiScreen({
       setPublishMessage('Failed to copy URL');
       appToast.error('Failed to copy published URL', {
         eventKey: `publish-url-copy-error:${activeProjectId ?? 'unknown'}`,
+      });
+    }
+  };
+
+  const copyPublishHistoryUrl = async (publishIdValue: string, url: string) => {
+    try {
+      await window.navigator.clipboard.writeText(url);
+      appToast.success('Published URL copied', {
+        eventKey: `publish-history-url-copied:${publishIdValue}`,
+      });
+    } catch {
+      appToast.error('Failed to copy published URL', {
+        eventKey: `publish-history-url-copy-error:${publishIdValue}`,
       });
     }
   };
@@ -898,6 +942,60 @@ export function ProjectsApiScreen({
               )}
             </div>
           )}
+
+          <div className="border rounded-md p-3 space-y-2">
+            <h3 className="text-sm font-medium">Publish History</h3>
+            {loadingPublishHistory && (
+              <p className="text-sm text-muted-foreground">Loading publish history...</p>
+            )}
+            {!loadingPublishHistory && publishHistoryError && (
+              <p className="text-sm text-destructive" role="alert">
+                {publishHistoryError}
+              </p>
+            )}
+            {!loadingPublishHistory && !publishHistoryError && publishHistory.length === 0 && (
+              <p className="text-sm text-muted-foreground">No publishes yet</p>
+            )}
+            {!loadingPublishHistory && publishHistory.length > 0 && (
+              <div className="space-y-2">
+                {publishHistory.map((entry) => {
+                  const baseUrl = toPublishedDisplayBaseUrl(entry.baseUrl);
+                  const homeUrl = toPublishedHomeUrl(baseUrl);
+                  return (
+                    <div key={`publish-history-${entry.publishId}`} className="border rounded-md p-2">
+                      <div className="text-xs text-muted-foreground">Created: {formatPublishHistoryTime(entry.createdAt)}</div>
+                      <div className="text-xs">
+                        Status:{' '}
+                        <span className="font-medium">
+                          {entry.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-2">
+                        <a
+                          href={homeUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-sm underline text-primary"
+                          aria-label={`Open publish ${entry.publishId}`}
+                        >
+                          Open
+                        </a>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => void copyPublishHistoryUrl(entry.publishId, homeUrl)}
+                          aria-label={`Copy publish URL ${entry.publishId}`}
+                        >
+                          Copy URL
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 space-y-4">
