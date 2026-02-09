@@ -263,7 +263,7 @@ describe('PublishService pretty URLs', () => {
     expect(minio.upload).not.toHaveBeenCalled();
   });
 
-  it('uploads published HTML with directory-style navigation links', async () => {
+  it('uploads published HTML with canonical index.html links for nav and internal buttons', async () => {
     const result = await service.createAndPublish(baseParams);
 
     expect(result.status).toBe('live');
@@ -282,13 +282,14 @@ describe('PublishService pretty URLs', () => {
 
     const homeHtml = homeUpload!.buffer.toString('utf-8');
     expect(homeHtml).toContain('<nav class="baw-nav">');
-    expect(homeHtml).toContain('href="about/"');
-    expect(homeHtml).not.toContain('index.html');
+    expect(homeHtml).toContain('href="/about/index.html"');
+    expect(homeHtml).not.toContain('href="/home/index.html"');
 
     const aboutHtml = aboutUpload!.buffer.toString('utf-8');
-    expect(aboutHtml).toContain('href="../"');
+    expect(aboutHtml).toContain('href="/index.html"');
+    expect(aboutHtml).toContain('<span>About</span>');
     expect(aboutHtml).toContain('href="../styles.css"');
-    expect(aboutHtml).not.toContain('index.html');
+    expect(aboutHtml).not.toContain('href="/home/index.html"');
 
     const css = cssUpload!.buffer.toString('utf-8');
     expect(css).toContain('.baw-nav{display:flex;gap:12px;padding:12px 0}');
@@ -307,6 +308,40 @@ describe('PublishService pretty URLs', () => {
         },
       },
     );
+  });
+
+  it('keeps external button links unchanged in published html', async () => {
+    pageModel.find.mockReturnValueOnce(
+      mockLeanExec([
+        {
+          _id: '507f1f77bcf86cd799439021',
+          title: 'Home',
+          slug: '/',
+          isHome: true,
+          editorJson: {
+            sections: [
+              {
+                blocks: [
+                  {
+                    nodes: [{ type: 'button', label: 'External', href: 'https://example.com/docs' }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ]),
+    );
+    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+
+    await service.createAndPublish(baseParams);
+
+    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
+    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+
+    expect(homeUpload).toBeDefined();
+    const html = homeUpload!.buffer.toString('utf-8');
+    expect(html).toContain('href="https://example.com/docs"');
   });
 
   it('injects seo title and description meta tags into published html', async () => {
