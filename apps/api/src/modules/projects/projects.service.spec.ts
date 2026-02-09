@@ -132,3 +132,99 @@ describe('ProjectsService.setHomePage', () => {
     expect(pageModel.updateOne).not.toHaveBeenCalled();
   });
 });
+
+describe('ProjectsService.settings', () => {
+  let service: ProjectsService;
+  let projectModel: MockProjectModel;
+  let pageModel: MockPageModel;
+  let navigationModel: MockNavigationModel;
+
+  beforeEach(() => {
+    projectModel = {
+      create: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+    };
+
+    pageModel = {
+      findOne: jest.fn(),
+      updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+      updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+    };
+
+    navigationModel = {
+      findOne: jest.fn(),
+    };
+
+    service = new ProjectsService(
+      projectModel as unknown as Model<ProjectDocument>,
+      pageModel as unknown as Model<PageDocument>,
+      navigationModel as unknown as Model<NavigationDocument>,
+    );
+  });
+
+  it('returns mapped settings with locale fallback', async () => {
+    projectModel.findOne.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({
+        _id: 'project-1',
+        siteName: ' My Site ',
+        logoAssetId: null,
+        faviconAssetId: 'favicon-asset',
+        defaultOgImageAssetId: '',
+        locale: '',
+        defaultLocale: 'en',
+      }),
+    });
+
+    const settings = await service.getSettings({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: 'project-1',
+    });
+
+    expect(settings).toEqual({
+      siteName: 'My Site',
+      logoAssetId: null,
+      faviconAssetId: 'favicon-asset',
+      defaultOgImageAssetId: null,
+      locale: 'en',
+    });
+  });
+
+  it('updates and persists settings', async () => {
+    const save = jest.fn().mockResolvedValue(undefined);
+    projectModel.findOne.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({
+        _id: 'project-1',
+        siteName: 'Old Name',
+        logoAssetId: null,
+        faviconAssetId: null,
+        defaultOgImageAssetId: null,
+        locale: 'en',
+        defaultLocale: 'en',
+        save,
+      }),
+    });
+
+    const settings = await service.updateSettings({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: 'project-1',
+      siteName: ' New Name ',
+      logoAssetId: 'logo-asset',
+      faviconAssetId: 'favicon-asset',
+      defaultOgImageAssetId: 'og-asset',
+      locale: 'fr',
+    });
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(settings).toEqual({
+      siteName: 'New Name',
+      logoAssetId: 'logo-asset',
+      faviconAssetId: 'favicon-asset',
+      defaultOgImageAssetId: 'og-asset',
+      locale: 'fr',
+    });
+  });
+});

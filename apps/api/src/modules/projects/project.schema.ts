@@ -30,6 +30,21 @@ export class Project {
   @Prop({ type: Date, default: null })
   publishedAt?: Date | null;
 
+  @Prop({ type: String, default: null, trim: true })
+  siteName?: string | null;
+
+  @Prop({ type: String, default: null, trim: true })
+  logoAssetId?: string | null;
+
+  @Prop({ type: String, default: null, trim: true })
+  faviconAssetId?: string | null;
+
+  @Prop({ type: String, default: null, trim: true })
+  defaultOgImageAssetId?: string | null;
+
+  @Prop({ type: String, required: true, default: 'en', trim: true })
+  locale!: string;
+
   // from @Schema({ timestamps: true })
   createdAt?: Date;
   updatedAt?: Date;
