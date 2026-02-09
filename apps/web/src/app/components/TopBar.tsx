@@ -39,6 +39,7 @@ export function TopBar({ currentScreen, onSearch, onNotifications, onProfile, on
       'project-settings': 'Project Settings',
       'trash': 'Trash',
       'project-folders': 'Project Folders',
+      'assets': 'Assets Library',
     };
     return titles[screen] || 'Buildaweb';
   };

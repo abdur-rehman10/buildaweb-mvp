@@ -312,6 +312,7 @@ export type UploadAssetResult = {
 export type ProjectAsset = {
   id: string;
   fileName: string;
+  mimeType?: string | null;
   size: number;
   publicUrl: string;
   createdAt?: string;
