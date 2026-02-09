@@ -1,36 +1,52 @@
 # PLAN.md
 
 ## Branch
-feat/seo-ui
+feat/project-settings
 
 ## Goal
-Add page-level SEO UI (title + meta description) and inject those head tags in preview and publish HTML.
+Implement Project Settings UI and persistence for site-level settings, then apply those settings in preview and publish HTML head output.
 
 ## In Scope
-- Frontend Page Settings SEO panel with:
-  - SEO Title
-  - Meta Description
-- Load and save these values through page `seoJson` via the existing page save/update flow.
-- Rehydrate saved values on page reload.
-- Preview renderer injects:
-  - `<title>` from `seoJson.title`, fallback to `page.title`
-  - `<meta name="description">` when `seoJson.description` is present
-- Publish generator injects the same head tags for:
-  - home: `index.html`
-  - non-home pages: `<slug>/index.html`
+- Backend project settings fields:
+  - `siteName` (string)
+  - `logoAssetId` (string|null)
+  - `faviconAssetId` (string|null)
+  - `defaultOgImageAssetId` (string|null)
+  - `locale` (string, default `en`)
+- Backend endpoints (JWT + tenant/user scoped):
+  - `GET /projects/:projectId/settings`
+  - `PUT /projects/:projectId/settings`
+- Frontend Project Settings panel:
+  - Site Name
+  - Locale
+  - Logo asset selection/upload
+  - Favicon asset selection/upload
+  - Default OG image asset selection/upload
+- Persist settings through PUT and rehydrate through GET on reload.
+- Preview + publish head usage:
+  - `<title>`: page SEO title if present, else project `siteName`, else page title
+  - `<link rel="icon" ...>` when favicon is set
+  - `<meta property="og:image" ...>` from project default OG image when set
+  - `<html lang="...">` from project locale, fallback `en`
 
 ## Out of Scope
-- `sitemap.xml`
-- `robots.txt`
-- Open Graph tags
-- Twitter cards
-- JSON-LD / Schema.org
-- Project-level or global SEO defaults
-- New endpoints or routing changes
+- Custom domains
+- Billing
+- AI generation
+- Global styles/tokens
+- Page-level OG overrides
+- Additional SEO features beyond the tags above
 
 ## Definition of Done
-- SEO panel is visible in Page Settings.
-- `seoJson.title` and `seoJson.description` persist and rehydrate.
-- Preview HTML head includes correct fallback title + optional description meta tag.
-- Published HTML head includes correct fallback title + optional description meta tag.
-- Manual checks pass for save, refresh, preview, and published `index.html` files.
+- Project Settings UI is visible and editable.
+- Settings persist and rehydrate after refresh.
+- Preview HTML contains correct title fallback, favicon, og:image, and `lang`.
+- Published home and non-home HTML contain the same settings-based head behavior.
+- Existing SEO behavior is not broken.
+- Manual tests pass.
+
+## Manual Tests
+1. Open Project Settings, set Site Name + Locale, save, refresh, and confirm values persist.
+2. Select/upload logo, favicon, and default OG image, save, refresh, and confirm links persist.
+3. Open Preview and confirm page source includes favicon + og:image and correct `html lang`.
+4. Publish and open `index.html` and a non-home page HTML to confirm the same head tags and title fallback behavior.
