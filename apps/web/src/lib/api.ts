@@ -311,6 +311,17 @@ export type LatestPublishResult = {
   errorMessage?: string;
 };
 
+export type PublishHistoryItem = {
+  publishId: string;
+  status: PublishStatus;
+  createdAt?: string | null;
+  baseUrl: string;
+};
+
+export type ListPublishesResult = {
+  publishes: PublishHistoryItem[];
+};
+
 export const authApi = {
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/api/v1/auth/login', {
@@ -458,6 +469,15 @@ export const publishApi = {
     return apiRequest<PublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish`, {
       method: 'POST',
     });
+  },
+  list(projectId: string, limit = 10) {
+    const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
+    return apiRequest<ListPublishesResult>(
+      `/api/v1/projects/${encodeURIComponent(projectId)}/publishes?limit=${encodeURIComponent(String(normalizedLimit))}`,
+      {
+        method: 'GET',
+      },
+    );
   },
   getLatest(projectId: string) {
     return apiRequest<LatestPublishResult | null>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
