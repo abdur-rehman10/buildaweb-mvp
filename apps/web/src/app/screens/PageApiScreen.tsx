@@ -456,6 +456,8 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       </div>
 
       <Card className="p-4 space-y-4">
+        <h2 className="text-base font-semibold">Page Settings</h2>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <Input
             label="Title"
@@ -493,79 +495,81 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
         </div>
 
         <div className="space-y-2">
-          <div className="border rounded-md p-3 space-y-3">
-            <h3 className="text-sm font-medium">SEO</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
+          <details className="border rounded-md p-3 space-y-3" open>
+            <summary className="text-sm font-medium cursor-pointer select-none">SEO Settings</summary>
+            <div className="mt-3 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Input
+                    label="SEO Title"
+                    value={seoForm.title}
+                    onChange={(e) => setSeoForm((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="SEO title"
+                  />
+                  <p className="text-xs text-muted-foreground" role="note">
+                    {seoForm.title.length}/60
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Input
+                    label="OG Title"
+                    value={seoForm.ogTitle}
+                    onChange={(e) => setSeoForm((prev) => ({ ...prev, ogTitle: e.target.value }))}
+                    placeholder="Open Graph title"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium mb-2">SEO Description</label>
+                  <textarea
+                    className="w-full min-h-24 px-3 py-2 rounded-[var(--radius-sm)] border bg-input-background text-foreground border-input"
+                    value={seoForm.description}
+                    onChange={(e) => setSeoForm((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="SEO description"
+                  />
+                  <p className="text-xs text-muted-foreground" role="note">
+                    {seoForm.description.length}/160
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium mb-2">OG Description</label>
+                  <textarea
+                    className="w-full min-h-24 px-3 py-2 rounded-[var(--radius-sm)] border bg-input-background text-foreground border-input"
+                    value={seoForm.ogDescription}
+                    onChange={(e) => setSeoForm((prev) => ({ ...prev, ogDescription: e.target.value }))}
+                    placeholder="Open Graph description"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
                 <Input
-                  label="SEO Title"
-                  value={seoForm.title}
-                  onChange={(e) => setSeoForm((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="SEO title"
+                  label="OG Image Asset ID"
+                  value={seoForm.ogImageAssetId ?? ''}
+                  onChange={(e) =>
+                    setSeoForm((prev) => ({
+                      ...prev,
+                      ogImageAssetId: e.target.value.trim() ? e.target.value.trim() : null,
+                    }))
+                  }
+                  placeholder="Select from media library"
                 />
-                <p className="text-xs text-muted-foreground" role="note">
-                  {seoForm.title.length}/60
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Input
-                  label="OG Title"
-                  value={seoForm.ogTitle}
-                  onChange={(e) => setSeoForm((prev) => ({ ...prev, ogTitle: e.target.value }))}
-                  placeholder="Open Graph title"
-                />
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setSeoImagePickerOpen(true)}>
+                    Select from Media Library
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSeoForm((prev) => ({ ...prev, ogImageAssetId: null }))}
+                    disabled={!seoForm.ogImageAssetId}
+                  >
+                    Clear
+                  </Button>
+                </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-sm font-medium mb-2">SEO Description</label>
-                <textarea
-                  className="w-full min-h-24 px-3 py-2 rounded-[var(--radius-sm)] border bg-input-background text-foreground border-input"
-                  value={seoForm.description}
-                  onChange={(e) => setSeoForm((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="SEO description"
-                />
-                <p className="text-xs text-muted-foreground" role="note">
-                  {seoForm.description.length}/160
-                </p>
-              </div>
-              <div className="space-y-1">
-                <label className="block text-sm font-medium mb-2">OG Description</label>
-                <textarea
-                  className="w-full min-h-24 px-3 py-2 rounded-[var(--radius-sm)] border bg-input-background text-foreground border-input"
-                  value={seoForm.ogDescription}
-                  onChange={(e) => setSeoForm((prev) => ({ ...prev, ogDescription: e.target.value }))}
-                  placeholder="Open Graph description"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Input
-                label="OG Image Asset ID"
-                value={seoForm.ogImageAssetId ?? ''}
-                onChange={(e) =>
-                  setSeoForm((prev) => ({
-                    ...prev,
-                    ogImageAssetId: e.target.value.trim() ? e.target.value.trim() : null,
-                  }))
-                }
-                placeholder="Select from media library"
-              />
-              <div className="flex items-center gap-2">
-                <Button type="button" variant="outline" onClick={() => setSeoImagePickerOpen(true)}>
-                  Select from Media Library
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setSeoForm((prev) => ({ ...prev, ogImageAssetId: null }))}
-                  disabled={!seoForm.ogImageAssetId}
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
-          </div>
+          </details>
 
           <div className="flex items-end gap-3">
             <div>
