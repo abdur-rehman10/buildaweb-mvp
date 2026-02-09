@@ -1,22 +1,23 @@
 # PLAN.md
 
 ## Branch
-feat/publish-history
+feat/publish-rollback
 
 ## Goal
-Show publish history per project (last N publishes) with status and URL.
+Allow selecting a previous publish from Publish History and mark it as "Live".
 
 ## In Scope
-- Backend: list publishes by project, sorted newest first, with default limit 10.
-- Frontend: show a small publish history list/table with `Open` and `Copy` actions.
-- Keep existing publish flow unchanged.
+- Backend endpoint to set `project.latestPublishId` to an existing publish belonging to the project.
+- Update `publishedAt` accordingly.
+- Frontend button `Make Live` per publish row.
+- UI updates so the Live indicator moves to the selected publish.
 
 ## Out of Scope
-- Delete publish.
-- Rollback (changing `latestPublishId`).
-- Pagination UI beyond "show last 10".
+- Deleting publishes.
+- Re-generating files.
+- Multi-tenant admin features.
 
 ## Definition of Done
-- User can see the latest publishes for a project after refresh.
-- User can open publish URLs from history.
-- User can copy publish URLs from history.
+- User clicks `Make Live` on any prior publish.
+- After refresh, the project shows that publish as Live.
+- The live URL uses that selected publishId.
