@@ -338,7 +338,7 @@ describe('ProjectsApiScreen toasts', () => {
     });
   });
 
-  it('shows Live status and link on initial render when latest publish exists', async () => {
+  it('shows Live (up to date) status and link on initial render when latest publish exists', async () => {
     const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-2/';
     vi.mocked(projectsApi.get).mockResolvedValueOnce({
       project: {
@@ -358,7 +358,7 @@ describe('ProjectsApiScreen toasts', () => {
 
     renderScreen();
 
-    const status = await screen.findByText('Live');
+    const status = await screen.findByText('Live (up to date)');
     expect(status).not.toBeNull();
     expect(projectsApi.get).toHaveBeenCalledWith('project-1');
     expect(publishApi.getStatus).toHaveBeenCalledWith('project-1', 'publish-2');
@@ -385,7 +385,7 @@ describe('ProjectsApiScreen toasts', () => {
     expect(status).not.toBeNull();
   });
 
-  it('updates to Live when a publish completes', async () => {
+  it('updates to Live (up to date) when a publish completes', async () => {
     const latestUrl = 'http://localhost:9000/buildaweb-sites/tenant/project/publish-3/';
     vi.mocked(projectsApi.get)
       .mockResolvedValueOnce({
@@ -435,7 +435,7 @@ describe('ProjectsApiScreen toasts', () => {
     fireEvent.click(publishButton);
 
     await waitFor(() => {
-      expect(screen.getByText('Live')).not.toBeNull();
+      expect(screen.getByText('Live (up to date)')).not.toBeNull();
     });
 
     await waitFor(() => {
@@ -444,5 +444,44 @@ describe('ProjectsApiScreen toasts', () => {
 
     const homeLink = await screen.findByRole('link', { name: 'Open published site' });
     expect(homeLink.getAttribute('href')).toBe(`${latestUrl}index.html`);
+  });
+
+  it('shows Live (outdated) and republish CTA when pages changed after publishedAt', async () => {
+    vi.mocked(pagesApi.list).mockResolvedValueOnce({
+      pages: [
+        {
+          id: 'page-home',
+          title: 'Home',
+          slug: '/',
+          isHome: true,
+          version: 2,
+          updatedAt: '2026-02-09T12:00:00.000Z',
+        },
+      ],
+    });
+
+    vi.mocked(projectsApi.get).mockResolvedValueOnce({
+      project: {
+        id: 'project-1',
+        name: 'Main site',
+        status: 'published',
+        defaultLocale: 'en',
+        latestPublishId: 'publish-10',
+        publishedAt: '2026-02-09T11:00:00.000Z',
+      },
+    });
+    vi.mocked(publishApi.getStatus).mockResolvedValueOnce({
+      publishId: 'publish-10',
+      status: 'live',
+      url: 'http://localhost:9000/buildaweb-sites/tenant/project/publish-10/',
+    });
+
+    renderScreen();
+
+    const status = await screen.findByText('Live (outdated) • Unpublished changes');
+    expect(status).not.toBeNull();
+
+    const republishButton = await screen.findByRole('button', { name: 'Republish to update live site' });
+    expect((republishButton as HTMLButtonElement).disabled).toBe(false);
   });
 });
