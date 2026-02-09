@@ -7,6 +7,7 @@ import { PagesModule } from '../pages/pages.module';
 import { Project, ProjectSchema } from '../projects/project.schema';
 import { ProjectsModule } from '../projects/projects.module';
 import { PublishController } from './publish.controller';
+import { PublishesController } from './publishes.controller';
 import { Publish, PublishSchema } from './publish.schema';
 import { PublishService } from './publish.service';
 
@@ -22,7 +23,7 @@ import { PublishService } from './publish.service';
     PagesModule,
     AssetsModule,
   ],
-  controllers: [PublishController],
+  controllers: [PublishController, PublishesController],
   providers: [PublishService],
   exports: [PublishService],
 })
