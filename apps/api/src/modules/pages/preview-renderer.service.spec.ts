@@ -58,30 +58,20 @@ describe('PreviewRendererService pretty URLs', () => {
     expect(preview.html).not.toContain('index.html');
   });
 
-  it('renders seo title, description, and og tags with og image resolved from assets map', () => {
+  it('renders seo title and description meta tags', () => {
     const preview = service.render({
       pageId: 'page-home',
       pageTitle: 'Fallback Title',
       seoJson: {
         title: 'SEO Title',
         description: 'SEO Description',
-        ogTitle: 'OG Title',
-        ogDescription: 'OG Description',
-        ogImageAssetId: 'asset-1',
-      },
-      assetUrlById: {
-        'asset-1': 'http://localhost:9000/buildaweb/assets/hero.png',
       },
       editorJson: { sections: [] },
     });
 
     expect(preview.headTags).toContain('<title>SEO Title</title>');
     expect(preview.headTags).toContain('<meta name="description" content="SEO Description" />');
-    expect(preview.headTags).toContain('<meta property="og:title" content="OG Title" />');
-    expect(preview.headTags).toContain('<meta property="og:description" content="OG Description" />');
-    expect(preview.headTags).toContain(
-      '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/hero.png" />',
-    );
+    expect(preview.headTags).not.toContain('property="og:');
   });
 
   it('falls back title to page title and omits optional meta tags when seoJson is empty', () => {

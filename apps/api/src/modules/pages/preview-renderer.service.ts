@@ -202,30 +202,15 @@ export class PreviewRendererService {
   private renderSeoHeadTags(params: {
     seoJson: unknown;
     pageTitle: string;
-    assetUrlById: Record<string, string>;
   }): string {
     const seo = this.asRecord(params.seoJson) ?? {};
     const fallbackTitle = params.pageTitle.trim() || 'Buildaweb Site';
     const title = this.readString(seo.title).trim() || fallbackTitle;
     const description = this.readString(seo.description).trim();
-    const ogTitle = this.readString(seo.ogTitle).trim();
-    const ogDescription = this.readString(seo.ogDescription).trim();
-    const ogImageAssetId = this.readString(seo.ogImageAssetId).trim();
-    const ogImageFromAssetId = ogImageAssetId ? this.readString(params.assetUrlById[ogImageAssetId]).trim() : '';
-    const ogImage = ogImageFromAssetId || this.readString(seo.ogImage).trim();
 
     const tags = [`<title>${this.escapeHtml(title)}</title>`];
     if (description) {
       tags.push(`<meta name="description" content="${this.escapeHtml(description)}" />`);
-    }
-    if (ogTitle) {
-      tags.push(`<meta property="og:title" content="${this.escapeHtml(ogTitle)}" />`);
-    }
-    if (ogDescription) {
-      tags.push(`<meta property="og:description" content="${this.escapeHtml(ogDescription)}" />`);
-    }
-    if (ogImage) {
-      tags.push(`<meta property="og:image" content="${this.escapeHtml(ogImage)}" />`);
     }
     return tags.join('\n');
   }
@@ -247,7 +232,6 @@ export class PreviewRendererService {
     const headTags = this.renderSeoHeadTags({
       seoJson: params.seoJson,
       pageTitle,
-      assetUrlById,
     });
     const navHtml = this.renderNavigation(navLinks, currentSlug);
     const sections = this.asArray(pageRecord.sections)

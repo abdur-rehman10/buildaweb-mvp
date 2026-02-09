@@ -87,9 +87,6 @@ describe('PageApiScreen SEO panel', () => {
         seoJson: {
           title: 'Initial SEO Title',
           description: 'Initial SEO Description',
-          ogTitle: 'Initial OG Title',
-          ogDescription: 'Initial OG Description',
-          ogImageAssetId: 'asset-1',
         },
         version: 3,
       },
@@ -112,9 +109,7 @@ describe('PageApiScreen SEO panel', () => {
 
     expect(await screen.findByDisplayValue('Initial SEO Title')).not.toBeNull();
     expect(screen.getByDisplayValue('Initial SEO Description')).not.toBeNull();
-    expect(screen.getByDisplayValue('Initial OG Title')).not.toBeNull();
-    expect(screen.getByDisplayValue('Initial OG Description')).not.toBeNull();
-    expect(screen.getByDisplayValue('asset-1')).not.toBeNull();
+    expect(screen.getByText('Meta Description')).not.toBeNull();
   });
 
   it('saves seoJson via pages update payload', async () => {
@@ -124,17 +119,8 @@ describe('PageApiScreen SEO panel', () => {
     fireEvent.change(screen.getByPlaceholderText('SEO title'), {
       target: { value: 'New SEO Title' },
     });
-    fireEvent.change(screen.getByPlaceholderText('SEO description'), {
+    fireEvent.change(screen.getByPlaceholderText('Meta description'), {
       target: { value: 'New SEO Description' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('Open Graph title'), {
-      target: { value: 'New OG Title' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('Open Graph description'), {
-      target: { value: 'New OG Description' },
-    });
-    fireEvent.change(screen.getByPlaceholderText('Select from media library'), {
-      target: { value: 'asset-2' },
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Page' }));
@@ -148,9 +134,6 @@ describe('PageApiScreen SEO panel', () => {
           seoJson: {
             title: 'New SEO Title',
             description: 'New SEO Description',
-            ogTitle: 'New OG Title',
-            ogDescription: 'New OG Description',
-            ogImageAssetId: 'asset-2',
           },
         }),
       );
