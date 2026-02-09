@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
@@ -12,6 +12,27 @@ export class ProjectsService {
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
     @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
   ) {}
+
+  private normalizeOptionalString(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private normalizeLocale(value: unknown, fallback = 'en'): string {
+    const normalized = this.normalizeOptionalString(value);
+    return normalized ?? fallback;
+  }
+
+  private mapSettings(project: ProjectDocument) {
+    return {
+      siteName: this.normalizeOptionalString(project.siteName),
+      logoAssetId: this.normalizeOptionalString(project.logoAssetId),
+      faviconAssetId: this.normalizeOptionalString(project.faviconAssetId),
+      defaultOgImageAssetId: this.normalizeOptionalString(project.defaultOgImageAssetId),
+      locale: this.normalizeLocale(project.locale, this.normalizeLocale(project.defaultLocale, 'en')),
+    };
+  }
 
   async create(params: { tenantId: string; ownerUserId: string; name: string; defaultLocale: string }) {
     return this.projectModel.create({
@@ -31,6 +52,79 @@ export class ProjectsService {
     return this.projectModel
       .findOne({ _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId })
       .exec();
+  }
+
+  async getSettings(params: { tenantId: string; ownerUserId: string; projectId: string }) {
+    const project = await this.getByIdScoped(params);
+    if (!project) {
+      return null;
+    }
+
+    return this.mapSettings(project);
+  }
+
+  async updateSettings(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+    siteName?: string | null;
+    logoAssetId?: string | null;
+    faviconAssetId?: string | null;
+    defaultOgImageAssetId?: string | null;
+    locale?: string | null;
+  }) {
+    const project = await this.getByIdScoped(params);
+    if (!project) {
+      return null;
+    }
+
+    const originalHomePageId = project.homePageId ? String(project.homePageId) : null;
+    const setPayload: {
+      siteName?: string | null;
+      logoAssetId?: string | null;
+      faviconAssetId?: string | null;
+      defaultOgImageAssetId?: string | null;
+      locale?: string;
+    } = {};
+
+    if (Object.prototype.hasOwnProperty.call(params, 'siteName')) {
+      setPayload.siteName = this.normalizeOptionalString(params.siteName);
+    }
+    if (Object.prototype.hasOwnProperty.call(params, 'logoAssetId')) {
+      setPayload.logoAssetId = this.normalizeOptionalString(params.logoAssetId);
+    }
+    if (Object.prototype.hasOwnProperty.call(params, 'faviconAssetId')) {
+      setPayload.faviconAssetId = this.normalizeOptionalString(params.faviconAssetId);
+    }
+    if (Object.prototype.hasOwnProperty.call(params, 'defaultOgImageAssetId')) {
+      setPayload.defaultOgImageAssetId = this.normalizeOptionalString(params.defaultOgImageAssetId);
+    }
+    if (Object.prototype.hasOwnProperty.call(params, 'locale')) {
+      setPayload.locale = this.normalizeLocale(params.locale, this.normalizeLocale(project.defaultLocale, 'en'));
+    } else if (!this.normalizeOptionalString(project.locale)) {
+      setPayload.locale = this.normalizeLocale(project.defaultLocale, 'en');
+    }
+
+    if (Object.keys(setPayload).length > 0) {
+      await this.projectModel
+        .updateOne(
+          { _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId },
+          { $set: setPayload },
+        )
+        .exec();
+    }
+
+    const refreshedProject = await this.getByIdScoped(params);
+    if (!refreshedProject) {
+      return null;
+    }
+
+    const refreshedHomePageId = refreshedProject.homePageId ? String(refreshedProject.homePageId) : null;
+    if (refreshedHomePageId !== originalHomePageId) {
+      throw new InternalServerErrorException('Project home page changed unexpectedly while updating settings');
+    }
+
+    return this.mapSettings(refreshedProject);
   }
 
   async setLatestPublish(params: {

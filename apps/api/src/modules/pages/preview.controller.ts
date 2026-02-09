@@ -169,7 +169,7 @@ export class PreviewController {
       .filter((item): item is { label: string; targetSlug: string } => item !== null);
   }
 
-  private collectAssetRefs(editorJson: unknown): string[] {
+  private collectAssetRefs(editorJson: unknown, additionalRefs: string[] = []): string[] {
     const page = this.asRecord(editorJson);
     const sections = this.asArray(page?.sections);
     const refs = new Set<string>();
@@ -194,6 +194,13 @@ export class PreviewController {
             refs.add(assetRef);
           }
         }
+      }
+    }
+
+    for (const ref of additionalRefs) {
+      const normalized = this.readString(ref).trim();
+      if (normalized) {
+        refs.add(normalized);
       }
     }
 
@@ -224,7 +231,9 @@ export class PreviewController {
       throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
-    const assetRefs = this.collectAssetRefs(page.editorJson);
+    const faviconAssetId = this.readString(project.faviconAssetId).trim();
+    const defaultOgImageAssetId = this.readString(project.defaultOgImageAssetId).trim();
+    const assetRefs = this.collectAssetRefs(page.editorJson, [faviconAssetId, defaultOgImageAssetId]);
     const validAssetIds = assetRefs.filter((assetId) => Types.ObjectId.isValid(assetId));
     const assets = await this.assets.getByIdsScoped({
       tenantId,
@@ -244,8 +253,12 @@ export class PreviewController {
       assetUrlById,
       navLinks,
       currentSlug,
-      pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+      pageTitle: this.readString(page.title) || 'Buildaweb Site',
       seoJson: page.seoJson,
+      siteName: this.readString(project.siteName),
+      faviconUrl: faviconAssetId ? this.readString(assetUrlById[faviconAssetId]) : '',
+      defaultOgImageUrl: defaultOgImageAssetId ? this.readString(assetUrlById[defaultOgImageAssetId]) : '',
+      locale: this.readString(project.locale) || this.readString(project.defaultLocale) || 'en',
     });
 
     return ok(preview);
