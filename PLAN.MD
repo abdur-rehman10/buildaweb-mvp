@@ -1,52 +1,39 @@
 # PLAN.md
 
 ## Branch
-feat/project-settings
+fix/published-nav-links
 
 ## Goal
-Implement Project Settings UI and persistence for site-level settings, then apply those settings in preview and publish HTML head output.
+Harden published static-site navigation and internal content links so they always resolve on MinIO static hosting.
 
 ## In Scope
-- Backend project settings fields:
-  - `siteName` (string)
-  - `logoAssetId` (string|null)
-  - `faviconAssetId` (string|null)
-  - `defaultOgImageAssetId` (string|null)
-  - `locale` (string, default `en`)
-- Backend endpoints (JWT + tenant/user scoped):
-  - `GET /projects/:projectId/settings`
-  - `PUT /projects/:projectId/settings`
-- Frontend Project Settings panel:
-  - Site Name
-  - Locale
-  - Logo asset selection/upload
-  - Favicon asset selection/upload
-  - Default OG image asset selection/upload
-- Persist settings through PUT and rehydrate through GET on reload.
-- Preview + publish head usage:
-  - `<title>`: page SEO title if present, else project `siteName`, else page title
-  - `<link rel="icon" ...>` when favicon is set
-  - `<meta property="og:image" ...>` from project default OG image when set
-  - `<html lang="...">` from project locale, fallback `en`
+- Publish output nav links must be canonical:
+  - Home -> `/index.html`
+  - Other pages -> `/<slug>/index.html`
+- Publish output internal content links (for example button href values) must be normalized:
+  - `/` -> `/index.html`
+  - `/about` or `about` -> `/about/index.html`
+  - External links (`http`, `https`, `mailto`, `tel`) remain unchanged.
+- Keep preview behavior unchanged.
+- Keep existing publish storage paths and API contracts unchanged.
 
 ## Out of Scope
-- Custom domains
-- Billing
-- AI generation
-- Global styles/tokens
-- Page-level OG overrides
-- Additional SEO features beyond the tags above
+- New UI
+- New endpoints
+- Refactors unrelated to publish-link generation
+- MinIO infrastructure/path changes
 
 ## Definition of Done
-- Project Settings UI is visible and editable.
-- Settings persist and rehydrate after refresh.
-- Preview HTML contains correct title fallback, favicon, og:image, and `lang`.
-- Published home and non-home HTML contain the same settings-based head behavior.
-- Existing SEO behavior is not broken.
+- Published nav links always resolve correctly and never use directory-only URLs.
+- Published internal button/content links resolve to canonical `index.html` targets.
+- Home never maps to `/home/index.html`.
+- Preview behavior is unchanged.
 - Manual tests pass.
 
 ## Manual Tests
-1. Open Project Settings, set Site Name + Locale, save, refresh, and confirm values persist.
-2. Select/upload logo, favicon, and default OG image, save, refresh, and confirm links persist.
-3. Open Preview and confirm page source includes favicon + og:image and correct `html lang`.
-4. Publish and open `index.html` and a non-home page HTML to confirm the same head tags and title fallback behavior.
+1. Publish a project with Home + About.
+2. Open published Home `index.html`, click About in nav, and confirm About loads.
+3. From About page, click Home in nav, and confirm it returns to Home.
+4. Click About multiple times and confirm no path nesting/crash.
+5. Verify generated HTML contains `href="/index.html"` for Home and `href="/about/index.html"` for About.
+6. Verify external links are not modified.
