@@ -195,6 +195,23 @@ ${params.bodyHtml}
       .exec();
   }
 
+  async listByProjectScoped(params: {
+    tenantId: string;
+    projectId: string;
+    ownerUserId: string;
+    limit: number;
+  }) {
+    return this.publishModel
+      .find({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+        ownerUserId: params.ownerUserId,
+      })
+      .sort({ createdAt: -1 })
+      .limit(params.limit)
+      .exec();
+  }
+
   async createAndPublish(params: { tenantId: string; projectId: string; ownerUserId: string }) {
     const baseUrl = this.publishBaseUrl({
       tenantId: params.tenantId,
