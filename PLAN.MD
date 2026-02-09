@@ -1,24 +1,36 @@
 # PLAN.md
 
 ## Branch
-fix/publish-preflight
+feat/seo-ui
 
 ## Goal
-Add preflight validation before publish so broken inputs are caught early.
+Add page-level SEO UI (title + meta description) and inject those head tags in preview and publish HTML.
 
 ## In Scope
-- Backend: validate pages + navigation before generating/uploading.
-- Frontend: surface friendly validation errors and block publish until resolved.
+- Frontend Page Settings SEO panel with:
+  - SEO Title
+  - Meta Description
+- Load and save these values through page `seoJson` via the existing page save/update flow.
+- Rehydrate saved values on page reload.
+- Preview renderer injects:
+  - `<title>` from `seoJson.title`, fallback to `page.title`
+  - `<meta name="description">` when `seoJson.description` is present
+- Publish generator injects the same head tags for:
+  - home: `index.html`
+  - non-home pages: `<slug>/index.html`
 
 ## Out of Scope
-- Auto-fixing slugs.
-- AI suggestions.
-- SEO features.
+- `sitemap.xml`
+- `robots.txt`
+- Open Graph tags
+- Twitter cards
+- JSON-LD / Schema.org
+- Project-level or global SEO defaults
+- New endpoints or routing changes
 
 ## Definition of Done
-- Publish fails fast with clear errors when:
-  - no home page exists
-  - duplicate slugs exist
-  - slug is empty/invalid
-  - navigation references missing pages
-- UI shows these errors and does not start publish until resolved.
+- SEO panel is visible in Page Settings.
+- `seoJson.title` and `seoJson.description` persist and rehydrate.
+- Preview HTML head includes correct fallback title + optional description meta tag.
+- Published HTML head includes correct fallback title + optional description meta tag.
+- Manual checks pass for save, refresh, preview, and published `index.html` files.

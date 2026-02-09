@@ -199,17 +199,40 @@ export class PreviewRendererService {
     return `<nav class="baw-nav">${links}</nav>`;
   }
 
+  private renderSeoHeadTags(params: {
+    seoJson: unknown;
+    pageTitle: string;
+  }): string {
+    const seo = this.asRecord(params.seoJson) ?? {};
+    const fallbackTitle = params.pageTitle.trim() || 'Buildaweb Site';
+    const title = this.readString(seo.title).trim() || fallbackTitle;
+    const description = this.readString(seo.description).trim();
+
+    const tags = [`<title>${this.escapeHtml(title)}</title>`];
+    if (description) {
+      tags.push(`<meta name="description" content="${this.escapeHtml(description)}" />`);
+    }
+    return tags.join('\n');
+  }
+
   render(params: {
     pageId: string;
     editorJson: unknown;
     assetUrlById?: Record<string, string>;
     navLinks?: RenderNavLink[];
     currentSlug?: string;
+    pageTitle?: string;
+    seoJson?: unknown;
   }) {
     const pageRecord = this.asRecord(params.editorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
     const navLinks = params.navLinks ?? [];
     const currentSlug = this.normalizeSlug(params.currentSlug ?? '/');
+    const pageTitle = this.readString(params.pageTitle, 'Buildaweb Site') || 'Buildaweb Site';
+    const headTags = this.renderSeoHeadTags({
+      seoJson: params.seoJson,
+      pageTitle,
+    });
     const navHtml = this.renderNavigation(navLinks, currentSlug);
     const sections = this.asArray(pageRecord.sections)
       .map((section) => this.renderSection(section, assetUrlById, currentSlug))
@@ -219,8 +242,8 @@ export class PreviewRendererService {
     const css = this.baseCss;
     const pageJsonString = this.stableStringify(pageRecord);
     const navString = this.stableStringify(navLinks);
-    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css).digest('hex');
+    const hash = createHash('sha256').update(pageJsonString + navString + currentSlug + css + headTags).digest('hex');
 
-    return { html, css, hash };
+    return { html, css, hash, headTags };
   }
 }

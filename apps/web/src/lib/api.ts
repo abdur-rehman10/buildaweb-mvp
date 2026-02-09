@@ -210,6 +210,7 @@ export type ListPagesResult = {
 export type UpdatePageInput = {
   page: Record<string, unknown>;
   version: number;
+  seoJson?: Record<string, unknown>;
 };
 
 export type UpdatePageResult = {

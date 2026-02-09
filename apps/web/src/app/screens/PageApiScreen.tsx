@@ -22,6 +22,10 @@ interface PageApiScreenProps {
 }
 
 type JsonRecord = Record<string, unknown>;
+type SeoFormValues = {
+  title: string;
+  description: string;
+};
 
 function asRecord(value: unknown): JsonRecord | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
@@ -68,6 +72,21 @@ function collectImageAssetIds(editorJson: JsonRecord): string[] {
   return [...ids];
 }
 
+function seoFromUnknown(value: unknown): SeoFormValues {
+  const record = asRecord(value);
+  if (!record) {
+    return {
+      title: '',
+      description: '',
+    };
+  }
+
+  return {
+    title: typeof record.title === 'string' ? record.title : '',
+    description: typeof record.description === 'string' ? record.description : '',
+  };
+}
+
 export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProjects }: PageApiScreenProps) {
   const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
   const [pageTitleInput, setPageTitleInput] = useState('');
@@ -76,6 +95,10 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [editorJson, setEditorJson] = useState<Record<string, unknown>>({});
   const [projectPages, setProjectPages] = useState<PageMetaSummary[]>([]);
   const [assetsById, setAssetsById] = useState<Record<string, string>>({});
+  const [seoForm, setSeoForm] = useState<SeoFormValues>({
+    title: '',
+    description: '',
+  });
   const [presetType, setPresetType] = useState<SectionPresetType>('hero');
   const [mediaLibraryNodeId, setMediaLibraryNodeId] = useState<string | null>(null);
 
@@ -114,6 +137,7 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       setVersion(page.version);
       setPageTitleInput(typeof page.title === 'string' ? page.title : '');
       setPageSlugInput(typeof page.slug === 'string' ? page.slug : '');
+      setSeoForm(seoFromUnknown(page.seoJson));
       const json = page.editorJson;
       const nextEditorJson =
         typeof json === 'object' && json !== null && !Array.isArray(json)
@@ -352,6 +376,10 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       const res = await pagesApi.update(projectId, targetPageId, {
         page: editorJson,
         version,
+        seoJson: {
+          title: seoForm.title.trim(),
+          description: seoForm.description.trim(),
+        },
       });
       setVersion(res.version);
       onPageIdChange(targetPageId);
@@ -397,6 +425,8 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       </div>
 
       <Card className="p-4 space-y-4">
+        <h2 className="text-base font-semibold">Page Settings</h2>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
           <Input
             label="Title"
@@ -434,6 +464,35 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
         </div>
 
         <div className="space-y-2">
+          <details className="border rounded-md p-3 space-y-3" open>
+            <summary className="text-sm font-medium cursor-pointer select-none">SEO Settings</summary>
+            <div className="mt-3 space-y-3">
+              <div className="space-y-1">
+                <Input
+                  label="SEO Title"
+                  value={seoForm.title}
+                  onChange={(e) => setSeoForm((prev) => ({ ...prev, title: e.target.value }))}
+                  placeholder="SEO title"
+                />
+                <p className="text-xs text-muted-foreground" role="note">
+                  {seoForm.title.length}/60
+                </p>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-sm font-medium mb-2">Meta Description</label>
+                <textarea
+                  className="w-full min-h-24 px-3 py-2 rounded-[var(--radius-sm)] border bg-input-background text-foreground border-input"
+                  value={seoForm.description}
+                  onChange={(e) => setSeoForm((prev) => ({ ...prev, description: e.target.value }))}
+                  placeholder="Meta description"
+                />
+                <p className="text-xs text-muted-foreground" role="note">
+                  {seoForm.description.length}/160
+                </p>
+              </div>
+            </div>
+          </details>
+
           <div className="flex items-end gap-3">
             <div>
               <label className="block text-sm font-medium mb-1">Add section preset</label>
@@ -513,10 +572,13 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
       <MediaLibraryModal
         isOpen={!!mediaLibraryNodeId}
         projectId={projectId}
-        onClose={() => setMediaLibraryNodeId(null)}
+        onClose={() => {
+          setMediaLibraryNodeId(null);
+        }}
         onSelect={(asset) => {
-          if (!mediaLibraryNodeId) return;
-          insertFromMediaLibrary(mediaLibraryNodeId, asset);
+          if (mediaLibraryNodeId) {
+            insertFromMediaLibrary(mediaLibraryNodeId, asset);
+          }
         }}
       />
     </div>

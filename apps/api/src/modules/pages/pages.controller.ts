@@ -209,11 +209,18 @@ export class PagesController {
     }
 
     try {
+      const pagePayload: { editorJson: Record<string, unknown>; seoJson?: Record<string, unknown> | null } = {
+        editorJson: dto.page,
+      };
+      if (Object.prototype.hasOwnProperty.call(dto, 'seoJson')) {
+        pagePayload.seoJson = dto.seoJson ?? null;
+      }
+
       const updated = await this.pages.updatePageJson({
         tenantId,
         projectId,
         pageId,
-        page: { editorJson: dto.page },
+        page: pagePayload,
         version: dto.version,
       });
 

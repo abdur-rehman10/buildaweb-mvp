@@ -57,4 +57,35 @@ describe('PreviewRendererService pretty URLs', () => {
     expect(preview.html).toContain('href="/"');
     expect(preview.html).not.toContain('index.html');
   });
+
+  it('renders seo title and description meta tags', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      pageTitle: 'Fallback Title',
+      seoJson: {
+        title: 'SEO Title',
+        description: 'SEO Description',
+      },
+      editorJson: { sections: [] },
+    });
+
+    expect(preview.headTags).toContain('<title>SEO Title</title>');
+    expect(preview.headTags).toContain('<meta name="description" content="SEO Description" />');
+    expect(preview.headTags).not.toContain('property="og:');
+  });
+
+  it('falls back title to page title and omits optional meta tags when seoJson is empty', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      pageTitle: 'Fallback Title',
+      seoJson: {},
+      editorJson: { sections: [] },
+    });
+
+    expect(preview.headTags).toContain('<title>Fallback Title</title>');
+    expect(preview.headTags).not.toContain('name="description"');
+    expect(preview.headTags).not.toContain('property="og:title"');
+    expect(preview.headTags).not.toContain('property="og:description"');
+    expect(preview.headTags).not.toContain('property="og:image"');
+  });
 });
