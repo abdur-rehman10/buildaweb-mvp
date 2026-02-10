@@ -1,31 +1,34 @@
 # PLAN.md
 
 ## Branch
-feat/seo-ui-polish
+feat/prod-dockerfiles
 
 ## Goal
-Polish the existing page-level SEO UI with better guidance while keeping current SEO behavior unchanged.
+Add production-grade Docker build/run setup for API and Web with minimal runtime images and no application behavior changes.
 
 ## In Scope
-- Frontend SEO panel polish only:
-  - Live character counter for SEO title with recommended range (30–60).
-  - Live character counter for meta description with recommended range (70–160).
-  - Add a simple static Google-like preview snippet using current title + description values.
-  - Keep save flow and persistence to `seoJson` exactly as existing behavior.
-  - Show validation hints only; do not introduce new save-blocking rules.
-- Backend: no changes unless absolutely required.
+- Add `apps/api/Dockerfile`:
+  - multi-stage build
+  - compile NestJS to `dist`
+  - runtime stage uses `NODE_ENV=production`
+  - run API using built output
+- Add `apps/web/Dockerfile`:
+  - build Vite app in build stage
+  - serve static `dist` from Nginx in runtime stage
+- Add minimal Nginx config for Web app shell routing:
+  - serve static assets
+  - SPA fallback to `index.html`
+  - no impact on published-site hosting behavior
+- Add minimal Docker Compose wiring to build and run API + Web containers locally for validation.
 
 ## Out of Scope
-- New SEO capabilities (OG fields UI, Twitter cards, JSON-LD)
-- robots.txt or sitemap.xml
-- New endpoints or response-contract changes
-- Refactors or unrelated UI changes
+- Changes to app routes, business logic, API contracts, or auth
+- Any backend/frontend feature changes
+- Changes to published static-site MinIO behavior
+- Infrastructure redesign beyond required Docker build/run files
 
 ## Definition of Done
-- Counters update live while typing in SEO fields.
-- SEO title/description continue to persist and rehydrate from `seoJson`.
-- Preview and publish head-tag injection behavior remains unchanged and correct.
-- Manual tests pass:
-  - Counter updates live.
-  - Persist/reload works.
-  - Preview + publish output still contains expected tags.
+- `docker build` succeeds for `apps/api` and `apps/web` images.
+- Containers can be started locally with Docker Compose.
+- Web container loads and can call API container successfully.
+- Existing API contracts and behavior remain unchanged.
