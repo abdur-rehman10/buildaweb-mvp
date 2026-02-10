@@ -1,33 +1,31 @@
 # PLAN.md
 
 ## Branch
-feat/auth-ux-polish
+feat/seo-ui-polish
 
 ## Goal
-Polish auth UX and error handling without changing auth architecture.
+Polish the existing page-level SEO UI with better guidance while keeping current SEO behavior unchanged.
 
 ## In Scope
-- Frontend:
-  - Signup screen:
-    - Add confirm password field
-    - Password rule hint (minimum length 8)
-    - Client-side validation messages
-  - Login/Forgot/Reset screens:
-    - Improve generic error presentation
-    - Loading states on submit actions
-  - Ensure displayed errors map cleanly from API contract (`{ ok, data }` / `{ ok, error }`) through existing API error handling.
-- Backend (only if needed):
-  - Ensure reset-password enforces minimum password length 8 consistently.
+- Frontend SEO panel polish only:
+  - Live character counter for SEO title with recommended range (30–60).
+  - Live character counter for meta description with recommended range (70–160).
+  - Add a simple static Google-like preview snippet using current title + description values.
+  - Keep save flow and persistence to `seoJson` exactly as existing behavior.
+  - Show validation hints only; do not introduce new save-blocking rules.
+- Backend: no changes unless absolutely required.
 
 ## Out of Scope
-- Roles/permissions changes
-- Refresh tokens
-- Email sending/integration
-- Redesign or styling overhaul
+- New SEO capabilities (OG fields UI, Twitter cards, JSON-LD)
+- robots.txt or sitemap.xml
+- New endpoints or response-contract changes
+- Refactors or unrelated UI changes
 
 ## Definition of Done
-- Signup blocks password mismatch and short password client-side.
-- Login wrong credentials still show generic failure.
-- Forgot password remains generic success (no user enumeration).
-- Reset password success returns user to login.
-- Auth submit buttons show loading states and prevent duplicate submits.
+- Counters update live while typing in SEO fields.
+- SEO title/description continue to persist and rehydrate from `seoJson`.
+- Preview and publish head-tag injection behavior remains unchanged and correct.
+- Manual tests pass:
+  - Counter updates live.
+  - Persist/reload works.
+  - Preview + publish output still contains expected tags.
