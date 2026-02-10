@@ -82,8 +82,9 @@ export class AuthService {
     return createHash('sha256').update(`${token}:${this.resetTokenPepper()}`).digest('hex');
   }
 
-  private isDevMode() {
-    return (this.config.get<string>('NODE_ENV') ?? '').toLowerCase() !== 'production';
+  private isProductionMode() {
+    const env = this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? '';
+    return env.toLowerCase() === 'production';
   }
 
   async forgotPassword(params: { email: string }) {
@@ -105,7 +106,7 @@ export class AuthService {
       usedAt: null,
     });
 
-    if (this.isDevMode()) {
+    if (!this.isProductionMode()) {
       return { ok: true as const, debugResetToken: rawToken };
     }
 
