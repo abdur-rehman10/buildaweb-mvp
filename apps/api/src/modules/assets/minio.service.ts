@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client as MinioClient } from 'minio';
+import { Readable } from 'node:stream';
 
 @Injectable()
 export class MinioService {
@@ -73,5 +74,15 @@ export class MinioService {
     const base = this.publicBaseUrl.replace(/\/$/, '');
     const objectPath = this.encodedPath(params.objectPath);
     return `${base}/${this.bucketName}/${objectPath}`;
+  }
+
+  async statObject(params: { objectPath: string }) {
+    await this.ensureBucketReady();
+    return this.client.statObject(this.bucketName, params.objectPath);
+  }
+
+  async getObjectStream(params: { objectPath: string }): Promise<Readable> {
+    await this.ensureBucketReady();
+    return this.client.getObject(this.bucketName, params.objectPath);
   }
 }

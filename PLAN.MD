@@ -1,34 +1,36 @@
 # PLAN.md
 
 ## Branch
-fix/aws-ip-deploy
+feat/publish-engine
 
 ## Goal
-Make AWS EC2 IP-based deployment reproducible and documented.
+Implement path-based publish engine so publicly published sites are served at `/p/<slug>/` from MinIO-backed artifacts.
 
 ## In Scope
-- Caddy routing baseline:
-  - Ensure `/api/*` is proxied to API without stripping the `/api` prefix.
-  - Use `handle /api/*` (not `handle_path`) for API routing.
-- Production compose hardening:
-  - Ensure `docker-compose.prod.yml` exposes MinIO ports `9000` and `9001` (MinIO only).
-  - Ensure Mongo remains internal-only in production compose (no host port publish).
-- Environment baseline:
-  - Ensure `.env.prod.example` uses MinIO endpoint without protocol (`MINIO_ENDPOINT=minio`, `MINIO_PORT=9000`).
-- Deployment docs:
-  - Add `DEPLOY_AWS_IP.md` with exact deploy steps.
-  - Include AWS security group port rules.
-  - Include verification `curl` checks and troubleshooting for "connection reset by peer".
+- Add project publish-state fields for path-based publish metadata:
+  - `isPublished`, `publishedAt`, `publishedSlug`, `publishedBucketKey`, `publishedVersion`
+- Extend publish flow (`POST /api/v1/projects/:id/publish`) to:
+  - generate/validate unique published slug
+  - render static output
+  - upload to MinIO prefix for current published version
+  - update project publish-state fields
+- Add `POST /api/v1/projects/:id/unpublish` to disable public serving without deleting artifacts.
+- Add public metadata endpoint `GET /api/v1/published/:slug`.
+- Add public site handler for `/p/<slug>/...` with SPA fallback:
+  - file-like paths serve exact object
+  - route-like paths serve `index.html`
+- Update Caddy so `/p/*` proxies to API published-site handler while preserving existing web and `/api` routes.
+- Add/update docs for publish engine behavior and verification.
 
 ## Out of Scope
-- Domains and real TLS certificates
-- Custom domains
-- CDN setup
-- Backups and disaster recovery
-- IAM hardening
-- ECS/Kubernetes migration
+- Wildcard DNS/subdomain publishing
+- CDN/edge caching redesign
+- Domain management automation
+- Publish rollback UX redesign
 
 ## Definition of Done
-- `curl http://localhost/api/v1/auth/me` returns `401` (not `404`) through proxy routing.
-- `docker ps` shows MinIO mapped on `9000/9001` and Mongo internal-only (no published port).
-- `DEPLOY_AWS_IP.md` contains security group rules and troubleshooting for "connection reset by peer".
+- `POST /api/v1/projects/:id/publish` returns publish slug and public URL.
+- `GET /api/v1/published/:slug` returns publish metadata.
+- `GET /p/<slug>/` serves published `index.html`.
+- `GET /p/<slug>/some/route` serves published `index.html` (SPA fallback).
+- `POST /api/v1/projects/:id/unpublish` disables `/p/<slug>/` serving with 404.

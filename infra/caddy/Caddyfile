@@ -1,4 +1,20 @@
-:80 {
+{
+  email {$ACME_EMAIL:admin@example.com}
+}
+
+http://{$DOMAIN} {
+  redir https://{$DOMAIN}{uri} 308
+}
+
+https://{$DOMAIN} {
+  encode zstd gzip
+
+  # Published sites (path-based)
+  handle /p/* {
+    rewrite * /api/v1{uri}
+    reverse_proxy api:4000
+  }
+
   # API under /api/* (keep /api prefix intact)
   handle /api/* {
     reverse_proxy api:4000

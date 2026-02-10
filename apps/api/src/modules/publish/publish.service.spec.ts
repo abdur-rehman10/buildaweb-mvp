@@ -288,9 +288,7 @@ describe('PublishService pretty URLs', () => {
     const result = await service.createAndPublish(baseParams);
 
     expect(result.status).toBe('live');
-    expect(result.url).toBe(
-      'http://localhost:9000/buildaweb/buildaweb-sites/tenants/default/projects/project-1/publishes/507f1f77bcf86cd799439011/',
-    );
+    expect(result.url).toBe('/p/main-site/');
 
     const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
     const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
@@ -331,7 +329,12 @@ describe('PublishService pretty URLs', () => {
       {
         $set: {
           latestPublishId: '507f1f77bcf86cd799439011',
+          isPublished: true,
+          publishedSlug: 'main-site',
+          publishedBucketKey: 'published-sites/main-site/v1',
+          publishedVersion: 1,
           publishedAt: expect.any(Date),
+          status: 'published',
         },
       },
     );

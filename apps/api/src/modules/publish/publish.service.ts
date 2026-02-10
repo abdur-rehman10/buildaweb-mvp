@@ -26,6 +26,8 @@ export class PublishPreflightError extends Error {
 export class PublishService {
   private readonly publishSlugPattern = /^[A-Za-z0-9_-]+$/;
   private readonly reservedPublishSlugs = new Set(['index.html', 'assets', '.', '..']);
+  private readonly publishedSiteSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+  private readonly reservedPublishedSiteSlugs = new Set(['api', 'p', 'published', 'assets', 'index', 'index.html']);
 
   constructor(
     @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
@@ -38,14 +40,28 @@ export class PublishService {
     private readonly config: ConfigService,
   ) {}
 
-  private publishRootPath(params: { tenantId: string; projectId: string; publishId: string }) {
-    return `buildaweb-sites/tenants/${params.tenantId}/projects/${params.projectId}/publishes/${params.publishId}`;
+  private publishRootPath(params: { publishedSlug: string; publishedVersion: number }) {
+    return `published-sites/${params.publishedSlug}/v${params.publishedVersion}`;
   }
 
-  private publishBaseUrl(params: { tenantId: string; projectId: string; publishId: string }) {
+  private publishBaseUrlFromRoot(publishRootPath: string) {
     const base = (this.config.get<string>('MINIO_PUBLIC_BASE_URL') ?? 'http://localhost:9000').replace(/\/$/, '');
     const bucket = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
-    return `${base}/${bucket}/${this.publishRootPath(params)}/`;
+    return `${base}/${bucket}/${publishRootPath}/`;
+  }
+
+  private publicSiteUrl(publishedSlug: string) {
+    const directBaseUrl = this.config.get<string>('PUBLIC_SITE_BASE_URL')?.trim();
+    if (directBaseUrl) {
+      return `${directBaseUrl.replace(/\/$/, '')}/p/${encodeURIComponent(publishedSlug)}/`;
+    }
+
+    const domain = this.config.get<string>('DOMAIN')?.trim();
+    if (domain) {
+      return `https://${domain}/p/${encodeURIComponent(publishedSlug)}/`;
+    }
+
+    return `/p/${encodeURIComponent(publishedSlug)}/`;
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {
@@ -61,6 +77,84 @@ export class PublishService {
     if (typeof value === 'string') return value;
     if (typeof value === 'number') return String(value);
     return fallback;
+  }
+
+  private toSafeSiteSlug(raw: string) {
+    const basic = raw
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+    return basic || 'site';
+  }
+
+  private isValidSiteSlug(value: string) {
+    return this.publishedSiteSlugPattern.test(value) && !this.reservedPublishedSiteSlugs.has(value);
+  }
+
+  private async ensureUniquePublishedSlug(params: { tenantId: string; projectId: string; preferredSlug: string }) {
+    const preferred = this.toSafeSiteSlug(params.preferredSlug);
+    let attempt = 0;
+
+    while (attempt < 50) {
+      const suffix = attempt === 0 ? '' : `-${attempt + 1}`;
+      const candidate = `${preferred}${suffix}`.slice(0, 64).replace(/-+$/, '');
+      if (!this.isValidSiteSlug(candidate)) {
+        attempt += 1;
+        continue;
+      }
+
+      const conflict = await this.projectModel
+        .findOne({
+          tenantId: params.tenantId,
+          publishedSlug: candidate,
+          _id: { $ne: params.projectId },
+        })
+        .select('_id')
+        .lean()
+        .exec();
+
+      if (!conflict || String((conflict as { _id?: unknown })._id ?? '') === params.projectId) {
+        return candidate;
+      }
+      attempt += 1;
+    }
+
+    throw new Error('Unable to generate a unique publish slug');
+  }
+
+  private async resolvePublishedSlug(params: {
+    tenantId: string;
+    projectId: string;
+    projectName: string;
+    existingPublishedSlug?: unknown;
+  }) {
+    const current = this.readString(params.existingPublishedSlug).trim().toLowerCase();
+    if (this.isValidSiteSlug(current)) {
+      const conflict = await this.projectModel
+        .findOne({
+          tenantId: params.tenantId,
+          publishedSlug: current,
+          _id: { $ne: params.projectId },
+        })
+        .select('_id')
+        .lean()
+        .exec();
+      if (!conflict || String((conflict as { _id?: unknown })._id ?? '') === params.projectId) return current;
+    }
+
+    return this.ensureUniquePublishedSlug({
+      tenantId: params.tenantId,
+      projectId: params.projectId,
+      preferredSlug: params.projectName,
+    });
+  }
+
+  private resolvePublishedVersion(existingVersion: unknown) {
+    const parsed = Number(existingVersion);
+    if (!Number.isFinite(parsed) || parsed < 0) return 1;
+    return Math.floor(parsed) + 1;
   }
 
   private collectAssetRefsFromPageJson(editorJson: unknown, refs: Set<string>) {
@@ -316,6 +410,96 @@ ${params.bodyHtml}
       .exec();
   }
 
+  async getProjectByPublishedSlug(params: { slug: string; onlyPublished: boolean }) {
+    const normalizedSlug = this.readString(params.slug).trim().toLowerCase();
+    if (!this.isValidSiteSlug(normalizedSlug)) return null;
+
+    const filter: Record<string, unknown> = {
+      publishedSlug: normalizedSlug,
+    };
+    if (params.onlyPublished) {
+      filter.isPublished = true;
+    }
+
+    return this.projectModel
+      .findOne(filter)
+      .select(
+        '_id tenantId ownerUserId name isPublished publishedAt publishedSlug publishedBucketKey publishedVersion latestPublishId updatedAt',
+      )
+      .lean()
+      .exec();
+  }
+
+  private isObjectNotFoundError(error: unknown) {
+    if (!error || typeof error !== 'object') return false;
+    const code = this.readString((error as Record<string, unknown>).code).toLowerCase();
+    return code === 'notfound' || code === 'nosuchkey' || code === 'nosuchobject';
+  }
+
+  private resolvePublishedObjectPath(requestPath?: string) {
+    const cleaned = this.readString(requestPath).trim().replace(/^\/+/, '');
+    if (!cleaned) {
+      return { relativePath: 'index.html', isAsset: false };
+    }
+
+    const pathOnly = cleaned.split('?')[0].split('#')[0].replace(/\/+$/, '');
+    const isFileLike = /\.[A-Za-z0-9]+$/.test(pathOnly);
+    if (isFileLike) {
+      const isHtml = pathOnly.toLowerCase().endsWith('.html');
+      return { relativePath: pathOnly, isAsset: !isHtml };
+    }
+
+    return { relativePath: 'index.html', isAsset: false };
+  }
+
+  async loadPublishedObjectBySlug(params: { slug: string; requestPath?: string }) {
+    const project = await this.getProjectByPublishedSlug({ slug: params.slug, onlyPublished: true });
+    if (!project) return null;
+
+    const bucketKey = this.readString(project.publishedBucketKey).trim();
+    if (!bucketKey) return null;
+
+    const resolved = this.resolvePublishedObjectPath(params.requestPath);
+    const objectPath = `${bucketKey}/${resolved.relativePath}`;
+
+    try {
+      const stat = await this.minio.statObject({ objectPath });
+      const stream = await this.minio.getObjectStream({ objectPath });
+      const metadata = (stat as { metaData?: Record<string, string> }).metaData ?? {};
+      const contentType = this.readString(metadata['content-type']).trim() || 'application/octet-stream';
+      const cacheControl = resolved.isAsset
+        ? 'public, max-age=31536000, immutable'
+        : 'public, max-age=60, must-revalidate';
+      return {
+        stream,
+        contentType,
+        cacheControl,
+      };
+    } catch (error) {
+      if (this.isObjectNotFoundError(error)) return null;
+      throw error;
+    }
+  }
+
+  async unpublishProject(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+    return this.projectModel
+      .findOneAndUpdate(
+        {
+          _id: params.projectId,
+          tenantId: params.tenantId,
+          ownerUserId: params.ownerUserId,
+        },
+        {
+          $set: {
+            isPublished: false,
+            status: 'draft',
+          },
+        },
+        { new: true },
+      )
+      .exec();
+  }
+
   async createAndPublish(params: { tenantId: string; projectId: string; ownerUserId: string }) {
     const project = await this.projectModel
       .findOne({
@@ -323,7 +507,7 @@ ${params.bodyHtml}
         tenantId: params.tenantId,
         ownerUserId: params.ownerUserId,
       })
-      .select('_id name defaultLocale locale siteName faviconAssetId defaultOgImageAssetId')
+      .select('_id name defaultLocale locale siteName faviconAssetId defaultOgImageAssetId publishedSlug publishedVersion')
       .lean()
       .exec();
     if (!project) {
@@ -359,11 +543,19 @@ ${params.bodyHtml}
       throw new PublishPreflightError(['Exactly one home page is required, but none was found.']);
     }
 
-    const baseUrl = this.publishBaseUrl({
+    const publishedSlug = await this.resolvePublishedSlug({
       tenantId: params.tenantId,
       projectId: params.projectId,
-      publishId: new Types.ObjectId().toString(),
+      projectName: this.readString(project.name),
+      existingPublishedSlug: project.publishedSlug,
     });
+    const publishedVersion = this.resolvePublishedVersion(project.publishedVersion);
+    const publishedBucketKey = this.publishRootPath({
+      publishedSlug,
+      publishedVersion,
+    });
+    const baseUrl = this.publishBaseUrlFromRoot(publishedBucketKey);
+
     const draftSnapshot = buildPublishDraftSnapshot({
       project,
       pages,
@@ -379,13 +571,6 @@ ${params.bodyHtml}
       errorMessage: null,
       draftSnapshot,
     });
-
-    publish.baseUrl = this.publishBaseUrl({
-      tenantId: params.tenantId,
-      projectId: params.projectId,
-      publishId: String(publish._id),
-    });
-    await publish.save();
 
     try {
       const faviconAssetId = this.readString(project.faviconAssetId).trim();
@@ -406,11 +591,7 @@ ${params.bodyHtml}
       const siteName = this.readString(project.siteName).trim();
 
       let sharedCss = '';
-      const publishRoot = this.publishRootPath({
-        tenantId: params.tenantId,
-        projectId: params.projectId,
-        publishId: String(publish._id),
-      });
+      const publishRoot = publishedBucketKey;
 
       for (const page of pages) {
         const isHome = String(page._id) === String(homePage._id);
@@ -488,7 +669,12 @@ ${params.bodyHtml}
           {
             $set: {
               latestPublishId: String(publish._id),
+              isPublished: true,
+              publishedSlug,
+              publishedBucketKey,
+              publishedVersion,
               publishedAt: new Date(),
+              status: 'published',
             },
           },
         )
@@ -497,7 +683,9 @@ ${params.bodyHtml}
       return {
         publishId: String(publish._id),
         status: publish.status,
-        url: publish.baseUrl,
+        url: this.publicSiteUrl(publishedSlug),
+        publishedSlug,
+        publishedVersion,
       };
     } catch (error) {
       publish.status = 'failed';
