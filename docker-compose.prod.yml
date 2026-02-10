@@ -74,7 +74,6 @@ services:
       - minio
     ports:
       - "80:80"
-      - "443:443"
     environment:
       DOMAIN: ${DOMAIN:-example.com}
       ACME_EMAIL: ${ACME_EMAIL:-ops@example.com}
