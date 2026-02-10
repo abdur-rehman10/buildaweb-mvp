@@ -25,22 +25,47 @@ export class AuthService {
     return DEFAULT_TENANT;
   }
 
+  private normalizeEmail(email: string) {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeName(name?: string) {
+    if (typeof name !== 'string') return null;
+    const trimmed = name.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private isDuplicateKeyError(error: unknown) {
+    if (!error || typeof error !== 'object') return false;
+    const code = (error as { code?: unknown }).code;
+    return code === 11000;
+  }
+
   async signup(params: { email: string; password: string; name?: string }) {
     const tenantId = this.tenantId();
-    const exists = await this.users.findByEmail(tenantId, params.email);
+    const normalizedEmail = this.normalizeEmail(params.email);
+    const normalizedName = this.normalizeName(params.name);
+    const exists = await this.users.findByEmail(tenantId, normalizedEmail);
     if (exists) {
       return { ok: false as const, code: 'EMAIL_ALREADY_EXISTS', message: 'Email already in use' };
     }
 
     const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
     const passwordHash = await bcrypt.hash(params.password, rounds);
-
-    const user = await this.users.create({
-      tenantId,
-      email: params.email,
-      passwordHash,
-      name: params.name ?? null,
-    });
+    let user;
+    try {
+      user = await this.users.create({
+        tenantId,
+        email: normalizedEmail,
+        passwordHash,
+        name: normalizedName,
+      });
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) {
+        return { ok: false as const, code: 'EMAIL_ALREADY_EXISTS', message: 'Email already in use' };
+      }
+      throw error;
+    }
 
     const accessToken = await this.signToken({ sub: String(user._id), tenantId });
     return {
@@ -52,7 +77,8 @@ export class AuthService {
 
   async login(params: { email: string; password: string }) {
     const tenantId = this.tenantId();
-    const user = await this.users.findByEmail(tenantId, params.email);
+    const normalizedEmail = this.normalizeEmail(params.email);
+    const user = await this.users.findByEmail(tenantId, normalizedEmail);
     if (!user) {
       return { ok: false as const, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' };
     }

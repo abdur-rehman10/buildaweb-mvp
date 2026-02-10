@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpException, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Logger, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
@@ -10,15 +10,52 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly auth: AuthService, private readonly users: UsersService) {}
 
+  private requestId(req: any) {
+    const headerId = req?.headers?.['x-request-id'] ?? req?.headers?.['x-requestid'];
+    if (typeof req?.id === 'string' && req.id.trim()) return req.id.trim();
+    if (typeof headerId === 'string' && headerId.trim()) return headerId.trim();
+    if (Array.isArray(headerId) && typeof headerId[0] === 'string' && headerId[0].trim()) return headerId[0].trim();
+    return undefined;
+  }
+
   @Post('signup')
-  async signup(@Body() dto: SignupDto) {
+  async signup(@Body() dto: SignupDto, @Req() req: any) {
+    const email = dto.email.trim().toLowerCase();
+    const requestId = this.requestId(req);
+    this.logger.log(
+      JSON.stringify({
+        event: 'auth.signup.attempt',
+        email,
+        requestId,
+      }),
+    );
+
     const res = await this.auth.signup(dto);
     if (!res.ok) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'auth.signup.failed',
+          email,
+          code: res.code,
+          requestId,
+        }),
+      );
       const status = res.code === 'EMAIL_ALREADY_EXISTS' ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
       throw new HttpException(fail(res.code, res.message), status);
     }
+
+    this.logger.log(
+      JSON.stringify({
+        event: 'auth.signup.success',
+        email,
+        userId: res.user.id,
+        requestId,
+      }),
+    );
     return ok({ user: res.user, accessToken: res.accessToken });
   }
 

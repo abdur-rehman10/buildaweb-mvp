@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 
 type MockUsersService = {
   findByEmail: jest.Mock;
+  create: jest.Mock;
   updatePasswordHashById: jest.Mock;
 };
 
@@ -24,10 +25,12 @@ describe('AuthService password reset flow', () => {
   let users: MockUsersService;
   let resetTokenModel: MockResetTokenModel;
   let config: MockConfigService;
+  let jwt: { signAsync: jest.Mock };
 
   beforeEach(() => {
     users = {
       findByEmail: jest.fn(),
+      create: jest.fn(),
       updatePasswordHashById: jest.fn(),
     };
 
@@ -47,12 +50,67 @@ describe('AuthService password reset flow', () => {
       }),
     };
 
+    jwt = {
+      signAsync: jest.fn().mockResolvedValue('test-access-token'),
+    };
+
     service = new AuthService(
       users as unknown as UsersService,
-      {} as JwtService,
+      jwt as unknown as JwtService,
       config as unknown as ConfigService,
       resetTokenModel as unknown as Model<PasswordResetTokenDocument>,
     );
+  });
+
+  it('creates user on signup and returns access token', async () => {
+    users.findByEmail.mockResolvedValue(null);
+    users.create.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439011',
+      email: 'new@example.com',
+      name: 'New User',
+      tenantId: 'default',
+    });
+
+    const result = await service.signup({
+      email: '  NEW@example.com  ',
+      password: 'Password123',
+      name: '  New User  ',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      user: {
+        id: '507f1f77bcf86cd799439011',
+        email: 'new@example.com',
+        name: 'New User',
+        tenantId: 'default',
+      },
+      accessToken: 'test-access-token',
+    });
+
+    expect(users.create).toHaveBeenCalledWith({
+      tenantId: 'default',
+      email: 'new@example.com',
+      passwordHash: expect.any(String),
+      name: 'New User',
+    });
+    expect(users.create.mock.calls[0][0].passwordHash).not.toBe('Password123');
+  });
+
+  it('returns duplicate email error when signup hits unique index race', async () => {
+    users.findByEmail.mockResolvedValue(null);
+    users.create.mockRejectedValue({ code: 11000 });
+
+    const result = await service.signup({
+      email: 'exists@example.com',
+      password: 'Password123',
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'EMAIL_ALREADY_EXISTS',
+      message: 'Email already in use',
+    });
   });
 
   it('returns ok for unknown email without creating token (no enumeration)', async () => {
