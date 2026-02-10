@@ -139,3 +139,9 @@ dist
 .pnp.*
 .env.prod
 create_download.pem
+
+# Secrets
+*.pem
+.env
+.env.*
+
