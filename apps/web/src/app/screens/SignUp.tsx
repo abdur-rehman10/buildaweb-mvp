@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Logo } from '../components/Logo';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { ApiError, authApi } from '../../lib/api';
+import { setAuthToken } from '../../lib/auth';
+import { appToast } from '../../lib/toast';
+import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 
 interface SignUpProps {
   onNavigateToLogin: () => void;
@@ -17,9 +20,10 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: typeof errors = {};
 
@@ -47,17 +51,31 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
     }
 
     setErrors({});
+    setSubmitError('');
     setIsSubmitting(true);
-    toast.success('Account created successfully!');
-    setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      const res = await authApi.signup({ email, password });
+      setAuthToken(res.accessToken);
+      appToast.success('Account created successfully!', {
+        eventKey: 'auth-signup-success',
+      });
       onSignUp();
-    }, 500);
+    } catch (err) {
+      const message =
+        err instanceof ApiError && err.code === 'EMAIL_ALREADY_EXISTS'
+          ? 'An account with this email already exists.'
+          : getUserFriendlyErrorMessage(err, 'Sign up failed');
+      setSubmitError(message);
+      appToast.error(message, {
+        eventKey: 'auth-signup-error',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleGoogleSignUp = () => {
-    toast.success('Signing up with Google...');
-    setTimeout(() => onSignUp(), 1000);
+    appToast.error('Google sign up is not available in MVP.');
   };
 
   return (
@@ -100,6 +118,7 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   setErrors({ ...errors, email: undefined });
+                  if (submitError) setSubmitError('');
                 }}
                 error={errors.email}
               />
@@ -115,6 +134,7 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
                 onChange={(e) => {
                   setPassword(e.target.value);
                   setErrors({ ...errors, password: undefined });
+                  if (submitError) setSubmitError('');
                 }}
                 error={errors.password}
               />
@@ -140,6 +160,7 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
                 onChange={(e) => {
                   setConfirmPassword(e.target.value);
                   setErrors({ ...errors, confirmPassword: undefined });
+                  if (submitError) setSubmitError('');
                 }}
                 error={errors.confirmPassword}
               />
@@ -152,6 +173,12 @@ export function SignUp({ onNavigateToLogin, onSignUp }: SignUpProps) {
                 {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
+
+            {submitError && (
+              <p className="text-sm text-destructive" role="alert">
+                {submitError}
+              </p>
+            )}
 
             <Button type="submit" fullWidth size="lg" disabled={isSubmitting}>
               {isSubmitting ? 'Creating account...' : 'Sign up'}
