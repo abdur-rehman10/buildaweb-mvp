@@ -1,10 +1,11 @@
 :80 {
+  # API under /api/* (keep /api prefix intact)
+  handle /api/* {
+    reverse_proxy api:4000
+  }
 
   # Web app (React build)
-  reverse_proxy web:80
-
-  # API under /api/*
-  handle_path /api/* {
-    reverse_proxy api:4000
+  handle {
+    reverse_proxy web:80
   }
 }
