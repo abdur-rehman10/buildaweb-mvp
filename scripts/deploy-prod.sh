@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="$ROOT_DIR/.env.prod"
 COMPOSE_FILE="$ROOT_DIR/docker-compose.prod.yml"
+HEALTH_TIMEOUT_SECONDS=30
 
 cd "$ROOT_DIR"
 
@@ -63,30 +64,95 @@ echo "Pulling latest images (best effort)..."
 echo "Starting production stack..."
 "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d --build
 
-DOMAIN="$(
-  grep -E '^DOMAIN=' "$ENV_FILE" | tail -n 1 | cut -d '=' -f 2- | tr -d '\r' | xargs || true
-)"
+http_code() {
+  local url="$1"
+  local code
+  code="$(curl -ksS --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' "$url" || true)"
+  if [ -z "$code" ]; then
+    echo "000"
+    return
+  fi
+  echo "$code"
+}
 
-if [ -n "$DOMAIN" ] && [ "$DOMAIN" != "localhost" ]; then
-  WEB_URL="https://${DOMAIN}/"
-  API_HEALTH_URL="https://${DOMAIN}/api/v1/health"
-  CURL_FLAGS=(-kfsS --resolve "${DOMAIN}:443:127.0.0.1")
-else
-  WEB_URL="http://localhost/"
-  API_HEALTH_URL="http://localhost/api/v1/health"
-  CURL_FLAGS=(-fsS)
-fi
+is_web_ready() {
+  local code
+  for url in "http://127.0.0.1/" "https://127.0.0.1/"; do
+    code="$(http_code "$url")"
+    if [[ "$code" == 2* || "$code" == 3* ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
 
-echo "Running health checks..."
-curl "${CURL_FLAGS[@]}" "$WEB_URL" >/dev/null
+is_api_ready() {
+  local code
+  local health_ok=1
+  for url in "http://127.0.0.1/api/v1/health" "https://127.0.0.1/api/v1/health"; do
+    code="$(http_code "$url")"
+    if [ "$code" = "200" ]; then
+      health_ok=0
+      break
+    fi
+  done
 
-if ! curl "${CURL_FLAGS[@]}" "$API_HEALTH_URL" >/dev/null; then
-  AUTH_ME_URL="${API_HEALTH_URL%/health}/auth/me"
-  HTTP_CODE="$(curl "${CURL_FLAGS[@]}" -o /dev/null -w '%{http_code}' "$AUTH_ME_URL")"
-  if [ "$HTTP_CODE" != "401" ]; then
-    echo "ERROR: API health check failed (health and auth fallback failed)." >&2
+  if [ $health_ok -eq 0 ]; then
+    return 0
+  fi
+
+  for url in "http://127.0.0.1/api/v1/auth/me" "https://127.0.0.1/api/v1/auth/me"; do
+    code="$(http_code "$url")"
+    if [ "$code" = "401" ]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+print_service_logs() {
+  local container_name="$1"
+  if docker ps -a --format '{{.Names}}' | grep -Fxq "$container_name"; then
+    echo "----- ${container_name} (last 80 lines) -----"
+    docker logs --tail 80 "$container_name" || true
+  fi
+}
+
+echo "Running health checks with retry window (${HEALTH_TIMEOUT_SECONDS}s)..."
+start_ts="$(date +%s)"
+web_ready=1
+api_ready=1
+
+while true; do
+  now_ts="$(date +%s)"
+  elapsed=$((now_ts - start_ts))
+
+  if is_web_ready; then
+    web_ready=0
+  else
+    web_ready=1
+  fi
+
+  if is_api_ready; then
+    api_ready=0
+  else
+    api_ready=1
+  fi
+
+  if [ $web_ready -eq 0 ] && [ $api_ready -eq 0 ]; then
+    break
+  fi
+
+  if [ "$elapsed" -ge "$HEALTH_TIMEOUT_SECONDS" ]; then
+    echo "ERROR: Health checks failed after ${HEALTH_TIMEOUT_SECONDS}s (web_ready=$((1 - web_ready)), api_ready=$((1 - api_ready)))." >&2
+    print_service_logs "buildaweb-caddy"
+    print_service_logs "buildaweb-api"
+    print_service_logs "buildaweb-web"
     exit 1
   fi
-fi
+
+  sleep 1
+done
 
 echo "DEPLOY OK"

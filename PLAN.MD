@@ -1,29 +1,30 @@
 # PLAN.md
 
 ## Branch
-infra/deploy-one-command
+fix/deploy-healthcheck-ip
 
 ## Goal
-Add a reliable one-command production deploy workflow for EC2 so `main` can be shipped consistently.
+Harden deploy health checks for IP-based EC2 deployments so transient Caddy restarts do not cause false failures.
 
 ## In Scope
-- Add `scripts/deploy-prod.sh` fail-fast deployment script that:
-  - fetches `origin/main`
-  - checks out `main`
-  - hard resets to `origin/main`
-  - runs production compose pull + up/build
-  - runs post-deploy health checks
-  - prints `DEPLOY OK` only on success
-- Add `Makefile` target `deploy-prod` to run the script.
-- Add `DEPLOYMENT.md` with prerequisites, `.env.prod` location, one-command run instructions, and rollback note.
+- Update `scripts/deploy-prod.sh` health checks to:
+  - retry for ~30 seconds after compose up
+  - support both `http://127.0.0.1` and `https://127.0.0.1` (`-k`)
+  - prefer `/api/v1/health`
+  - fallback to `/api/v1/auth/me` expecting `401`
+  - avoid any domain/host-header assumptions
+- On health-check failure, print recent logs from:
+  - `buildaweb-caddy`
+  - `buildaweb-api`
+  - `buildaweb-web`
 
 ## Out of Scope
-- App feature changes
-- API contract changes
-- Infrastructure redesign beyond deploy automation
+- App/API feature changes
+- Domain/TLS infrastructure changes
+- Compose topology changes
 
 ## Definition of Done
-- `make deploy-prod` updates server code to `origin/main` and recreates production containers.
-- Deployment exits non-zero on build/start/health-check failures.
-- Success path prints `DEPLOY OK`.
-- Docs clearly explain EC2 prerequisites, command usage, and rollback.
+- Deploy script succeeds on IP-only EC2 when services become healthy within retry window.
+- Transient Caddy restart/reset during startup no longer causes immediate failure.
+- Script exits non-zero with service logs when health checks never recover.
+- Script prints `DEPLOY OK` only when web + API health checks pass.
