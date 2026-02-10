@@ -1,30 +1,34 @@
 # PLAN.md
 
 ## Branch
-fix/prod-hardening
+fix/aws-ip-deploy
 
 ## Goal
-Harden production API startup and auth safety by enforcing strict CORS origins, validating required env vars, and preventing debug reset token exposure in production.
+Make AWS EC2 IP-based deployment reproducible and documented.
 
 ## In Scope
-- API startup hardening:
-  - Configure CORS origins from environment variables.
-  - Disallow wildcard CORS in production mode.
-  - Keep local development behavior practical.
-- Environment validation at startup:
-  - Fail fast with clear errors when required env vars are missing/invalid in production.
-  - Include key settings such as `JWT_SECRET`, `MONGO_URI`, and core auth/minio settings used at runtime.
-- Forgot-password safety:
-  - Ensure reset debug token is never included when `NODE_ENV=production`.
+- Caddy routing baseline:
+  - Ensure `/api/*` is proxied to API without stripping the `/api` prefix.
+  - Use `handle /api/*` (not `handle_path`) for API routing.
+- Production compose hardening:
+  - Ensure `docker-compose.prod.yml` exposes MinIO ports `9000` and `9001` (MinIO only).
+  - Ensure Mongo remains internal-only in production compose (no host port publish).
+- Environment baseline:
+  - Ensure `.env.prod.example` uses MinIO endpoint without protocol (`MINIO_ENDPOINT=minio`, `MINIO_PORT=9000`).
+- Deployment docs:
+  - Add `DEPLOY_AWS_IP.md` with exact deploy steps.
+  - Include AWS security group port rules.
+  - Include verification `curl` checks and troubleshooting for "connection reset by peer".
 
 ## Out of Scope
-- New auth features or endpoint changes
-- API response contract changes
-- Frontend/UI changes
-- Infrastructure refactors beyond env usage
+- Domains and real TLS certificates
+- Custom domains
+- CDN setup
+- Backups and disaster recovery
+- IAM hardening
+- ECS/Kubernetes migration
 
 ## Definition of Done
-- Starting API with `NODE_ENV=production` and missing required env fails immediately with a clear startup error.
-- Production CORS only allows configured origins (no wildcard).
-- Forgot-password endpoint never returns debug reset token in production.
-- Existing API behavior remains unchanged outside these hardening rules.
+- `curl http://localhost/api/v1/auth/me` returns `401` (not `404`) through proxy routing.
+- `docker ps` shows MinIO mapped on `9000/9001` and Mongo internal-only (no published port).
+- `DEPLOY_AWS_IP.md` contains security group rules and troubleshooting for "connection reset by peer".
