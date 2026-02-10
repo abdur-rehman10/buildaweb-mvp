@@ -1,31 +1,10 @@
-{$APP_DOMAIN:app.localhost} {
-  tls internal
-  encode zstd gzip
+:80 {
 
-  @api path /api/*
-  handle @api {
+  # Web app (React build)
+  reverse_proxy web:80
+
+  # API under /api/*
+  handle_path /api/* {
     reverse_proxy api:4000
   }
-
-  handle {
-    reverse_proxy web:80
-  }
-}
-
-{$API_DOMAIN:api.localhost} {
-  tls internal
-  encode zstd gzip
-  reverse_proxy api:4000
-}
-
-{$MINIO_DOMAIN:minio.localhost} {
-  tls internal
-  encode zstd gzip
-  reverse_proxy minio:9000
-}
-
-{$MINIO_CONSOLE_DOMAIN:minio-console.localhost} {
-  tls internal
-  encode zstd gzip
-  reverse_proxy minio:9001
 }
