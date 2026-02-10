@@ -127,6 +127,17 @@ export type LoginInput = {
   password: string;
 };
 
+export type SignupInput = {
+  email: string;
+  password: string;
+  name?: string;
+};
+
+export type SignupResult = {
+  user: AuthUser;
+  accessToken: string;
+};
+
 export type LoginResult = {
   user: AuthUser;
   accessToken: string;
@@ -388,6 +399,12 @@ export type SetLatestPublishResult = {
 };
 
 export const authApi = {
+  signup(input: SignupInput) {
+    return apiRequest<SignupResult>('/api/v1/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
   login(input: LoginInput) {
     return apiRequest<LoginResult>('/api/v1/auth/login', {
       method: 'POST',

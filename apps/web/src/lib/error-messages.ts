@@ -5,6 +5,7 @@ const FRIENDLY_ERROR_MESSAGES_BY_CODE: Record<string, string> = {
   NETWORK_ERROR: 'Network error. Please check your connection and try again.',
   INVALID_RESPONSE_SHAPE: 'The server returned an unexpected response. Please try again.',
   INVALID_CREDENTIALS: 'Invalid email or password.',
+  EMAIL_ALREADY_EXISTS: 'An account with this email already exists.',
   INVALID_OR_EXPIRED_TOKEN: 'Invalid or expired reset token.',
   BAD_REQUEST: 'Please check the entered information and try again.',
 };

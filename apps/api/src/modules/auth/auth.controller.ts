@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
@@ -15,7 +15,10 @@ export class AuthController {
   @Post('signup')
   async signup(@Body() dto: SignupDto) {
     const res = await this.auth.signup(dto);
-    if (!res.ok) return fail(res.code, res.message);
+    if (!res.ok) {
+      const status = res.code === 'EMAIL_ALREADY_EXISTS' ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
+      throw new HttpException(fail(res.code, res.message), status);
+    }
     return ok({ user: res.user, accessToken: res.accessToken });
   }
 

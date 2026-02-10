@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Toaster, toast } from 'sonner';
+import { Toaster } from 'sonner';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { MobileNav } from './components/MobileNav';
@@ -114,8 +114,8 @@ export default function App() {
   };
 
   const handleSignUp = () => {
-    toast.info('Sign up is not wired in this MVP flow. Please log in.');
-    navigate('login');
+    setIsAuthenticated(true);
+    navigate('dashboard');
   };
 
   const handleLogin = () => {
