@@ -1,4 +1,14 @@
-:80 {
+{
+  email {$ACME_EMAIL:admin@example.com}
+}
+
+http://{$DOMAIN} {
+  redir https://{$DOMAIN}{uri} 308
+}
+
+https://{$DOMAIN} {
+  encode zstd gzip
+
   # API under /api/* (keep /api prefix intact)
   handle /api/* {
     reverse_proxy api:4000

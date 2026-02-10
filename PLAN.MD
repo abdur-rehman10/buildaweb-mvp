@@ -1,34 +1,28 @@
 # PLAN.md
 
 ## Branch
-fix/aws-ip-deploy
+feat/domain-ssl
 
 ## Goal
-Make AWS EC2 IP-based deployment reproducible and documented.
+Move production access from raw EC2 IP to domain-based HTTPS using Caddy + Let's Encrypt.
 
 ## In Scope
-- Caddy routing baseline:
-  - Ensure `/api/*` is proxied to API without stripping the `/api` prefix.
-  - Use `handle /api/*` (not `handle_path`) for API routing.
-- Production compose hardening:
-  - Ensure `docker-compose.prod.yml` exposes MinIO ports `9000` and `9001` (MinIO only).
-  - Ensure Mongo remains internal-only in production compose (no host port publish).
-- Environment baseline:
-  - Ensure `.env.prod.example` uses MinIO endpoint without protocol (`MINIO_ENDPOINT=minio`, `MINIO_PORT=9000`).
-- Deployment docs:
-  - Add `DEPLOY_AWS_IP.md` with exact deploy steps.
-  - Include AWS security group port rules.
-  - Include verification `curl` checks and troubleshooting for "connection reset by peer".
+- Update Caddy production routing to:
+  - serve web on `https://<DOMAIN>`
+  - redirect `http://<DOMAIN>` to HTTPS
+  - proxy `https://<DOMAIN>/api/*` to `api:4000` without stripping `/api`
+- Keep MinIO access behavior unchanged on ports `9000` and `9001`.
+- Add/update production env template for domain-based deploy (`DOMAIN`, Caddy ACME email, CORS origin).
+- Add deployment documentation for domain + DNS + HTTPS validation checks.
 
 ## Out of Scope
-- Domains and real TLS certificates
-- Custom domains
-- CDN setup
-- Backups and disaster recovery
-- IAM hardening
-- ECS/Kubernetes migration
+- Custom domain automation platform work
+- CDN, WAF, backup or IAM hardening
+- App feature or API contract changes
+- MinIO reverse-proxy/domain migration
 
 ## Definition of Done
-- `curl http://localhost/api/v1/auth/me` returns `401` (not `404`) through proxy routing.
-- `docker ps` shows MinIO mapped on `9000/9001` and Mongo internal-only (no published port).
-- `DEPLOY_AWS_IP.md` contains security group rules and troubleshooting for "connection reset by peer".
+- `curl -I http://<DOMAIN>/` returns `301/308` to HTTPS.
+- `curl -I https://<DOMAIN>/` returns `200`.
+- `curl -I https://<DOMAIN>/api/v1/auth/me` returns `401` (not `404`).
+- Production compose still builds and starts with updated Caddy/domain config.

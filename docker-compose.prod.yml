@@ -40,7 +40,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://example.com}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
       MINIO_PORT: ${MINIO_PORT:-9000}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
@@ -74,10 +74,8 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      APP_DOMAIN: ${APP_DOMAIN:-app.localhost}
-      API_DOMAIN: ${API_DOMAIN:-api.localhost}
-      MINIO_DOMAIN: ${MINIO_DOMAIN:-minio.localhost}
-      MINIO_CONSOLE_DOMAIN: ${MINIO_CONSOLE_DOMAIN:-minio-console.localhost}
+      DOMAIN: ${DOMAIN:-example.com}
+      ACME_EMAIL: ${ACME_EMAIL:-ops@example.com}
     volumes:
       - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
