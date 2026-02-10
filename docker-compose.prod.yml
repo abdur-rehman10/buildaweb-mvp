@@ -18,8 +18,12 @@ services:
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"  
     networks:
       - app_net
+    
 
   api:
     build:
