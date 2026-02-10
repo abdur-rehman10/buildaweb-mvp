@@ -2,15 +2,68 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
+const DEV_DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'https://app.localhost',
+];
+
+function isProduction() {
+  return (process.env.NODE_ENV ?? '').toLowerCase() === 'production';
+}
+
+function parseOrigins(raw: string) {
+  return [...new Set(raw.split(',').map((origin) => origin.trim()).filter(Boolean))];
+}
+
+function validateRequiredEnvForProduction() {
+  if (!isProduction()) return;
+
+  const requiredKeys = [
+    'MONGO_URI',
+    'JWT_SECRET',
+    'BCRYPT_SALT_ROUNDS',
+    'MINIO_ENDPOINT',
+    'MINIO_PORT',
+    'MINIO_ACCESS_KEY',
+    'MINIO_SECRET_KEY',
+    'MINIO_BUCKET',
+    'MINIO_PUBLIC_BASE_URL',
+    'CORS_ORIGINS',
+  ];
+
+  const missingKeys = requiredKeys.filter((key) => !(process.env[key] ?? '').trim());
+  const errors: string[] = [];
+
+  if (missingKeys.length > 0) {
+    errors.push(`Missing required env vars for production: ${missingKeys.join(', ')}`);
+  }
+
+  const corsOrigins = parseOrigins(process.env.CORS_ORIGINS ?? '');
+  if (corsOrigins.includes('*')) {
+    errors.push('CORS_ORIGINS cannot include "*" in production.');
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join(' '));
+  }
+}
+
+function resolveCorsOrigins() {
+  const configured = parseOrigins(process.env.CORS_ORIGINS ?? '');
+  if (configured.length > 0) return configured;
+  return DEV_DEFAULT_CORS_ORIGINS;
+}
+
 async function bootstrap() {
+  validateRequiredEnvForProduction();
   const app = await NestFactory.create(AppModule);
 
-  // Allow frontend to call API locally
+  // Allow frontend to call API from configured origins
   app.enableCors({
-    origin: [
-      'http://localhost:5173', // Vite default
-      'http://127.0.0.1:5173',
-    ],
+    origin: resolveCorsOrigins(),
     credentials: true,
   });
 
