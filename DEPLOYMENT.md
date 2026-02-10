@@ -1,6 +1,6 @@
 # Production Deployment (EC2)
 
-This repository includes a one-command production deploy workflow for EC2.
+This repository supports two deployment modes. Default mode is IP-based and HTTP-only.
 
 ## Prerequisites
 - Ubuntu EC2 instance with Docker Engine + Docker Compose plugin installed.
@@ -16,8 +16,28 @@ cp .env.prod.example .env.prod
 
 Set real production values in `.env.prod` (JWT secret, Mongo URI, domain, MinIO keys, etc.).
 
-## One-Command Deploy
-From repository root on EC2:
+## Mode A: IP MODE (Default)
+- HTTP only
+- Caddy exposed on port `80` only
+- No domain required
+- No TLS/certificate provisioning
+
+Use this mode when accessing the app via `http://<EC2_IP>/`.
+
+Important:
+- Do **not** expose port `443` in IP mode.
+- Do **not** expect HTTPS on raw EC2 IP.
+
+## Mode B: DOMAIN MODE (Future)
+- HTTPS enabled
+- Port `443` exposed
+- Requires:
+  - real domain DNS pointing to EC2
+  - ACME email configured
+  - Caddy HTTPS config for domain host
+
+## One-Command Deploy (IP Mode)
+From repository root on EC2, run either:
 
 ```bash
 ./deploy-prod.sh

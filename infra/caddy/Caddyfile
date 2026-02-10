@@ -1,12 +1,8 @@
 {
-  email {$ACME_EMAIL:admin@example.com}
+  auto_https off
 }
 
-http://{$DOMAIN} {
-  redir https://{$DOMAIN}{uri} 308
-}
-
-https://{$DOMAIN} {
+:80 {
   encode zstd gzip
 
   # Published sites (path-based)
