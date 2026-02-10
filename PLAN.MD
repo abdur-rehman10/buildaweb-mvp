@@ -1,37 +1,29 @@
 # PLAN.md
 
 ## Branch
-feat/auth-signup-wiring
+infra/deploy-one-command
 
 ## Goal
-Wire signup end-to-end so new users can register from web UI, receive JWT, and enter authenticated state immediately.
+Add a reliable one-command production deploy workflow for EC2 so `main` can be shipped consistently.
 
 ## In Scope
-- Ensure `POST /api/v1/auth/signup` returns JWT and user for valid signup.
-- Ensure duplicate email returns proper API error shape with conflict status.
-- Wire web signup form to call signup API.
-- Persist JWT on signup success using existing token storage.
-- Update app authenticated state and redirect to post-auth project area after signup.
-- Show API validation/auth errors in signup UI.
+- Add `scripts/deploy-prod.sh` fail-fast deployment script that:
+  - fetches `origin/main`
+  - checks out `main`
+  - hard resets to `origin/main`
+  - runs production compose pull + up/build
+  - runs post-deploy health checks
+  - prints `DEPLOY OK` only on success
+- Add `Makefile` target `deploy-prod` to run the script.
+- Add `DEPLOYMENT.md` with prerequisites, `.env.prod` location, one-command run instructions, and rollback note.
 
 ## Out of Scope
-- Refresh tokens
-- Social login
-- Role/permission changes
-- Auth architecture refactor
+- App feature changes
+- API contract changes
+- Infrastructure redesign beyond deploy automation
 
 ## Definition of Done
-- Signup from web creates user and lands in authenticated area.
-- `POST /api/v1/auth/signup` returns token for new user.
-- `GET /api/v1/auth/me` with signup token returns user.
-- Duplicate signup email returns conflict error with `{ ok:false, error }`.
-- Manual curl + UI checks pass.
-
-## How To Test
-- Web:
-  - Open signup screen, create a new account, confirm redirect to authenticated project area.
-  - Refresh and confirm authenticated session still works via stored token.
-- API:
-  - `POST /api/v1/auth/signup` with new email -> `ok:true` with `accessToken`.
-  - `GET /api/v1/auth/me` with bearer token -> `ok:true` with user.
-  - Repeat signup with same email -> `409` and `{ ok:false, error:{ code:\"EMAIL_ALREADY_EXISTS\"... } }`.
+- `make deploy-prod` updates server code to `origin/main` and recreates production containers.
+- Deployment exits non-zero on build/start/health-check failures.
+- Success path prints `DEPLOY OK`.
+- Docs clearly explain EC2 prerequisites, command usage, and rollback.
