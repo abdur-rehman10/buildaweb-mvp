@@ -145,3 +145,9 @@ create_download.pem
 .env
 .env.*
 
+
+# Secrets
+*.pem
+*.pub
+.env
+.env.*
