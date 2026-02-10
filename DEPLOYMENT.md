@@ -20,6 +20,12 @@ Set real production values in `.env.prod` (JWT secret, Mongo URI, domain, MinIO 
 From repository root on EC2:
 
 ```bash
+./deploy-prod.sh
+```
+
+or:
+
+```bash
 make deploy-prod
 ```
 

@@ -1,30 +1,23 @@
 # PLAN.md
 
 ## Branch
-fix/deploy-healthcheck-ip
+chore/deploy-wrapper
 
 ## Goal
-Harden deploy health checks for IP-based EC2 deployments so transient Caddy restarts do not cause false failures.
+Add a root-level deploy wrapper so production deploy can be run with a simple obvious command from repo root.
 
 ## In Scope
-- Update `scripts/deploy-prod.sh` health checks to:
-  - retry for ~30 seconds after compose up
-  - support both `http://127.0.0.1` and `https://127.0.0.1` (`-k`)
-  - prefer `/api/v1/health`
-  - fallback to `/api/v1/auth/me` expecting `401`
-  - avoid any domain/host-header assumptions
-- On health-check failure, print recent logs from:
-  - `buildaweb-caddy`
-  - `buildaweb-api`
-  - `buildaweb-web`
+- Add root script `./deploy-prod.sh`.
+- Wrapper forwards execution to `./scripts/deploy-prod.sh`.
+- Preserve exit codes and arguments.
+- Make wrapper executable.
+- Brief docs update mentioning both `./deploy-prod.sh` and `make deploy-prod`.
 
 ## Out of Scope
-- App/API feature changes
-- Domain/TLS infrastructure changes
-- Compose topology changes
+- Deploy logic refactor
+- Infrastructure/API changes
 
 ## Definition of Done
-- Deploy script succeeds on IP-only EC2 when services become healthy within retry window.
-- Transient Caddy restart/reset during startup no longer causes immediate failure.
-- Script exits non-zero with service logs when health checks never recover.
-- Script prints `DEPLOY OK` only when web + API health checks pass.
+- `./deploy-prod.sh` works from repo root.
+- Wrapper does not duplicate deploy logic.
+- Existing `scripts/deploy-prod.sh` remains the source of deploy behavior.
