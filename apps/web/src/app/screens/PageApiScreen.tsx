@@ -27,6 +27,11 @@ type SeoFormValues = {
   description: string;
 };
 
+const SEO_TITLE_RECOMMENDED_MIN = 30;
+const SEO_TITLE_RECOMMENDED_MAX = 60;
+const SEO_DESCRIPTION_RECOMMENDED_MIN = 70;
+const SEO_DESCRIPTION_RECOMMENDED_MAX = 160;
+
 function asRecord(value: unknown): JsonRecord | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   return value as JsonRecord;
@@ -87,6 +92,13 @@ function seoFromUnknown(value: unknown): SeoFormValues {
   };
 }
 
+function getLengthHint(length: number, min: number, max: number): string {
+  if (length === 0) return `Recommended ${min}-${max} characters`;
+  if (length < min) return `${min - length} more recommended`;
+  if (length > max) return `${length - max} over recommended`;
+  return 'Within recommended range';
+}
+
 export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProjects }: PageApiScreenProps) {
   const [pageIdInput, setPageIdInput] = useState(pageId ?? '');
   const [pageTitleInput, setPageTitleInput] = useState('');
@@ -111,6 +123,10 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
   const [previewSrcDoc, setPreviewSrcDoc] = useState<string | null>(null);
   const [previewHash, setPreviewHash] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+
+  const seoPreviewTitle = seoForm.title.trim() || pageTitleInput.trim() || 'Untitled page';
+  const seoPreviewDescription =
+    seoForm.description.trim() || 'Add a meta description to improve how this page appears in search results.';
 
   useEffect(() => {
     setPageIdInput(pageId ?? '');
@@ -479,7 +495,8 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
                   placeholder="SEO title"
                 />
                 <p className="text-xs text-muted-foreground" role="note">
-                  {seoForm.title.length}/60
+                  {seoForm.title.length} chars · Recommended {SEO_TITLE_RECOMMENDED_MIN}-{SEO_TITLE_RECOMMENDED_MAX} ·{' '}
+                  {getLengthHint(seoForm.title.length, SEO_TITLE_RECOMMENDED_MIN, SEO_TITLE_RECOMMENDED_MAX)}
                 </p>
               </div>
               <div className="space-y-1">
@@ -491,8 +508,20 @@ export function PageApiScreen({ projectId, pageId, onPageIdChange, onBackToProje
                   placeholder="Meta description"
                 />
                 <p className="text-xs text-muted-foreground" role="note">
-                  {seoForm.description.length}/160
+                  {seoForm.description.length} chars · Recommended {SEO_DESCRIPTION_RECOMMENDED_MIN}-
+                  {SEO_DESCRIPTION_RECOMMENDED_MAX} ·{' '}
+                  {getLengthHint(
+                    seoForm.description.length,
+                    SEO_DESCRIPTION_RECOMMENDED_MIN,
+                    SEO_DESCRIPTION_RECOMMENDED_MAX,
+                  )}
                 </p>
+              </div>
+              <div className="space-y-2 border rounded-md p-3 bg-muted/20">
+                <p className="text-xs font-medium text-muted-foreground">Search preview</p>
+                <p className="text-sm text-[#1a0dab] line-clamp-1">{seoPreviewTitle}</p>
+                <p className="text-xs text-[#006621] line-clamp-1">example.com/{pageSlugInput.trim() || 'page'}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2">{seoPreviewDescription}</p>
               </div>
             </div>
           </details>
