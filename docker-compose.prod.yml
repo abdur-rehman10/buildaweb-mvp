@@ -35,6 +35,8 @@ services:
       - minio
     environment:
       NODE_ENV: production
+      DOMAIN: ${DOMAIN:-example.com}
+      PUBLIC_SITE_BASE_URL: ${PUBLIC_SITE_BASE_URL:-}
       PORT: ${PORT:-4000}
       MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/buildaweb}
       JWT_SECRET: ${JWT_SECRET:-change-me}

@@ -9,6 +9,12 @@ http://{$DOMAIN} {
 https://{$DOMAIN} {
   encode zstd gzip
 
+  # Published sites (path-based)
+  handle /p/* {
+    rewrite * /api/v1{uri}
+    reverse_proxy api:4000
+  }
+
   # API under /api/* (keep /api prefix intact)
   handle /api/* {
     reverse_proxy api:4000

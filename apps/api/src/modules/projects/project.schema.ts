@@ -27,6 +27,18 @@ export class Project {
   @Prop({ type: String, default: null })
   latestPublishId?: string | null;
 
+  @Prop({ type: Boolean, default: false })
+  isPublished!: boolean;
+
+  @Prop({ type: String, default: null, trim: true })
+  publishedSlug?: string | null;
+
+  @Prop({ type: String, default: null, trim: true })
+  publishedBucketKey?: string | null;
+
+  @Prop({ type: Number, default: 0 })
+  publishedVersion!: number;
+
   @Prop({ type: Date, default: null })
   publishedAt?: Date | null;
 
@@ -55,3 +67,4 @@ export const ProjectSchema = SchemaFactory.createForClass(Project);
 // indexes
 ProjectSchema.index({ tenantId: 1, ownerUserId: 1 });
 ProjectSchema.index({ tenantId: 1, status: 1 });
+ProjectSchema.index({ tenantId: 1, publishedSlug: 1 }, { unique: true, sparse: true });

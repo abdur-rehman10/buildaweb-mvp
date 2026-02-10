@@ -1,28 +1,36 @@
 # PLAN.md
 
 ## Branch
-feat/domain-ssl
+feat/publish-engine
 
 ## Goal
-Move production access from raw EC2 IP to domain-based HTTPS using Caddy + Let's Encrypt.
+Implement path-based publish engine so publicly published sites are served at `/p/<slug>/` from MinIO-backed artifacts.
 
 ## In Scope
-- Update Caddy production routing to:
-  - serve web on `https://<DOMAIN>`
-  - redirect `http://<DOMAIN>` to HTTPS
-  - proxy `https://<DOMAIN>/api/*` to `api:4000` without stripping `/api`
-- Keep MinIO access behavior unchanged on ports `9000` and `9001`.
-- Add/update production env template for domain-based deploy (`DOMAIN`, Caddy ACME email, CORS origin).
-- Add deployment documentation for domain + DNS + HTTPS validation checks.
+- Add project publish-state fields for path-based publish metadata:
+  - `isPublished`, `publishedAt`, `publishedSlug`, `publishedBucketKey`, `publishedVersion`
+- Extend publish flow (`POST /api/v1/projects/:id/publish`) to:
+  - generate/validate unique published slug
+  - render static output
+  - upload to MinIO prefix for current published version
+  - update project publish-state fields
+- Add `POST /api/v1/projects/:id/unpublish` to disable public serving without deleting artifacts.
+- Add public metadata endpoint `GET /api/v1/published/:slug`.
+- Add public site handler for `/p/<slug>/...` with SPA fallback:
+  - file-like paths serve exact object
+  - route-like paths serve `index.html`
+- Update Caddy so `/p/*` proxies to API published-site handler while preserving existing web and `/api` routes.
+- Add/update docs for publish engine behavior and verification.
 
 ## Out of Scope
-- Custom domain automation platform work
-- CDN, WAF, backup or IAM hardening
-- App feature or API contract changes
-- MinIO reverse-proxy/domain migration
+- Wildcard DNS/subdomain publishing
+- CDN/edge caching redesign
+- Domain management automation
+- Publish rollback UX redesign
 
 ## Definition of Done
-- `curl -I http://<DOMAIN>/` returns `301/308` to HTTPS.
-- `curl -I https://<DOMAIN>/` returns `200`.
-- `curl -I https://<DOMAIN>/api/v1/auth/me` returns `401` (not `404`).
-- Production compose still builds and starts with updated Caddy/domain config.
+- `POST /api/v1/projects/:id/publish` returns publish slug and public URL.
+- `GET /api/v1/published/:slug` returns publish metadata.
+- `GET /p/<slug>/` serves published `index.html`.
+- `GET /p/<slug>/some/route` serves published `index.html` (SPA fallback).
+- `POST /api/v1/projects/:id/unpublish` disables `/p/<slug>/` serving with 404.
