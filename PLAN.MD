@@ -1,34 +1,29 @@
 # PLAN.md
 
 ## Branch
-feat/prod-dockerfiles
+feat/prod-compose
 
 ## Goal
-Add production-grade Docker build/run setup for API and Web with minimal runtime images and no application behavior changes.
+Add a production compose stack with Caddy reverse proxy for TLS and routing across web and API services.
 
 ## In Scope
-- Add `apps/api/Dockerfile`:
-  - multi-stage build
-  - compile NestJS to `dist`
-  - runtime stage uses `NODE_ENV=production`
-  - run API using built output
-- Add `apps/web/Dockerfile`:
-  - build Vite app in build stage
-  - serve static `dist` from Nginx in runtime stage
-- Add minimal Nginx config for Web app shell routing:
-  - serve static assets
-  - SPA fallback to `index.html`
-  - no impact on published-site hosting behavior
-- Add minimal Docker Compose wiring to build and run API + Web containers locally for validation.
+- Add/adjust `docker-compose.prod.yml` to run:
+  - `mongo` with private persistent volume
+  - `minio` with persistent volume(s)
+  - `api`
+  - `web`
+  - `caddy` reverse proxy
+- Add Caddy routing config for host + API path routing with TLS suitable for local validation.
+- Add `.env.prod.example` with non-secret placeholders and required variable names.
 
 ## Out of Scope
-- Changes to app routes, business logic, API contracts, or auth
-- Any backend/frontend feature changes
-- Changes to published static-site MinIO behavior
-- Infrastructure redesign beyond required Docker build/run files
+- App feature changes (frontend/backend business logic)
+- API contract changes
+- Production secret values
+- Infrastructure beyond compose + Caddy routing setup
 
 ## Definition of Done
-- `docker build` succeeds for `apps/api` and `apps/web` images.
-- Containers can be started locally with Docker Compose.
-- Web container loads and can call API container successfully.
-- Existing API contracts and behavior remain unchanged.
+- `docker compose -f docker-compose.prod.yml up -d` starts the production stack.
+- Caddy routes app traffic to web and `/api/*` requests to API.
+- Mongo and MinIO persist data to Docker volumes.
+- `.env.prod.example` documents required environment variables without real secrets.
