@@ -1,35 +1,92 @@
 services:
+  mongo:
+    image: mongo:7
+    container_name: buildaweb-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - app_net
+
+  minio:
+    image: minio/minio
+    container_name: buildaweb-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio12345}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - app_net
+
   api:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: buildaweb-api
-    environment:
-      NODE_ENV: production
-      PORT: 4000
-      MONGO_URI: mongodb://mongo:27017/buildaweb
-      MINIO_ENDPOINT: minio
-      MINIO_PORT: 9000
-      MINIO_USE_SSL: "false"
-      MINIO_ACCESS_KEY: minio
-      MINIO_SECRET_KEY: minio12345
-      MINIO_BUCKET: buildaweb
-      MINIO_PUBLIC_BASE_URL: http://localhost:9000
-      JWT_SECRET: change-me
-      JWT_EXPIRES_IN: 1d
-      BCRYPT_SALT_ROUNDS: 12
+    restart: unless-stopped
     depends_on:
       - mongo
       - minio
-    ports:
-      - "4001:4000"
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-4000}
+      MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/buildaweb}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
+      BCRYPT_SALT_ROUNDS: ${BCRYPT_SALT_ROUNDS:-12}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio}
+      MINIO_PORT: ${MINIO_PORT:-9000}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minio}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minio12345}
+      MINIO_BUCKET: ${MINIO_BUCKET:-buildaweb}
+      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-https://minio.localhost}
+    networks:
+      - app_net
 
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
     container_name: buildaweb-web
+    restart: unless-stopped
     depends_on:
       - api
+    networks:
+      - app_net
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: buildaweb-caddy
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+      - minio
     ports:
-      - "3000:80"
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-app.localhost}
+      API_DOMAIN: ${API_DOMAIN:-api.localhost}
+      MINIO_DOMAIN: ${MINIO_DOMAIN:-minio.localhost}
+      MINIO_CONSOLE_DOMAIN: ${MINIO_CONSOLE_DOMAIN:-minio-console.localhost}
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - app_net
+
+volumes:
+  mongo_data:
+  minio_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  app_net:
+    driver: bridge
