@@ -2,11 +2,11 @@
 
 ## Branch
 
-feat/ai-generate-ui
+chore/lint-scope-ai
 
 ## Goal
 
-Wire a frontend “Generate with AI” flow to the existing backend endpoint so users can generate site content from a prompt and continue directly into page editing.
+Add a scoped lint workflow for AI generator files so current PRs can pass quality checks while legacy repo-wide lint debt is tracked for a dedicated cleanup phase.
 
 ## In Scope
 
@@ -84,3 +84,24 @@ Wire a frontend “Generate with AI” flow to the existing backend endpoint so 
   - Wired frontend API client to `POST /api/v1/projects/:projectId/generate`.
   - Ensured generation flow opens the generated page in the editor after refresh of pages/navigation.
   - Added frontend tests for API call payload, loading-state button disabling, and success/error behavior.
+
+### Step 7: Full AI Website Generator
+
+- Status: DONE
+- Changes:
+  - Added structured OpenAI generator output validation with `zod` and one automatic retry on invalid JSON.
+  - Added Pexels integration for real section imagery (`PEXELS_API_KEY`) and injected `imageUrl` values.
+  - Added service-level generation flow `ProjectsService.createFromPrompt()` to build project pages/navigation from generated schema.
+  - Enforced non-empty generated sections/pages and home-page section quality checks.
+  - Added tests for generation success, invalid JSON rejection, empty-section rejection, and image injection cleanup.
+
+### Step 8: Scoped lint baseline for AI generator
+
+- Status: DONE
+- Changes:
+  - Added `pnpm --dir apps/api run lint:ai` to lint only AI generator files (`src/modules/ai/**` + `test/ai-generator.spec.ts`).
+  - Kept global lint rules unchanged to avoid masking existing strict-rule debt across legacy modules.
+  - Confirmed AI generator files are lint-clean under scoped lint and covered by tests.
+- Lint debt note:
+  - Repo-wide `pnpm --dir apps/api lint` still reports legacy violations outside this scope.
+  - A dedicated future milestone is required for full repository lint cleanup.

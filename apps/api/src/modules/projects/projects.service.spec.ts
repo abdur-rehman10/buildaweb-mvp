@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Model } from 'mongoose';
+import { AiService } from '../ai/ai.service';
 import { NavigationDocument } from '../navigation/navigation.schema';
 import { PageDocument } from '../pages/page.schema';
 import { PublishDocument } from '../publish/publish.schema';
@@ -70,6 +71,7 @@ describe('ProjectsService.create', () => {
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
+      { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
     );
   });
 
@@ -119,26 +121,20 @@ describe('ProjectsService.setHomePage', () => {
       create: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
-      updateOne: jest
-        .fn()
-        .mockReturnValue({
-          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
-        }),
+      updateOne: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
     };
 
     pageModel = {
       findOne: jest.fn(),
       find: jest.fn(),
-      updateMany: jest
-        .fn()
-        .mockReturnValue({
-          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
-        }),
-      updateOne: jest
-        .fn()
-        .mockReturnValue({
-          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
-        }),
+      updateMany: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
+      updateOne: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
     };
 
     navigationModel = {
@@ -155,6 +151,7 @@ describe('ProjectsService.setHomePage', () => {
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
+      { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
     );
   });
 
@@ -250,26 +247,20 @@ describe('ProjectsService.settings', () => {
       create: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
-      updateOne: jest
-        .fn()
-        .mockReturnValue({
-          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
-        }),
+      updateOne: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
     };
 
     pageModel = {
       findOne: jest.fn(),
       find: jest.fn(),
-      updateMany: jest
-        .fn()
-        .mockReturnValue({
-          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
-        }),
-      updateOne: jest
-        .fn()
-        .mockReturnValue({
-          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
-        }),
+      updateMany: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
+      updateOne: jest.fn().mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      }),
     };
 
     navigationModel = {
@@ -286,6 +277,7 @@ describe('ProjectsService.settings', () => {
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
+      { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
     );
   });
 
@@ -452,6 +444,7 @@ describe('ProjectsService.draftStatus', () => {
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
+      { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
     );
   });
 

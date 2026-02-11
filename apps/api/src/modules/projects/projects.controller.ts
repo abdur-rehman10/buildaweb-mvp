@@ -15,11 +15,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import { ok, fail } from '../../common/api-response';
-import {
-  AiGenerationError,
-  AiInvalidJsonError,
-  AiService,
-} from '../ai/ai.service';
+import { AiGenerationError, AiInvalidJsonError } from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -32,7 +28,6 @@ import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
 export class ProjectsController {
   constructor(
     private readonly projects: ProjectsService,
-    private readonly ai: AiService,
     private readonly config: ConfigService,
   ) {}
 
@@ -83,25 +78,12 @@ export class ProjectsController {
       );
     }
 
-    const project = await this.projects.getByIdScoped({
-      tenantId,
-      ownerUserId,
-      projectId,
-    });
-    if (!project) {
-      throw new HttpException(
-        fail('NOT_FOUND', 'Not found'),
-        HttpStatus.NOT_FOUND,
-      );
-    }
-
     try {
-      const generated = await this.ai.generateSiteFromPrompt(prompt);
-      await this.projects.replaceProjectContentFromGeneration({
+      await this.projects.createFromPrompt({
         tenantId,
         ownerUserId,
         projectId,
-        generated,
+        prompt,
       });
 
       const publicAppUrl =
@@ -117,10 +99,17 @@ export class ProjectsController {
         previewUrl,
       });
     } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new HttpException(
+          fail('NOT_FOUND', 'Not found'),
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
       if (error instanceof AiInvalidJsonError) {
         throw new HttpException(
           fail('AI_INVALID_JSON', 'AI returned invalid JSON'),
-          HttpStatus.BAD_GATEWAY,
+          HttpStatus.UNPROCESSABLE_ENTITY,
         );
       }
 

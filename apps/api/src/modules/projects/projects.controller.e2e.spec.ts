@@ -9,7 +9,6 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { AiService } from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
@@ -22,17 +21,12 @@ type MockProjectsService = {
   updateSettings: jest.Mock;
   getByIdScoped: jest.Mock;
   setHomePage: jest.Mock;
-  replaceProjectContentFromGeneration: jest.Mock;
-};
-
-type MockAiService = {
-  generateSiteFromPrompt: jest.Mock;
+  createFromPrompt: jest.Mock;
 };
 
 describe('ProjectsController single-project enforcement (request)', () => {
   let app: INestApplication;
   let projectsService: MockProjectsService;
-  let aiService: MockAiService;
   let jwt: JwtService;
   let createdProjectId: string | null;
 
@@ -53,20 +47,9 @@ describe('ProjectsController single-project enforcement (request)', () => {
       updateSettings: jest.fn(),
       getByIdScoped: jest.fn(),
       setHomePage: jest.fn(),
-      replaceProjectContentFromGeneration: jest.fn(),
-    };
-    aiService = {
-      generateSiteFromPrompt: jest.fn().mockResolvedValue({
-        pages: [
-          {
-            title: 'Home',
-            slug: '/',
-            isHome: true,
-            editorJson: { sections: [] },
-          },
-        ],
-        navigation: [{ label: 'Home', slug: '/' }],
-        theme: {},
+      createFromPrompt: jest.fn().mockResolvedValue({
+        homePageId: 'page-1',
+        pageCount: 2,
       }),
     };
 
@@ -76,7 +59,6 @@ describe('ProjectsController single-project enforcement (request)', () => {
       controllers: [ProjectsController],
       providers: [
         { provide: ProjectsService, useValue: projectsService },
-        { provide: AiService, useValue: aiService },
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('http://13.50.101.211') },
@@ -153,10 +135,6 @@ describe('ProjectsController single-project enforcement (request)', () => {
 
   it('generates site content and returns previewUrl', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
-    projectsService.getByIdScoped.mockResolvedValue({
-      _id: 'project-1',
-      name: 'Main Project',
-    });
 
     const response = await request(app.getHttpServer())
       .post('/api/v1/projects/project-1/generate')
@@ -172,13 +150,11 @@ describe('ProjectsController single-project enforcement (request)', () => {
         previewUrl: 'http://13.50.101.211/editor/project-1',
       },
     });
-    expect(
-      projectsService.replaceProjectContentFromGeneration,
-    ).toHaveBeenCalledWith({
+    expect(projectsService.createFromPrompt).toHaveBeenCalledWith({
       tenantId: 'default',
       ownerUserId: 'user-1',
       projectId: 'project-1',
-      generated: expect.any(Object),
+      prompt: 'Create a SaaS landing site',
     });
   });
 });

@@ -74,6 +74,12 @@ What it does:
 - Runs HTTP health checks for web (`/`), API (`/api/v1/health` with `/api/v1/auth/me` fallback), and media proxy (`/media/minio/health/live`).
 - Prints `DEPLOY OK` only when checks pass.
 
+## API Lint Scope (Temporary)
+- Run scoped AI lint during AI feature work:
+  - `pnpm --dir apps/api run lint:ai`
+- This targets only AI generator files and avoids unrelated legacy lint failures in untouched modules.
+- Full repo-wide lint cleanup is tracked as a separate milestone.
+
 ## Rollback
 If a deployment is bad:
 
