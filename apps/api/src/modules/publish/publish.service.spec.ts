@@ -68,7 +68,8 @@ describe('PublishService pretty URLs', () => {
       projectId: 'project-1',
       ownerUserId: 'user-1',
       status: 'publishing' as const,
-      baseUrl: 'http://localhost:9000/buildaweb/buildaweb-sites/tenants/default/projects/project-1/publishes/temp/',
+      baseUrl:
+        'http://localhost:9000/buildaweb/buildaweb-sites/tenants/default/projects/project-1/publishes/temp/',
       errorMessage: null as string | null,
       save: jest.fn().mockResolvedValue(undefined),
     };
@@ -110,7 +111,11 @@ describe('PublishService pretty URLs', () => {
                     {
                       nodes: [
                         { type: 'button', label: 'Go home', href: '/' },
-                        { type: 'button', label: 'Go services', href: 'services' },
+                        {
+                          type: 'button',
+                          label: 'Go services',
+                          href: 'services',
+                        },
                       ],
                     },
                   ],
@@ -173,13 +178,16 @@ describe('PublishService pretty URLs', () => {
     };
 
     minio = {
-      upload: jest.fn().mockResolvedValue('http://localhost:9000/buildaweb/object'),
+      upload: jest
+        .fn()
+        .mockResolvedValue('http://localhost:9000/buildaweb/object'),
     };
 
     config = {
       get: jest.fn((key: string) => {
         if (key === 'MINIO_PUBLIC_BASE_URL') return 'http://localhost:9000';
         if (key === 'MINIO_BUCKET') return 'buildaweb';
+        if (key === 'PUBLIC_APP_URL') return 'http://13.50.101.211';
         return undefined;
       }),
     };
@@ -235,11 +243,15 @@ describe('PublishService pretty URLs', () => {
         },
       ]),
     );
-    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({ itemsJson: [] }),
+    );
 
     await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
       code: 'PUBLISH_PREFLIGHT_FAILED',
-      details: expect.arrayContaining([expect.stringContaining('Duplicate slug "about"')]),
+      details: expect.arrayContaining([
+        expect.stringContaining('Duplicate slug "about"'),
+      ]),
     });
 
     expect(publishModel.create).not.toHaveBeenCalled();
@@ -258,11 +270,15 @@ describe('PublishService pretty URLs', () => {
         },
       ]),
     );
-    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({ itemsJson: [] }),
+    );
 
     await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
       code: 'PUBLISH_PREFLIGHT_FAILED',
-      details: expect.arrayContaining([expect.stringContaining('Exactly one home page is required')]),
+      details: expect.arrayContaining([
+        expect.stringContaining('Exactly one home page is required'),
+      ]),
     });
 
     expect(publishModel.create).not.toHaveBeenCalled();
@@ -277,7 +293,9 @@ describe('PublishService pretty URLs', () => {
 
     await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
       code: 'PUBLISH_PREFLIGHT_FAILED',
-      details: expect.arrayContaining([expect.stringContaining('Navigation item 1 references missing pageId')]),
+      details: expect.arrayContaining([
+        expect.stringContaining('Navigation item 1 references missing pageId'),
+      ]),
     });
 
     expect(publishModel.create).not.toHaveBeenCalled();
@@ -288,12 +306,20 @@ describe('PublishService pretty URLs', () => {
     const result = await service.createAndPublish(baseParams);
 
     expect(result.status).toBe('live');
-    expect(result.url).toBe('/p/main-site/');
+    expect(result.url).toBe('http://13.50.101.211/p/main-site');
 
-    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
-    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
-    const aboutUpload = uploads.find((upload) => upload.objectPath.endsWith('/about/index.html'));
-    const cssUpload = uploads.find((upload) => upload.objectPath.endsWith('/styles.css'));
+    const uploads = minio.upload.mock.calls.map(
+      (call) => call[0] as { objectPath: string; buffer: Buffer },
+    );
+    const homeUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/index.html'),
+    );
+    const aboutUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/about/index.html'),
+    );
+    const cssUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/styles.css'),
+    );
 
     expect(homeUpload).toBeDefined();
     expect(aboutUpload).toBeDefined();
@@ -311,7 +337,9 @@ describe('PublishService pretty URLs', () => {
     expect(aboutHtml).toContain('href="../index.html"');
     expect(aboutHtml).toContain('href="../services/index.html"');
     expect(aboutHtml).toContain('class="baw-node-button" href="../index.html"');
-    expect(aboutHtml).toContain('class="baw-node-button" href="../services/index.html"');
+    expect(aboutHtml).toContain(
+      'class="baw-node-button" href="../services/index.html"',
+    );
     expect(aboutHtml).toContain('<span>About</span>');
     expect(aboutHtml).toContain('href="../styles.css"');
     expect(aboutHtml).not.toContain('href="/home/index.html"');
@@ -340,6 +368,16 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
+  it('returns empty public site url when PUBLIC_APP_URL is not configured', () => {
+    config.get.mockImplementation((key: string) => {
+      if (key === 'MINIO_PUBLIC_BASE_URL') return 'http://localhost:9000';
+      if (key === 'MINIO_BUCKET') return 'buildaweb';
+      return undefined;
+    });
+
+    expect(service.publicSiteUrlFromSlug('main-site')).toBe('');
+  });
+
   it('keeps external and hash button links unchanged in published html', async () => {
     pageModel.find.mockReturnValueOnce(
       mockLeanExec([
@@ -354,7 +392,11 @@ describe('PublishService pretty URLs', () => {
                 blocks: [
                   {
                     nodes: [
-                      { type: 'button', label: 'External', href: 'https://example.com/docs' },
+                      {
+                        type: 'button',
+                        label: 'External',
+                        href: 'https://example.com/docs',
+                      },
                       { type: 'button', label: 'Hash', href: '#features' },
                     ],
                   },
@@ -365,12 +407,18 @@ describe('PublishService pretty URLs', () => {
         },
       ]),
     );
-    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({ itemsJson: [] }),
+    );
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
-    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+    const uploads = minio.upload.mock.calls.map(
+      (call) => call[0] as { objectPath: string; buffer: Buffer },
+    );
+    const homeUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/index.html'),
+    );
 
     expect(homeUpload).toBeDefined();
     const html = homeUpload!.buffer.toString('utf-8');
@@ -394,18 +442,26 @@ describe('PublishService pretty URLs', () => {
         },
       ]),
     );
-    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({ itemsJson: [] }),
+    );
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
-    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+    const uploads = minio.upload.mock.calls.map(
+      (call) => call[0] as { objectPath: string; buffer: Buffer },
+    );
+    const homeUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/index.html'),
+    );
 
     expect(homeUpload).toBeDefined();
 
     const html = homeUpload!.buffer.toString('utf-8');
     expect(html).toContain('<title>SEO Home</title>');
-    expect(html).toContain('<meta name="description" content="Home description" />');
+    expect(html).toContain(
+      '<meta name="description" content="Home description" />',
+    );
     expect(html).not.toContain('property="og:');
   });
 
@@ -422,12 +478,18 @@ describe('PublishService pretty URLs', () => {
         },
       ]),
     );
-    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({ itemsJson: [] }),
+    );
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
-    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+    const uploads = minio.upload.mock.calls.map(
+      (call) => call[0] as { objectPath: string; buffer: Buffer },
+    );
+    const homeUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/index.html'),
+    );
 
     expect(homeUpload).toBeDefined();
 
@@ -463,7 +525,9 @@ describe('PublishService pretty URLs', () => {
         },
       ]),
     );
-    navigationModel.findOne.mockReturnValueOnce(mockLeanExec({ itemsJson: [] }));
+    navigationModel.findOne.mockReturnValueOnce(
+      mockLeanExec({ itemsJson: [] }),
+    );
     assets.getByIdsScoped.mockResolvedValueOnce([
       {
         _id: '507f1f77bcf86cd799439091',
@@ -477,22 +541,30 @@ describe('PublishService pretty URLs', () => {
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map((call) => call[0] as { objectPath: string; buffer: Buffer });
-    const homeUpload = uploads.find((upload) => upload.objectPath.endsWith('/index.html'));
+    const uploads = minio.upload.mock.calls.map(
+      (call) => call[0] as { objectPath: string; buffer: Buffer },
+    );
+    const homeUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/index.html'),
+    );
 
     expect(homeUpload).toBeDefined();
 
     const html = homeUpload!.buffer.toString('utf-8');
     expect(html).toContain('<html lang="fr">');
     expect(html).toContain('<title>Project Site Name</title>');
-    expect(html).toContain('<link rel="icon" href="http://localhost:9000/buildaweb/assets/favicon.png" />');
+    expect(html).toContain(
+      '<link rel="icon" href="http://localhost:9000/buildaweb/assets/favicon.png" />',
+    );
     expect(html).toContain(
       '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/default-og.png" />',
     );
   });
 
   it('lists publishes scoped to project/user sorted by createdAt desc with limit', async () => {
-    const exec = jest.fn().mockResolvedValue([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
+    const exec = jest
+      .fn()
+      .mockResolvedValue([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
     const limit = jest.fn().mockReturnValue({ exec });
     const sort = jest.fn().mockReturnValue({ limit });
     publishModel.find.mockReturnValue({ sort });

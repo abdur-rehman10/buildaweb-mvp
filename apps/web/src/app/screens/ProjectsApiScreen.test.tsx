@@ -432,6 +432,30 @@ describe('ProjectsApiScreen toasts', () => {
     });
   });
 
+  it('falls back to window origin publish URL when API url is empty and slug is provided', async () => {
+    vi.mocked(publishApi.create).mockResolvedValue({
+      publishId: 'publish-slug-only',
+      status: 'live',
+      url: '',
+      slug: 'main-site',
+      publishedSlug: 'main-site',
+    });
+
+    renderScreen();
+
+    const publishButton = await screen.findByRole('button', { name: 'Publish' });
+    fireEvent.click(publishButton);
+
+    const expectedUrl = `${window.location.origin}/p/main-site`;
+    const homeLink = await screen.findByRole('link', { name: 'Open published site' });
+    expect(homeLink.getAttribute('href')).toBe(expectedUrl);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy URL' }));
+    await waitFor(() => {
+      expect(window.navigator.clipboard.writeText).toHaveBeenCalledWith(expectedUrl);
+    });
+  });
+
   it('shows index.html subpage links when publish URL uses proxy port', async () => {
     const proxyPublishedBaseUrl = 'http://localhost:8080/buildaweb-sites/tenants/default/projects/project-1/publishes/publish-1/';
     vi.mocked(publishApi.create).mockResolvedValue({
