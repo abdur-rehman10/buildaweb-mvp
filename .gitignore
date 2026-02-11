@@ -151,3 +151,6 @@ create_download.pem
 *.pub
 .env
 .env.*
+docs/mvp-gap-audit.md
+docs/mvp-super-audit.json
+docs/mvp-super-audit.md
