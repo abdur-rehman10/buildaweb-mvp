@@ -1,4 +1,8 @@
-import { InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Model } from 'mongoose';
 import { NavigationDocument } from '../navigation/navigation.schema';
 import { PageDocument } from '../pages/page.schema';
@@ -30,6 +34,79 @@ type MockPublishModel = {
   find: jest.Mock;
 };
 
+describe('ProjectsService.create', () => {
+  let service: ProjectsService;
+  let projectModel: MockProjectModel;
+  let pageModel: MockPageModel;
+  let navigationModel: MockNavigationModel;
+  let publishModel: MockPublishModel;
+
+  beforeEach(() => {
+    projectModel = {
+      create: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      updateOne: jest.fn(),
+    };
+
+    pageModel = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      updateMany: jest.fn(),
+      updateOne: jest.fn(),
+    };
+
+    navigationModel = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+    };
+
+    publishModel = {
+      find: jest.fn(),
+    };
+
+    service = new ProjectsService(
+      projectModel as unknown as Model<ProjectDocument>,
+      pageModel as unknown as Model<PageDocument>,
+      navigationModel as unknown as Model<NavigationDocument>,
+      publishModel as unknown as Model<PublishDocument>,
+    );
+  });
+
+  it('throws ForbiddenException when owner already has a project', async () => {
+    projectModel.findOne.mockReturnValue({
+      exec: jest.fn().mockResolvedValue({ _id: 'project-1' }),
+    });
+
+    await expect(
+      service.create({
+        tenantId: 'default',
+        ownerUserId: 'user-1',
+        name: 'My Project',
+        defaultLocale: 'en',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(projectModel.create).not.toHaveBeenCalled();
+  });
+
+  it('converts duplicate key errors to ForbiddenException', async () => {
+    projectModel.findOne.mockReturnValue({
+      exec: jest.fn().mockResolvedValue(null),
+    });
+    projectModel.create.mockRejectedValue({ code: 11000 });
+
+    await expect(
+      service.create({
+        tenantId: 'default',
+        ownerUserId: 'user-1',
+        name: 'My Project',
+        defaultLocale: 'en',
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
 describe('ProjectsService.setHomePage', () => {
   let service: ProjectsService;
   let projectModel: MockProjectModel;
@@ -42,14 +119,26 @@ describe('ProjectsService.setHomePage', () => {
       create: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
-      updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+      updateOne: jest
+        .fn()
+        .mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        }),
     };
 
     pageModel = {
       findOne: jest.fn(),
       find: jest.fn(),
-      updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
-      updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+      updateMany: jest
+        .fn()
+        .mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        }),
+      updateOne: jest
+        .fn()
+        .mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        }),
     };
 
     navigationModel = {
@@ -161,14 +250,26 @@ describe('ProjectsService.settings', () => {
       create: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
-      updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+      updateOne: jest
+        .fn()
+        .mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        }),
     };
 
     pageModel = {
       findOne: jest.fn(),
       find: jest.fn(),
-      updateMany: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
-      updateOne: jest.fn().mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) }),
+      updateMany: jest
+        .fn()
+        .mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        }),
+      updateOne: jest
+        .fn()
+        .mockReturnValue({
+          exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+        }),
     };
 
     navigationModel = {
@@ -382,7 +483,10 @@ describe('ProjectsService.draftStatus', () => {
       exec: jest.fn().mockResolvedValue([]),
     });
 
-    const result = await service.listByOwnerWithDraftStatus({ tenantId: 'default', ownerUserId: 'user-1' });
+    const result = await service.listByOwnerWithDraftStatus({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+    });
     expect(result).toEqual([
       {
         project: expect.objectContaining({ _id: '507f1f77bcf86cd799439100' }),
@@ -402,7 +506,11 @@ describe('ProjectsService.draftStatus', () => {
         title: 'Home',
         slug: '/',
         isHome: true,
-        editorJson: { sections: [{ blocks: [{ nodes: [{ type: 'text', content: 'Hello' }] }] }] },
+        editorJson: {
+          sections: [
+            { blocks: [{ nodes: [{ type: 'text', content: 'Hello' }] }] },
+          ],
+        },
         seoJson: { title: 'Home' },
       },
     ];
@@ -441,7 +549,9 @@ describe('ProjectsService.draftStatus', () => {
     navigationModel.find.mockReturnValue({
       select: jest.fn().mockReturnThis(),
       lean: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([{ projectId, itemsJson: navigationItems }]),
+      exec: jest
+        .fn()
+        .mockResolvedValue([{ projectId, itemsJson: navigationItems }]),
     });
     publishModel.find.mockReturnValue({
       select: jest.fn().mockReturnThis(),
@@ -449,7 +559,10 @@ describe('ProjectsService.draftStatus', () => {
       exec: jest.fn().mockResolvedValue([{ _id: publishId, draftSnapshot }]),
     });
 
-    const result = await service.listByOwnerWithDraftStatus({ tenantId: 'default', ownerUserId: 'user-1' });
+    const result = await service.listByOwnerWithDraftStatus({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+    });
     expect(result).toEqual([
       {
         project: expect.objectContaining({ _id: projectId }),

@@ -1,4 +1,17 @@
-import { Body, Controller, Get, HttpException, HttpStatus, NotFoundException, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  HttpException,
+  HttpStatus,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ok, fail } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -21,12 +34,23 @@ export class ProjectsController {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.create({
-      tenantId,
-      ownerUserId,
-      name: dto.name,
-      defaultLocale: dto.defaultLocale ?? 'en',
-    });
+    let project;
+    try {
+      project = await this.projects.create({
+        tenantId,
+        ownerUserId,
+        name: dto.name,
+        defaultLocale: dto.defaultLocale ?? 'en',
+      });
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        throw new HttpException(
+          fail('PROJECT_ALREADY_EXISTS', 'User already has a project'),
+          HttpStatus.FORBIDDEN,
+        );
+      }
+      throw error;
+    }
 
     return ok({ project_id: String(project._id) });
   }
@@ -36,7 +60,10 @@ export class ProjectsController {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const projects = await this.projects.listByOwnerWithDraftStatus({ tenantId, ownerUserId });
+    const projects = await this.projects.listByOwnerWithDraftStatus({
+      tenantId,
+      ownerUserId,
+    });
 
     return ok({
       projects: projects.map((entry) => ({
@@ -44,8 +71,12 @@ export class ProjectsController {
         name: entry.project.name,
         status: entry.project.status,
         defaultLocale: entry.project.defaultLocale,
-        homePageId: entry.project.homePageId ? String(entry.project.homePageId) : null,
-        latestPublishId: entry.project.latestPublishId ? String(entry.project.latestPublishId) : null,
+        homePageId: entry.project.homePageId
+          ? String(entry.project.homePageId)
+          : null,
+        latestPublishId: entry.project.latestPublishId
+          ? String(entry.project.latestPublishId)
+          : null,
         publishedAt: entry.project.publishedAt ?? null,
         siteName: entry.project.siteName ?? null,
         logoAssetId: entry.project.logoAssetId ?? null,
@@ -64,9 +95,16 @@ export class ProjectsController {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const projectResult = await this.projects.getByIdScopedWithDraftStatus({ tenantId, ownerUserId, projectId });
+    const projectResult = await this.projects.getByIdScopedWithDraftStatus({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!projectResult) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const project = projectResult.project;
@@ -77,7 +115,9 @@ export class ProjectsController {
         status: project.status,
         defaultLocale: project.defaultLocale,
         homePageId: project.homePageId ? String(project.homePageId) : null,
-        latestPublishId: project.latestPublishId ? String(project.latestPublishId) : null,
+        latestPublishId: project.latestPublishId
+          ? String(project.latestPublishId)
+          : null,
         publishedAt: project.publishedAt ?? null,
         siteName: project.siteName ?? null,
         logoAssetId: project.logoAssetId ?? null,
@@ -92,13 +132,23 @@ export class ProjectsController {
   }
 
   @Get(':projectId/settings')
-  async getProjectSettings(@Param('projectId') projectId: string, @Req() req: any) {
+  async getProjectSettings(
+    @Param('projectId') projectId: string,
+    @Req() req: any,
+  ) {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const settings = await this.projects.getSettings({ tenantId, ownerUserId, projectId });
+    const settings = await this.projects.getSettings({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!settings) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return ok({ settings });
@@ -124,7 +174,10 @@ export class ProjectsController {
       locale: dto.locale,
     });
     if (!settings) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return ok({ settings });
@@ -137,15 +190,25 @@ export class ProjectsController {
     @Req() req: any,
   ) {
     if (!this.isValidObjectId(projectId)) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
@@ -162,7 +225,10 @@ export class ProjectsController {
       });
     } catch (error) {
       if (error instanceof NotFoundException) {
-        throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          fail('NOT_FOUND', 'Not found'),
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       throw error;

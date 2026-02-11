@@ -1,10 +1,22 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
+import {
+  Navigation,
+  NavigationDocument,
+} from '../navigation/navigation.schema';
 import { Page, PageDocument } from '../pages/page.schema';
 import { Publish, PublishDocument } from '../publish/publish.schema';
-import { buildPublishDraftSnapshot, snapshotSignature, type PublishDraftSnapshot } from '../publish/publish-snapshot.util';
+import {
+  buildPublishDraftSnapshot,
+  snapshotSignature,
+  type PublishDraftSnapshot,
+} from '../publish/publish-snapshot.util';
 import { Project, ProjectDocument } from './project.schema';
 
 type ProjectWithDraftStatus = {
@@ -30,10 +42,13 @@ type ProjectWithDraftStatus = {
 @Injectable()
 export class ProjectsService {
   constructor(
-    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(Project.name)
+    private readonly projectModel: Model<ProjectDocument>,
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
-    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
-    @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
+    @InjectModel(Navigation.name)
+    private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Publish.name)
+    private readonly publishModel: Model<PublishDocument>,
   ) {}
 
   private normalizeOptionalString(value: unknown): string | null {
@@ -47,28 +62,70 @@ export class ProjectsService {
     return normalized ?? fallback;
   }
 
+  private isDuplicateKeyError(error: unknown) {
+    return !!(
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: number }).code === 11000
+    );
+  }
+
   private mapSettings(project: ProjectDocument) {
     return {
       siteName: this.normalizeOptionalString(project.siteName),
       logoAssetId: this.normalizeOptionalString(project.logoAssetId),
       faviconAssetId: this.normalizeOptionalString(project.faviconAssetId),
-      defaultOgImageAssetId: this.normalizeOptionalString(project.defaultOgImageAssetId),
-      locale: this.normalizeLocale(project.locale, this.normalizeLocale(project.defaultLocale, 'en')),
+      defaultOgImageAssetId: this.normalizeOptionalString(
+        project.defaultOgImageAssetId,
+      ),
+      locale: this.normalizeLocale(
+        project.locale,
+        this.normalizeLocale(project.defaultLocale, 'en'),
+      ),
     };
   }
 
-  async create(params: { tenantId: string; ownerUserId: string; name: string; defaultLocale: string }) {
-    return this.projectModel.create({
+  async create(params: {
+    tenantId: string;
+    ownerUserId: string;
+    name: string;
+    defaultLocale: string;
+  }) {
+    const existingProject = await this.findFirstByOwner({
       tenantId: params.tenantId,
       ownerUserId: params.ownerUserId,
-      name: params.name,
-      defaultLocale: params.defaultLocale,
-      status: 'draft',
     });
+    if (existingProject) {
+      throw new ForbiddenException('User already has a project');
+    }
+
+    try {
+      return await this.projectModel.create({
+        tenantId: params.tenantId,
+        ownerUserId: params.ownerUserId,
+        name: params.name,
+        defaultLocale: params.defaultLocale,
+        status: 'draft',
+      });
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) {
+        throw new ForbiddenException('User already has a project');
+      }
+      throw error;
+    }
+  }
+
+  async findFirstByOwner(params: { tenantId: string; ownerUserId: string }) {
+    return this.projectModel
+      .findOne({ tenantId: params.tenantId, ownerUserId: params.ownerUserId })
+      .exec();
   }
 
   async listByOwner(params: { tenantId: string; ownerUserId: string }) {
-    return this.projectModel.find({ tenantId: params.tenantId, ownerUserId: params.ownerUserId }).exec();
+    return this.projectModel
+      .find({ tenantId: params.tenantId, ownerUserId: params.ownerUserId })
+      .exec();
   }
 
   private normalizeLatestPublishId(value: unknown): string | null {
@@ -152,7 +209,10 @@ export class ProjectsService {
 
     const navigationItemsByProjectId = new Map<string, unknown[]>();
     for (const navigation of navigations) {
-      navigationItemsByProjectId.set(String(navigation.projectId), Array.isArray(navigation.itemsJson) ? navigation.itemsJson : []);
+      navigationItemsByProjectId.set(
+        String(navigation.projectId),
+        Array.isArray(navigation.itemsJson) ? navigation.itemsJson : [],
+      );
     }
 
     const currentSnapshotByProjectId = new Map<string, PublishDraftSnapshot>();
@@ -188,7 +248,10 @@ export class ProjectsService {
 
       for (const publish of publishes) {
         if (publish.draftSnapshot) {
-          publishSnapshotById.set(String(publish._id), publish.draftSnapshot as PublishDraftSnapshot);
+          publishSnapshotById.set(
+            String(publish._id),
+            publish.draftSnapshot as PublishDraftSnapshot,
+          );
         }
       }
     }
@@ -196,7 +259,9 @@ export class ProjectsService {
     const hasUnpublishedChangesByProjectId = new Map<string, boolean>();
     for (const project of params.projects) {
       const projectId = String(project._id);
-      const latestPublishId = this.normalizeLatestPublishId(project.latestPublishId);
+      const latestPublishId = this.normalizeLatestPublishId(
+        project.latestPublishId,
+      );
 
       if (!latestPublishId) {
         hasUnpublishedChangesByProjectId.set(projectId, true);
@@ -219,7 +284,10 @@ export class ProjectsService {
     return hasUnpublishedChangesByProjectId;
   }
 
-  async listByOwnerWithDraftStatus(params: { tenantId: string; ownerUserId: string }): Promise<ProjectWithDraftStatus[]> {
+  async listByOwnerWithDraftStatus(params: {
+    tenantId: string;
+    ownerUserId: string;
+  }): Promise<ProjectWithDraftStatus[]> {
     const projects = await this.projectModel
       .find({ tenantId: params.tenantId, ownerUserId: params.ownerUserId })
       .lean()
@@ -233,21 +301,36 @@ export class ProjectsService {
 
     return projects.map((project) => ({
       project,
-      hasUnpublishedChanges: hasUnpublishedChangesByProjectId.get(String(project._id)) ?? true,
+      hasUnpublishedChanges:
+        hasUnpublishedChangesByProjectId.get(String(project._id)) ?? true,
     }));
   }
 
-  async getByIdScoped(params: { tenantId: string; ownerUserId: string; projectId: string }) {
+  async getByIdScoped(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+  }) {
     return this.projectModel
-      .findOne({ _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId })
+      .findOne({
+        _id: params.projectId,
+        tenantId: params.tenantId,
+        ownerUserId: params.ownerUserId,
+      })
       .exec();
   }
 
-  async getByIdScopedWithDraftStatus(
-    params: { tenantId: string; ownerUserId: string; projectId: string },
-  ): Promise<ProjectWithDraftStatus | null> {
+  async getByIdScopedWithDraftStatus(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+  }): Promise<ProjectWithDraftStatus | null> {
     const project = await this.projectModel
-      .findOne({ _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId })
+      .findOne({
+        _id: params.projectId,
+        tenantId: params.tenantId,
+        ownerUserId: params.ownerUserId,
+      })
       .lean()
       .exec();
     if (!project) return null;
@@ -260,11 +343,16 @@ export class ProjectsService {
 
     return {
       project,
-      hasUnpublishedChanges: hasUnpublishedChangesByProjectId.get(String(project._id)) ?? true,
+      hasUnpublishedChanges:
+        hasUnpublishedChangesByProjectId.get(String(project._id)) ?? true,
     };
   }
 
-  async getSettings(params: { tenantId: string; ownerUserId: string; projectId: string }) {
+  async getSettings(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+  }) {
     const project = await this.getByIdScoped(params);
     if (!project) {
       return null;
@@ -288,7 +376,9 @@ export class ProjectsService {
       return null;
     }
 
-    const originalHomePageId = project.homePageId ? String(project.homePageId) : null;
+    const originalHomePageId = project.homePageId
+      ? String(project.homePageId)
+      : null;
     const setPayload: {
       siteName?: string | null;
       logoAssetId?: string | null;
@@ -304,13 +394,20 @@ export class ProjectsService {
       setPayload.logoAssetId = this.normalizeOptionalString(params.logoAssetId);
     }
     if (Object.prototype.hasOwnProperty.call(params, 'faviconAssetId')) {
-      setPayload.faviconAssetId = this.normalizeOptionalString(params.faviconAssetId);
+      setPayload.faviconAssetId = this.normalizeOptionalString(
+        params.faviconAssetId,
+      );
     }
     if (Object.prototype.hasOwnProperty.call(params, 'defaultOgImageAssetId')) {
-      setPayload.defaultOgImageAssetId = this.normalizeOptionalString(params.defaultOgImageAssetId);
+      setPayload.defaultOgImageAssetId = this.normalizeOptionalString(
+        params.defaultOgImageAssetId,
+      );
     }
     if (Object.prototype.hasOwnProperty.call(params, 'locale')) {
-      setPayload.locale = this.normalizeLocale(params.locale, this.normalizeLocale(project.defaultLocale, 'en'));
+      setPayload.locale = this.normalizeLocale(
+        params.locale,
+        this.normalizeLocale(project.defaultLocale, 'en'),
+      );
     } else if (!this.normalizeOptionalString(project.locale)) {
       setPayload.locale = this.normalizeLocale(project.defaultLocale, 'en');
     }
@@ -318,7 +415,11 @@ export class ProjectsService {
     if (Object.keys(setPayload).length > 0) {
       await this.projectModel
         .updateOne(
-          { _id: params.projectId, tenantId: params.tenantId, ownerUserId: params.ownerUserId },
+          {
+            _id: params.projectId,
+            tenantId: params.tenantId,
+            ownerUserId: params.ownerUserId,
+          },
           { $set: setPayload },
         )
         .exec();
@@ -329,9 +430,13 @@ export class ProjectsService {
       return null;
     }
 
-    const refreshedHomePageId = refreshedProject.homePageId ? String(refreshedProject.homePageId) : null;
+    const refreshedHomePageId = refreshedProject.homePageId
+      ? String(refreshedProject.homePageId)
+      : null;
     if (refreshedHomePageId !== originalHomePageId) {
-      throw new InternalServerErrorException('Project home page changed unexpectedly while updating settings');
+      throw new InternalServerErrorException(
+        'Project home page changed unexpectedly while updating settings',
+      );
     }
 
     return this.mapSettings(refreshedProject);
@@ -362,7 +467,12 @@ export class ProjectsService {
       .exec();
   }
 
-  async setHomePage(params: { tenantId: string; ownerUserId: string; projectId: string; pageId: string }) {
+  async setHomePage(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+    pageId: string;
+  }) {
     if (!Types.ObjectId.isValid(params.pageId)) {
       throw new NotFoundException('Page not found');
     }
@@ -428,9 +538,15 @@ export class ProjectsService {
       .exec();
 
     if (navigation) {
-      const currentItems = Array.isArray(navigation.itemsJson) ? navigation.itemsJson : [];
-      const existingTarget = currentItems.find((item) => item.pageId === params.pageId);
-      const remainingItems = currentItems.filter((item) => item.pageId !== params.pageId);
+      const currentItems = Array.isArray(navigation.itemsJson)
+        ? navigation.itemsJson
+        : [];
+      const existingTarget = currentItems.find(
+        (item) => item.pageId === params.pageId,
+      );
+      const remainingItems = currentItems.filter(
+        (item) => item.pageId !== params.pageId,
+      );
 
       navigation.itemsJson = [
         existingTarget ?? { label: targetPage.title, pageId: params.pageId },
