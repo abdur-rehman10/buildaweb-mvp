@@ -242,6 +242,14 @@ describe('ProjectsApiScreen toasts', () => {
     });
   });
 
+  it('disables create project form when a project already exists', async () => {
+    renderScreen();
+
+    const createButton = await screen.findByRole('button', { name: 'Project limit reached' });
+    expect((createButton as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('MVP limit: one project per user.')).not.toBeNull();
+  });
+
   it('disables delete when project has only one page and shows a hint', async () => {
     vi.mocked(pagesApi.list).mockResolvedValueOnce({
       pages: [pages[0]],

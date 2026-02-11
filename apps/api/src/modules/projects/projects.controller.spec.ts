@@ -1,10 +1,15 @@
-import { HttpException, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  HttpException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 
-describe('ProjectsController.setProjectHomePage', () => {
+describe('ProjectsController.createProject', () => {
   let controller: ProjectsController;
   let projects: {
+    create: jest.Mock;
     getByIdScoped: jest.Mock;
     getByIdScopedWithDraftStatus: jest.Mock;
     listByOwnerWithDraftStatus: jest.Mock;
@@ -15,6 +20,72 @@ describe('ProjectsController.setProjectHomePage', () => {
 
   beforeEach(() => {
     projects = {
+      create: jest.fn(),
+      getByIdScoped: jest.fn(),
+      getByIdScopedWithDraftStatus: jest.fn(),
+      listByOwnerWithDraftStatus: jest.fn(),
+      setHomePage: jest.fn(),
+      getSettings: jest.fn(),
+      updateSettings: jest.fn(),
+    };
+
+    controller = new ProjectsController(projects as unknown as ProjectsService);
+  });
+
+  it('returns project id when project is created', async () => {
+    projects.create.mockResolvedValue({ _id: '507f1f77bcf86cd799439100' });
+
+    const result = await controller.createProject(
+      { name: 'Main site', defaultLocale: 'en' },
+      { user: { sub: 'user-1', tenantId: 'default' } },
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        project_id: '507f1f77bcf86cd799439100',
+      },
+    });
+  });
+
+  it('returns PROJECT_ALREADY_EXISTS when user already has a project', async () => {
+    projects.create.mockRejectedValue(
+      new ForbiddenException('User already has a project'),
+    );
+
+    await expect(
+      controller.createProject(
+        { name: 'Second site', defaultLocale: 'en' },
+        { user: { sub: 'user-1', tenantId: 'default' } },
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: {
+        ok: false,
+        error: {
+          code: 'PROJECT_ALREADY_EXISTS',
+          message: 'User already has a project',
+        },
+      },
+    } as Partial<HttpException>);
+  });
+});
+
+describe('ProjectsController.setProjectHomePage', () => {
+  let controller: ProjectsController;
+  let projects: {
+    create: jest.Mock;
+    getByIdScoped: jest.Mock;
+    getByIdScopedWithDraftStatus: jest.Mock;
+    listByOwnerWithDraftStatus: jest.Mock;
+    setHomePage: jest.Mock;
+    getSettings: jest.Mock;
+    updateSettings: jest.Mock;
+  };
+
+  beforeEach(() => {
+    projects = {
+      create: jest.fn(),
       getByIdScoped: jest.fn(),
       getByIdScopedWithDraftStatus: jest.fn(),
       listByOwnerWithDraftStatus: jest.fn(),
@@ -27,8 +98,12 @@ describe('ProjectsController.setProjectHomePage', () => {
   });
 
   it('returns ok response when home page is set', async () => {
-    projects.getByIdScoped.mockResolvedValue({ _id: '507f1f77bcf86cd799439100' });
-    projects.setHomePage.mockResolvedValue({ pageId: '507f1f77bcf86cd799439011' });
+    projects.getByIdScoped.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439100',
+    });
+    projects.setHomePage.mockResolvedValue({
+      pageId: '507f1f77bcf86cd799439011',
+    });
 
     const result = await controller.setProjectHomePage(
       '507f1f77bcf86cd799439100',
@@ -46,8 +121,12 @@ describe('ProjectsController.setProjectHomePage', () => {
   });
 
   it('returns NOT_FOUND when pageId does not belong to project', async () => {
-    projects.getByIdScoped.mockResolvedValue({ _id: '507f1f77bcf86cd799439100' });
-    projects.setHomePage.mockRejectedValue(new NotFoundException('Page not found'));
+    projects.getByIdScoped.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439100',
+    });
+    projects.setHomePage.mockRejectedValue(
+      new NotFoundException('Page not found'),
+    );
 
     await expect(
       controller.setProjectHomePage(
@@ -71,6 +150,7 @@ describe('ProjectsController.setProjectHomePage', () => {
 describe('ProjectsController.getProject', () => {
   let controller: ProjectsController;
   let projects: {
+    create: jest.Mock;
     getByIdScoped: jest.Mock;
     getByIdScopedWithDraftStatus: jest.Mock;
     listByOwnerWithDraftStatus: jest.Mock;
@@ -81,6 +161,7 @@ describe('ProjectsController.getProject', () => {
 
   beforeEach(() => {
     projects = {
+      create: jest.fn(),
       getByIdScoped: jest.fn(),
       getByIdScopedWithDraftStatus: jest.fn(),
       listByOwnerWithDraftStatus: jest.fn(),
@@ -164,6 +245,7 @@ describe('ProjectsController.getProject', () => {
 describe('ProjectsController.settings', () => {
   let controller: ProjectsController;
   let projects: {
+    create: jest.Mock;
     getByIdScoped: jest.Mock;
     getByIdScopedWithDraftStatus: jest.Mock;
     listByOwnerWithDraftStatus: jest.Mock;
@@ -174,6 +256,7 @@ describe('ProjectsController.settings', () => {
 
   beforeEach(() => {
     projects = {
+      create: jest.fn(),
       getByIdScoped: jest.fn(),
       getByIdScopedWithDraftStatus: jest.fn(),
       listByOwnerWithDraftStatus: jest.fn(),
@@ -194,9 +277,12 @@ describe('ProjectsController.settings', () => {
       locale: 'en',
     });
 
-    const result = await controller.getProjectSettings('507f1f77bcf86cd799439100', {
-      user: { sub: 'user-1', tenantId: 'default' },
-    });
+    const result = await controller.getProjectSettings(
+      '507f1f77bcf86cd799439100',
+      {
+        user: { sub: 'user-1', tenantId: 'default' },
+      },
+    );
 
     expect(result).toEqual({
       ok: true,

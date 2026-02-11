@@ -65,6 +65,9 @@ export class Project {
 export const ProjectSchema = SchemaFactory.createForClass(Project);
 
 // indexes
-ProjectSchema.index({ tenantId: 1, ownerUserId: 1 });
+ProjectSchema.index({ tenantId: 1, ownerUserId: 1 }, { unique: true });
 ProjectSchema.index({ tenantId: 1, status: 1 });
-ProjectSchema.index({ tenantId: 1, publishedSlug: 1 }, { unique: true, sparse: true });
+ProjectSchema.index(
+  { tenantId: 1, publishedSlug: 1 },
+  { unique: true, sparse: true },
+);
