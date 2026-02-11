@@ -1,32 +1,35 @@
 # PLAN.md
 
 ## Branch
-fix/infra-ip-http-only
+fix/auth-signup-hardening
 
 ## Goal
-Lock IP-based EC2 deployments to stable HTTP-only behavior and remove accidental HTTPS exposure.
-
-## Status
-Completed: IP-only deployment hardening is done. HTTPS remains deferred until domain setup.
+Harden signup reliability for production by tightening validation behavior, duplicate handling, safe logging, and targeted tests.
 
 ## In Scope
-- Remove `443` port exposure from production Caddy service in compose.
-- Keep Caddy in HTTP-only mode:
-  - `auto_https off`
-  - single `:80` site block
-  - no TLS directives
-- Update deployment docs with explicit two-mode guidance:
-  - IP mode (default, HTTP-only)
-  - domain mode (future, HTTPS-enabled)
-- Mark IP-only deployment hardening complete and note HTTPS is deferred until domain setup.
+- API hardening:
+  - normalize signup email/name safely
+  - preserve strict DTO validation
+  - return stable duplicate-email conflict behavior (including race on unique index)
+  - keep password hashing mandatory
+  - add safe structured signup logs (no password)
+- Web verification:
+  - confirm signup uses `/api/v1/auth/signup`
+  - token persistence + auth redirect flow remains correct
+- Add minimal signup-focused API tests:
+  - signup success returns token
+  - duplicate email returns 409
+  - invalid email/short password returns 400
+  - `/auth/me` works with signup token
 
 ## Out of Scope
-- Domain setup
-- HTTPS enablement in IP mode
-- App/API feature changes
+- Auth feature expansion (roles, social login, refresh tokens)
+- UI redesign
+- Deployment/infrastructure changes
 
 ## Definition of Done
-- `docker-compose.prod.yml` exposes Caddy on port `80` only.
-- `infra/caddy/Caddyfile` is HTTP-only and does not trigger certificate attempts.
-- Deployment docs clearly warn against exposing `443` in IP mode.
-- HTTPS is documented as domain-mode only (future).
+- Signup API consistently returns token on success and 409 on duplicate.
+- Passwords are always hashed and never logged.
+- `/api/v1/auth/me` accepts token from signup.
+- Signup frontend continues to persist session and survive refresh.
+- New tests cover core signup hardening scenarios.
