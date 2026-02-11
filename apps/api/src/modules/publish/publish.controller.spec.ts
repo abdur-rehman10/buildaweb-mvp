@@ -10,7 +10,7 @@ describe('PublishController', () => {
 
   let controller: PublishController;
   let projects: { getByIdScoped: jest.Mock; setLatestPublish: jest.Mock };
-  let publish: { getByIdScoped: jest.Mock; createAndPublish: jest.Mock };
+  let publish: { getByIdScoped: jest.Mock; createAndPublish: jest.Mock; publicSiteUrlFromSlug: jest.Mock };
 
   beforeEach(() => {
     projects = {
@@ -21,6 +21,7 @@ describe('PublishController', () => {
     publish = {
       getByIdScoped: jest.fn(),
       createAndPublish: jest.fn(),
+      publicSiteUrlFromSlug: jest.fn((slug: string) => `/p/${slug}/`),
     };
 
     controller = new PublishController(
@@ -35,6 +36,7 @@ describe('PublishController', () => {
       projects.getByIdScoped.mockResolvedValue({
         _id: projectId,
         latestPublishId: '507f1f77bcf86cd799439055',
+        publishedSlug: 'main-site',
       });
       publish.getByIdScoped.mockResolvedValue({
         _id: '507f1f77bcf86cd799439055',
@@ -57,7 +59,10 @@ describe('PublishController', () => {
         data: {
           publishId: '507f1f77bcf86cd799439055',
           status: 'live',
-          url: 'http://localhost:9000/buildaweb/path/',
+          url: '/p/main-site/',
+          baseUrl: 'http://localhost:9000/buildaweb/path/',
+          publishedSlug: 'main-site',
+          publishedUrl: '/p/main-site/',
           timestamp,
         },
       });
@@ -102,7 +107,9 @@ describe('PublishController', () => {
       publish.createAndPublish.mockResolvedValue({
         publishId: '507f1f77bcf86cd799439099',
         status: 'live',
-        url: 'http://localhost:9000/buildaweb/path/',
+        url: '/p/main-site/',
+        publishedUrl: '/p/main-site/',
+        publishedSlug: 'main-site',
       });
 
       const res = await controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } });
@@ -113,7 +120,9 @@ describe('PublishController', () => {
         data: {
           publishId: '507f1f77bcf86cd799439099',
           status: 'live',
-          url: 'http://localhost:9000/buildaweb/path/',
+          url: '/p/main-site/',
+          publishedUrl: '/p/main-site/',
+          publishedSlug: 'main-site',
         },
       });
     });

@@ -151,7 +151,7 @@ export function ProjectsApiScreen({
   } = useLatestPublish(activeProjectId);
   const effectiveLatestPublishId = optimisticLatestPublishId ?? latestPublishId;
   const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
-  const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : null;
+  const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : publishedUrl;
   const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
   const hasUnpublishedChangesFromProjectsList =
     typeof activeProject?.hasUnpublishedChanges === 'boolean' ? activeProject.hasUnpublishedChanges : null;
@@ -478,7 +478,7 @@ export function ProjectsApiScreen({
         if (cancelled) return;
 
         setPublishStatus(result.status);
-        setPublishedUrl(result.url);
+        setPublishedUrl(result.publishedUrl ?? result.url);
 
         if (result.status === 'failed') {
           const message = result.errorMessage ?? 'Publish failed';
@@ -525,7 +525,7 @@ export function ProjectsApiScreen({
     if (latestPublish) {
       setPublishId(latestPublish.publishId);
       setPublishStatus(latestPublish.status);
-      setPublishedUrl(latestPublish.url);
+      setPublishedUrl(latestPublish.publishedUrl ?? latestPublish.url);
       setPublishError(latestPublish.errorMessage ?? null);
       return;
     }
@@ -654,7 +654,7 @@ export function ProjectsApiScreen({
       const result = await publishApi.create(activeProjectId);
       setPublishId(result.publishId);
       setPublishStatus(result.status);
-      setPublishedUrl(result.url);
+      setPublishedUrl(result.publishedUrl ?? result.url);
       setPublishPreflightDetails([]);
       appToast.success('Publish started', {
         eventKey: `publish-started:${result.publishId}`,

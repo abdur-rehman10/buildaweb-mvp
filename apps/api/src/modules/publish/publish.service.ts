@@ -50,7 +50,12 @@ export class PublishService {
     return `${base}/${bucket}/${publishRootPath}/`;
   }
 
-  private publicSiteUrl(publishedSlug: string) {
+  public publicSiteUrlFromSlug(publishedSlug: string) {
+    const publicAppUrl = this.config.get<string>('PUBLIC_APP_URL')?.trim();
+    if (publicAppUrl) {
+      return `${publicAppUrl.replace(/\/$/, '')}/p/${encodeURIComponent(publishedSlug)}/`;
+    }
+
     const directBaseUrl = this.config.get<string>('PUBLIC_SITE_BASE_URL')?.trim();
     if (directBaseUrl) {
       return `${directBaseUrl.replace(/\/$/, '')}/p/${encodeURIComponent(publishedSlug)}/`;
@@ -683,7 +688,8 @@ ${params.bodyHtml}
       return {
         publishId: String(publish._id),
         status: publish.status,
-        url: this.publicSiteUrl(publishedSlug),
+        url: this.publicSiteUrlFromSlug(publishedSlug),
+        publishedUrl: this.publicSiteUrlFromSlug(publishedSlug),
         publishedSlug,
         publishedVersion,
       };

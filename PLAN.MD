@@ -1,23 +1,23 @@
 # PLAN.md
 
 ## Branch
-fix/media-public-url
+fix/publish-link-output
 
 ## Goal
-Fix broken production images by generating browser-accessible MinIO asset URLs for IP + HTTP deployments.
+Ensure publish responses and frontend mapping always show a user-visible published website link immediately after publish.
 
 ## In Scope
-- Backend: harden MinIO public URL generation so assets never resolve to internal hosts or wrong protocol.
-- Backend: support explicit public URL env vars for media URL generation.
-- Infra/env: wire production compose and env examples for stable public media URL configuration.
-- Docs: document required env vars and verification steps for media URL correctness.
+- Backend: return `publishedSlug` + absolute `publishedUrl` from publish response.
+- Backend: keep compatible fields for existing callers.
+- Frontend: consume `publishedUrl` and render publish link even when URL is path-based (`/p/<slug>/`).
+- Docs: clarify `PUBLIC_APP_URL` is required for absolute publish links in IP mode.
 
 ## Out of Scope
-- New media endpoints or storage architecture changes.
-- Frontend refactors.
-- Domain/TLS rollout changes.
+- Publish pipeline/storage refactors.
+- New endpoints.
+- UI redesign.
 
 ## Definition of Done
-- Uploaded asset `publicUrl` values are externally reachable in production.
-- Asset URLs never use `localhost`, `minio`, or forced `https` in HTTP-only IP mode.
-- Deployment docs explain `PUBLIC_APP_URL` and `MINIO_PUBLIC_URL` clearly.
+- Publish API returns `publishedSlug` and `publishedUrl`.
+- Publish success UI always shows “Open published site” link immediately.
+- Link opens the published site, and link is hidden when there is no live publish URL.
