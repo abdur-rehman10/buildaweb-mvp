@@ -21,6 +21,7 @@ Media URL variables for production:
 - `MEDIA_PUBLIC_BASE_URL` (recommended): proxied media base, use `http://<EC2_IP>/media`
 - `MINIO_PUBLIC_URL` (legacy fallback): optional compatibility variable
 - `MINIO_PUBLIC_BASE_URL` (legacy fallback): optional compatibility variable
+- `AUTH_RATE_LIMIT_MAX` / `AUTH_RATE_LIMIT_WINDOW_MS` (optional): auth endpoint throttling controls
 
 The API generates asset URLs using this priority:
 1. `MEDIA_PUBLIC_BASE_URL`
@@ -70,7 +71,7 @@ What it does:
 - Fetches latest `origin/main`.
 - Checks out `main` and hard resets to `origin/main`.
 - Runs production compose pull + up/build.
-- Runs health checks for web and API.
+- Runs HTTP health checks for web (`/`), API (`/api/v1/health` with `/api/v1/auth/me` fallback), and media proxy (`/media/minio/health/live`).
 - Prints `DEPLOY OK` only when checks pass.
 
 ## Rollback

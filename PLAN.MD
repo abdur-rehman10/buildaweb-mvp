@@ -52,3 +52,13 @@ Proxy MinIO asset delivery through Caddy (`/media`) so public images load from t
   - If `PUBLIC_APP_URL` is missing, API returns an empty `url` but still returns `slug`.
   - Frontend publish success handling now falls back to `${window.location.origin}/p/${slug}` when API `url` is empty.
   - Added request-level API e2e test for publish response contract and updated publish service/controller tests.
+
+### Step 3: Production sanity layer (IP-only)
+
+- Status: DONE
+- Changes:
+  - Kept Caddy in IP-safe HTTP mode (`:80`, no forced HTTPS) with `/api`, `/p`, and `/media` proxy paths.
+  - Hardened publish asset/public URL base construction to prefer `MEDIA_PUBLIC_BASE_URL`, then production `${PUBLIC_APP_URL}/media`, then legacy MinIO public vars.
+  - Added auth endpoint rate limiting middleware for `/api/v1/auth/*` with configurable limits (`AUTH_RATE_LIMIT_MAX`, `AUTH_RATE_LIMIT_WINDOW_MS`).
+  - Updated deploy health checks to HTTP-only and added `/media/minio/health/live` verification.
+  - Added tests covering publish URL sanity and auth rate limiting behavior.
