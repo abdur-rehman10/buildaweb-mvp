@@ -5,9 +5,11 @@ import {
   UnauthorizedException,
   ValidationPipe,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { AiService } from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
@@ -20,11 +22,17 @@ type MockProjectsService = {
   updateSettings: jest.Mock;
   getByIdScoped: jest.Mock;
   setHomePage: jest.Mock;
+  replaceProjectContentFromGeneration: jest.Mock;
+};
+
+type MockAiService = {
+  generateSiteFromPrompt: jest.Mock;
 };
 
 describe('ProjectsController single-project enforcement (request)', () => {
   let app: INestApplication;
   let projectsService: MockProjectsService;
+  let aiService: MockAiService;
   let jwt: JwtService;
   let createdProjectId: string | null;
 
@@ -45,13 +53,35 @@ describe('ProjectsController single-project enforcement (request)', () => {
       updateSettings: jest.fn(),
       getByIdScoped: jest.fn(),
       setHomePage: jest.fn(),
+      replaceProjectContentFromGeneration: jest.fn(),
+    };
+    aiService = {
+      generateSiteFromPrompt: jest.fn().mockResolvedValue({
+        pages: [
+          {
+            title: 'Home',
+            slug: '/',
+            isHome: true,
+            editorJson: { sections: [] },
+          },
+        ],
+        navigation: [{ label: 'Home', slug: '/' }],
+        theme: {},
+      }),
     };
 
     jwt = new JwtService({ secret: 'test-jwt-secret' });
 
     const moduleRef = await Test.createTestingModule({
       controllers: [ProjectsController],
-      providers: [{ provide: ProjectsService, useValue: projectsService }],
+      providers: [
+        { provide: ProjectsService, useValue: projectsService },
+        { provide: AiService, useValue: aiService },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('http://13.50.101.211') },
+        },
+      ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({
@@ -118,6 +148,37 @@ describe('ProjectsController single-project enforcement (request)', () => {
         code: 'PROJECT_ALREADY_EXISTS',
         message: 'User already has a project',
       },
+    });
+  });
+
+  it('generates site content and returns previewUrl', async () => {
+    const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
+    projectsService.getByIdScoped.mockResolvedValue({
+      _id: 'project-1',
+      name: 'Main Project',
+    });
+
+    const response = await request(app.getHttpServer())
+      .post('/api/v1/projects/project-1/generate')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ prompt: 'Create a SaaS landing site' });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      ok: true,
+      data: {
+        success: true,
+        projectId: 'project-1',
+        previewUrl: 'http://13.50.101.211/editor/project-1',
+      },
+    });
+    expect(
+      projectsService.replaceProjectContentFromGeneration,
+    ).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: 'project-1',
+      generated: expect.any(Object),
     });
   });
 });

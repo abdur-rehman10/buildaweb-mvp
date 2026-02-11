@@ -12,18 +12,29 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import { ok, fail } from '../../common/api-response';
+import {
+  AiGenerationError,
+  AiInvalidJsonError,
+  AiService,
+} from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { GenerateProjectDto } from './dto/generate-project.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
 export class ProjectsController {
-  constructor(private readonly projects: ProjectsService) {}
+  constructor(
+    private readonly projects: ProjectsService,
+    private readonly ai: AiService,
+    private readonly config: ConfigService,
+  ) {}
 
   private isValidObjectId(value: string) {
     return Types.ObjectId.isValid(value);
@@ -53,6 +64,80 @@ export class ProjectsController {
     }
 
     return ok({ project_id: String(project._id) });
+  }
+
+  @Post(':projectId/generate')
+  async generateProject(
+    @Param('projectId') projectId: string,
+    @Body() dto: GenerateProjectDto,
+    @Req() req: any,
+  ) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const prompt = dto.prompt.trim();
+
+    if (!prompt) {
+      throw new HttpException(
+        fail('INVALID_PROMPT', 'Prompt is required'),
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
+    if (!project) {
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    try {
+      const generated = await this.ai.generateSiteFromPrompt(prompt);
+      await this.projects.replaceProjectContentFromGeneration({
+        tenantId,
+        ownerUserId,
+        projectId,
+        generated,
+      });
+
+      const publicAppUrl =
+        this.config.get<string>('PUBLIC_APP_URL')?.trim().replace(/\/$/, '') ??
+        '';
+      const previewUrl = publicAppUrl
+        ? `${publicAppUrl}/editor/${projectId}`
+        : `/editor/${projectId}`;
+
+      return ok({
+        success: true,
+        projectId,
+        previewUrl,
+      });
+    } catch (error) {
+      if (error instanceof AiInvalidJsonError) {
+        throw new HttpException(
+          fail('AI_INVALID_JSON', 'AI returned invalid JSON'),
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+
+      if (error instanceof AiGenerationError) {
+        throw new HttpException(
+          fail('AI_GENERATION_FAILED', 'Failed to generate site'),
+          HttpStatus.BAD_GATEWAY,
+        );
+      }
+
+      const message =
+        error instanceof Error ? error.message : 'Failed to generate site';
+      throw new HttpException(
+        fail('GENERATE_FAILED', message),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get()

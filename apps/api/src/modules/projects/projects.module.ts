@@ -1,5 +1,12 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { AuthRateLimitMiddleware } from '../auth/auth-rate-limit.middleware';
+import { AiModule } from '../ai/ai.module';
 import { Navigation, NavigationSchema } from '../navigation/navigation.schema';
 import { Page, PageSchema } from '../pages/page.schema';
 import { Publish, PublishSchema } from '../publish/publish.schema';
@@ -9,6 +16,7 @@ import { ProjectsController } from './projects.controller';
 
 @Module({
   imports: [
+    AiModule,
     MongooseModule.forFeature([
       { name: Project.name, schema: ProjectSchema },
       { name: Page.name, schema: PageSchema },
@@ -20,4 +28,11 @@ import { ProjectsController } from './projects.controller';
   providers: [ProjectsService],
   exports: [ProjectsService],
 })
-export class ProjectsModule {}
+export class ProjectsModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(AuthRateLimitMiddleware).forRoutes({
+      path: 'projects/:projectId/generate',
+      method: RequestMethod.POST,
+    });
+  }
+}
