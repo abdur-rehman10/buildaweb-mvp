@@ -2,7 +2,7 @@
 
 ## Branch
 
-feat/infra-media-proxy
+feat/ai-generate-site-endpoint
 
 ## Goal
 
@@ -62,3 +62,16 @@ Proxy MinIO asset delivery through Caddy (`/media`) so public images load from t
   - Added auth endpoint rate limiting middleware for `/api/v1/auth/*` with configurable limits (`AUTH_RATE_LIMIT_MAX`, `AUTH_RATE_LIMIT_WINDOW_MS`).
   - Updated deploy health checks to HTTP-only and added `/media/minio/health/live` verification.
   - Added tests covering publish URL sanity and auth rate limiting behavior.
+
+## Phase 2
+
+### Step 4: AI Site Generation Endpoint
+
+- Status: DONE
+- Changes:
+  - Added `POST /api/v1/projects/:projectId/generate` (JWT + scoped) to generate and persist site structure from prompt.
+  - Added AI module/service with OpenAI integration and fallback generator when `OPENAI_API_KEY` is missing.
+  - Enforced strict AI JSON normalization/validation (`pages`, `navigation`, `theme`) with `502` on invalid AI output.
+  - Replaced project pages + navigation on generation and updated `homePageId`.
+  - Reused existing rate-limit middleware on generate endpoint.
+  - Added request-level tests for generation endpoint wiring and preview URL contract.

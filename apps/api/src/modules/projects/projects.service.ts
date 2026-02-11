@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { AiGeneratedSite } from '../ai/ai.service';
 import {
   Navigation,
   NavigationDocument,
@@ -60,6 +61,25 @@ export class ProjectsService {
   private normalizeLocale(value: unknown, fallback = 'en'): string {
     const normalized = this.normalizeOptionalString(value);
     return normalized ?? fallback;
+  }
+
+  private asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    return value as Record<string, unknown>;
+  }
+
+  private normalizeGeneratedSlug(value: string) {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed || trimmed === '/' || trimmed === 'home') return '/';
+    const withoutEdges = trimmed.replace(/^\/+/, '').replace(/\/+$/, '');
+    return withoutEdges || '/';
+  }
+
+  private isValidGeneratedSlug(slug: string) {
+    if (slug === '/') return true;
+    return /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*)*$/.test(slug);
   }
 
   private isDuplicateKeyError(error: unknown) {
@@ -440,6 +460,169 @@ export class ProjectsService {
     }
 
     return this.mapSettings(refreshedProject);
+  }
+
+  async replaceProjectContentFromGeneration(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+    generated: AiGeneratedSite;
+  }) {
+    const project = await this.getByIdScoped({
+      tenantId: params.tenantId,
+      ownerUserId: params.ownerUserId,
+      projectId: params.projectId,
+    });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const generatedPages = Array.isArray(params.generated.pages)
+      ? params.generated.pages
+      : [];
+    if (generatedPages.length === 0) {
+      throw new InternalServerErrorException(
+        'Generated site did not include any pages',
+      );
+    }
+
+    let explicitHomeIndex = generatedPages.findIndex(
+      (page) =>
+        page.isHome === true || this.normalizeGeneratedSlug(page.slug) === '/',
+    );
+    if (explicitHomeIndex < 0) explicitHomeIndex = 0;
+
+    const seenSlugs = new Set<string>();
+    const pageDocs: Array<Record<string, unknown>> = [];
+    const pageIdBySlug = new Map<string, string>();
+    const pageTitleBySlug = new Map<string, string>();
+
+    for (let index = 0; index < generatedPages.length; index += 1) {
+      const source = generatedPages[index];
+      const normalizedTitle =
+        this.normalizeOptionalString(source.title) ?? `Page ${index + 1}`;
+      const normalizedSlug =
+        index === explicitHomeIndex
+          ? '/'
+          : this.normalizeGeneratedSlug(source.slug);
+
+      if (!this.isValidGeneratedSlug(normalizedSlug)) {
+        throw new InternalServerErrorException(
+          `Generated page "${normalizedTitle}" has invalid slug "${source.slug}"`,
+        );
+      }
+
+      if (seenSlugs.has(normalizedSlug)) {
+        throw new InternalServerErrorException(
+          `Generated site contains duplicate slug "${normalizedSlug}"`,
+        );
+      }
+      seenSlugs.add(normalizedSlug);
+
+      const pageId = new Types.ObjectId();
+      const editorJson = this.asRecord(source.editorJson) ?? {};
+      const seoJson = this.asRecord(source.seoJson) ?? {};
+
+      const storedSlug = normalizedSlug === '/' ? '/' : normalizedSlug;
+      pageIdBySlug.set(normalizedSlug, String(pageId));
+      pageTitleBySlug.set(normalizedSlug, normalizedTitle);
+
+      pageDocs.push({
+        _id: pageId,
+        tenantId: params.tenantId,
+        projectId: new Types.ObjectId(params.projectId),
+        title: normalizedTitle,
+        slug: storedSlug,
+        isHome: index === explicitHomeIndex,
+        editorJson,
+        seoJson,
+        version: 1,
+      });
+    }
+
+    const generatedNavigation = Array.isArray(params.generated.navigation)
+      ? params.generated.navigation
+      : [];
+    const navigationItems: Array<{ label: string; pageId: string }> = [];
+
+    for (const navItem of generatedNavigation) {
+      const navSlug = this.normalizeGeneratedSlug(navItem.slug);
+      const pageId = pageIdBySlug.get(navSlug);
+      if (!pageId) {
+        throw new InternalServerErrorException(
+          `Generated navigation references missing slug "${navItem.slug}"`,
+        );
+      }
+
+      const navLabel = this.normalizeOptionalString(navItem.label);
+      navigationItems.push({
+        label: navLabel ?? pageTitleBySlug.get(navSlug) ?? navSlug,
+        pageId,
+      });
+    }
+
+    if (navigationItems.length === 0) {
+      for (const [slug, pageId] of pageIdBySlug.entries()) {
+        navigationItems.push({
+          label: pageTitleBySlug.get(slug) ?? slug,
+          pageId,
+        });
+      }
+      navigationItems.sort(
+        (a, b) =>
+          Number(b.pageId === pageIdBySlug.get('/')) -
+          Number(a.pageId === pageIdBySlug.get('/')),
+      );
+    }
+
+    await this.pageModel.deleteMany({
+      tenantId: params.tenantId,
+      projectId: params.projectId,
+    });
+    await this.pageModel.insertMany(pageDocs);
+
+    await this.navigationModel
+      .findOneAndUpdate(
+        {
+          tenantId: params.tenantId,
+          projectId: params.projectId,
+          ownerUserId: params.ownerUserId,
+        },
+        {
+          $set: {
+            itemsJson: navigationItems,
+          },
+        },
+        { upsert: true, new: true },
+      )
+      .exec();
+
+    const homePageId = pageIdBySlug.get('/');
+    if (!homePageId) {
+      throw new InternalServerErrorException(
+        'Generated site did not resolve a home page',
+      );
+    }
+
+    await this.projectModel
+      .updateOne(
+        {
+          _id: params.projectId,
+          tenantId: params.tenantId,
+          ownerUserId: params.ownerUserId,
+        },
+        {
+          $set: {
+            homePageId: homePageId,
+          },
+        },
+      )
+      .exec();
+
+    return {
+      homePageId,
+      pageCount: pageDocs.length,
+    };
   }
 
   async setLatestPublish(params: {
