@@ -2,11 +2,11 @@
 
 ## Branch
 
-feat/ai-generate-site-endpoint
+feat/ai-generate-ui
 
 ## Goal
 
-Proxy MinIO asset delivery through Caddy (`/media`) so public images load from the app host/port in IP-based HTTP deployments without exposing MinIO API port 9000.
+Wire a frontend “Generate with AI” flow to the existing backend endpoint so users can generate site content from a prompt and continue directly into page editing.
 
 ## In Scope
 
@@ -75,3 +75,12 @@ Proxy MinIO asset delivery through Caddy (`/media`) so public images load from t
   - Replaced project pages + navigation on generation and updated `homePageId`.
   - Reused existing rate-limit middleware on generate endpoint.
   - Added request-level tests for generation endpoint wiring and preview URL contract.
+
+### Step 5: AI Generation UI Wiring
+
+- Status: DONE
+- Changes:
+  - Added a “Generate with AI” prompt panel in the projects screen with loading/disabled/error states.
+  - Wired frontend API client to `POST /api/v1/projects/:projectId/generate`.
+  - Ensured generation flow opens the generated page in the editor after refresh of pages/navigation.
+  - Added frontend tests for API call payload, loading-state button disabling, and success/error behavior.

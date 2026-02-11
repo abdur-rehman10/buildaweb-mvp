@@ -8,6 +8,10 @@ const FRIENDLY_ERROR_MESSAGES_BY_CODE: Record<string, string> = {
   EMAIL_ALREADY_EXISTS: 'An account with this email already exists.',
   PROJECT_ALREADY_EXISTS: 'You already have a project in MVP. Open your existing project.',
   INVALID_OR_EXPIRED_TOKEN: 'Invalid or expired reset token.',
+  INVALID_PROMPT: 'Please describe your website before generating.',
+  AI_INVALID_JSON: 'AI response failed, try again.',
+  AI_GENERATION_FAILED: 'AI response failed, try again.',
+  GENERATE_FAILED: 'Failed to generate site. Please try again.',
   BAD_REQUEST: 'Please check the entered information and try again.',
 };
 

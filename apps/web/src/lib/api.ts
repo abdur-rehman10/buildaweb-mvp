@@ -232,6 +232,16 @@ export type UpdateProjectSettingsResult = {
   settings: ProjectSettings;
 };
 
+export type GenerateProjectInput = {
+  prompt: string;
+};
+
+export type GenerateProjectResult = {
+  success: boolean;
+  projectId: string;
+  previewUrl: string;
+};
+
 export type CreatePageInput = {
   title: string;
   slug: string;
@@ -469,6 +479,12 @@ export const projectsApi = {
   updateSettings(projectId: string, input: UpdateProjectSettingsInput) {
     return apiRequest<UpdateProjectSettingsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`, {
       method: 'PUT',
+      body: JSON.stringify(input),
+    });
+  },
+  generate(projectId: string, input: GenerateProjectInput) {
+    return apiRequest<GenerateProjectResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/generate`, {
+      method: 'POST',
       body: JSON.stringify(input),
     });
   },
