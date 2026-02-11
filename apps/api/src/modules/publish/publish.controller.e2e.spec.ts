@@ -107,5 +107,7 @@ describe('PublishController contract (request)', () => {
       }),
     });
     expect(response.body.data.url).toContain('/p/');
+    expect(response.body.data.url).not.toContain('127.0.0.1');
+    expect(response.body.data.url).not.toContain('localhost');
   });
 });

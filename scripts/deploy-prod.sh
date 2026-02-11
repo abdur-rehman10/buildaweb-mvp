@@ -67,7 +67,7 @@ echo "Starting production stack..."
 http_code() {
   local url="$1"
   local code
-  code="$(curl -ksS --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' "$url" || true)"
+  code="$(curl -sS --connect-timeout 2 --max-time 5 -o /dev/null -w '%{http_code}' "$url" || true)"
   if [ -z "$code" ]; then
     echo "000"
     return
@@ -77,38 +77,25 @@ http_code() {
 
 is_web_ready() {
   local code
-  for url in "http://127.0.0.1/" "https://127.0.0.1/"; do
-    code="$(http_code "$url")"
-    if [[ "$code" == 2* || "$code" == 3* ]]; then
-      return 0
-    fi
-  done
-  return 1
+  code="$(http_code "http://127.0.0.1/")"
+  [[ "$code" == 2* || "$code" == 3* ]]
 }
 
 is_api_ready() {
   local code
-  local health_ok=1
-  for url in "http://127.0.0.1/api/v1/health" "https://127.0.0.1/api/v1/health"; do
-    code="$(http_code "$url")"
-    if [ "$code" = "200" ]; then
-      health_ok=0
-      break
-    fi
-  done
-
-  if [ $health_ok -eq 0 ]; then
+  code="$(http_code "http://127.0.0.1/api/v1/health")"
+  if [ "$code" = "200" ]; then
     return 0
   fi
 
-  for url in "http://127.0.0.1/api/v1/auth/me" "https://127.0.0.1/api/v1/auth/me"; do
-    code="$(http_code "$url")"
-    if [ "$code" = "401" ]; then
-      return 0
-    fi
-  done
+  code="$(http_code "http://127.0.0.1/api/v1/auth/me")"
+  [ "$code" = "401" ]
+}
 
-  return 1
+is_media_ready() {
+  local code
+  code="$(http_code "http://127.0.0.1/media/minio/health/live")"
+  [ "$code" = "200" ]
 }
 
 print_service_logs() {
@@ -123,6 +110,7 @@ echo "Running health checks with retry window (${HEALTH_TIMEOUT_SECONDS}s)..."
 start_ts="$(date +%s)"
 web_ready=1
 api_ready=1
+media_ready=1
 
 while true; do
   now_ts="$(date +%s)"
@@ -140,15 +128,22 @@ while true; do
     api_ready=1
   fi
 
-  if [ $web_ready -eq 0 ] && [ $api_ready -eq 0 ]; then
+  if is_media_ready; then
+    media_ready=0
+  else
+    media_ready=1
+  fi
+
+  if [ $web_ready -eq 0 ] && [ $api_ready -eq 0 ] && [ $media_ready -eq 0 ]; then
     break
   fi
 
   if [ "$elapsed" -ge "$HEALTH_TIMEOUT_SECONDS" ]; then
-    echo "ERROR: Health checks failed after ${HEALTH_TIMEOUT_SECONDS}s (web_ready=$((1 - web_ready)), api_ready=$((1 - api_ready)))." >&2
+    echo "ERROR: Health checks failed after ${HEALTH_TIMEOUT_SECONDS}s (web_ready=$((1 - web_ready)), api_ready=$((1 - api_ready)), media_ready=$((1 - media_ready)))." >&2
     print_service_logs "buildaweb-caddy"
     print_service_logs "buildaweb-api"
     print_service_logs "buildaweb-web"
+    print_service_logs "buildaweb-minio"
     exit 1
   fi
 

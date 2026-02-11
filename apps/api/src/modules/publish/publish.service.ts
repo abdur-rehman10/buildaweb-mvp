@@ -65,13 +65,76 @@ export class PublishService {
     return `published-sites/${params.publishedSlug}/v${params.publishedVersion}`;
   }
 
+  private trimOrEmpty(value: string | undefined | null) {
+    return (value ?? '').trim();
+  }
+
+  private withHttpProtocol(raw: string) {
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+    return `http://${raw}`;
+  }
+
+  private normalizePublicBaseUrl(raw: string) {
+    const parsed = new URL(this.withHttpProtocol(raw));
+    const normalizedPath =
+      parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '');
+    return `${parsed.origin}${normalizedPath}`;
+  }
+
+  private resolvePublicMediaBaseUrl() {
+    const mediaPublicBaseUrl = this.trimOrEmpty(
+      this.config.get<string>('MEDIA_PUBLIC_BASE_URL'),
+    );
+    if (mediaPublicBaseUrl) {
+      return this.normalizePublicBaseUrl(mediaPublicBaseUrl);
+    }
+
+    const isProduction =
+      this.trimOrEmpty(this.config.get<string>('NODE_ENV')).toLowerCase() ===
+      'production';
+    if (isProduction) {
+      const publicAppUrl = this.trimOrEmpty(
+        this.config.get<string>('PUBLIC_APP_URL'),
+      );
+      if (publicAppUrl) {
+        const appUrl = new URL(this.withHttpProtocol(publicAppUrl));
+        return `${appUrl.origin}/media`;
+      }
+    }
+
+    const explicitMinioUrl = this.trimOrEmpty(
+      this.config.get<string>('MINIO_PUBLIC_URL'),
+    );
+    if (explicitMinioUrl) {
+      return this.normalizePublicBaseUrl(explicitMinioUrl);
+    }
+
+    const explicitMinioBaseUrl = this.trimOrEmpty(
+      this.config.get<string>('MINIO_PUBLIC_BASE_URL'),
+    );
+    if (explicitMinioBaseUrl) {
+      return this.normalizePublicBaseUrl(explicitMinioBaseUrl);
+    }
+
+    return '';
+  }
+
+  private encodedPath(path: string) {
+    return path
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+  }
+
   private publishBaseUrlFromRoot(publishRootPath: string) {
-    const base = (
-      this.config.get<string>('MINIO_PUBLIC_BASE_URL') ??
-      'http://localhost:9000'
-    ).replace(/\/$/, '');
+    const base = this.resolvePublicMediaBaseUrl().replace(/\/$/, '');
+    if (!base) return '';
+
     const bucket = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
-    return `${base}/${bucket}/${publishRootPath}/`;
+    const bucketBase = base.endsWith(`/${bucket}`) ? base : `${base}/${bucket}`;
+    return `${bucketBase}/${this.encodedPath(publishRootPath)}/`;
   }
 
   private publicAppBaseUrl() {

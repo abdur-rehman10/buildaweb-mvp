@@ -368,6 +368,38 @@ describe('PublishService pretty URLs', () => {
     );
   });
 
+  it('uses media public base url for publish baseUrl and avoids localhost/127 when configured', async () => {
+    config.get.mockImplementation((key: string) => {
+      if (key === 'MEDIA_PUBLIC_BASE_URL') return 'http://13.50.101.211/media';
+      if (key === 'PUBLIC_APP_URL') return 'http://13.50.101.211';
+      if (key === 'MINIO_BUCKET') return 'buildaweb';
+      return undefined;
+    });
+
+    const result = await service.createAndPublish(baseParams);
+    const createPayload = publishModel.create.mock.calls[0]?.[0] as {
+      baseUrl: string;
+    };
+
+    expect(result.url).toBe('http://13.50.101.211/p/main-site');
+    expect(createPayload.baseUrl).toBe(
+      'http://13.50.101.211/media/buildaweb/published-sites/main-site/v1/',
+    );
+    expect(createPayload.baseUrl).not.toContain('127.0.0.1');
+    expect(createPayload.baseUrl).not.toContain('localhost');
+
+    const uploads = minio.upload.mock.calls.map(
+      (call) => call[0] as { objectPath: string; buffer: Buffer },
+    );
+    const homeUpload = uploads.find((upload) =>
+      upload.objectPath.endsWith('/index.html'),
+    );
+    expect(homeUpload).toBeDefined();
+    const html = homeUpload!.buffer.toString('utf-8');
+    expect(html).not.toContain('127.0.0.1');
+    expect(html).not.toContain('http://localhost');
+  });
+
   it('returns empty public site url when PUBLIC_APP_URL is not configured', () => {
     config.get.mockImplementation((key: string) => {
       if (key === 'MINIO_PUBLIC_BASE_URL') return 'http://localhost:9000';
