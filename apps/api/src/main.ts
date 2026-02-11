@@ -45,12 +45,13 @@ function validateRequiredEnvForProduction() {
     errors.push('CORS_ORIGINS cannot include "*" in production.');
   }
 
+  const hasMediaPublicBaseUrl = (process.env.MEDIA_PUBLIC_BASE_URL ?? '').trim().length > 0;
   const hasMinioPublicUrl = (process.env.MINIO_PUBLIC_URL ?? '').trim().length > 0;
   const hasMinioPublicBaseUrl = (process.env.MINIO_PUBLIC_BASE_URL ?? '').trim().length > 0;
   const hasPublicAppUrl = (process.env.PUBLIC_APP_URL ?? '').trim().length > 0;
-  if (!hasMinioPublicUrl && !hasMinioPublicBaseUrl && !hasPublicAppUrl) {
+  if (!hasMediaPublicBaseUrl && !hasMinioPublicUrl && !hasMinioPublicBaseUrl && !hasPublicAppUrl) {
     errors.push(
-      'Set one of MINIO_PUBLIC_URL, MINIO_PUBLIC_BASE_URL, or PUBLIC_APP_URL in production for browser-accessible asset URLs.',
+      'Set one of MEDIA_PUBLIC_BASE_URL, MINIO_PUBLIC_URL, MINIO_PUBLIC_BASE_URL, or PUBLIC_APP_URL in production for browser-accessible asset URLs.',
     );
   }
 

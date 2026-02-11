@@ -18,15 +18,17 @@ Set real production values in `.env.prod` (JWT secret, Mongo URI, domain, MinIO 
 
 Media URL variables for production:
 - `PUBLIC_APP_URL` (required): public app origin, for IP mode use `http://<EC2_IP>`; also used to build absolute published site URLs (`/p/<slug>/`)
-- `MINIO_PUBLIC_URL` (recommended): browser-facing MinIO origin, for IP mode use `http://<EC2_IP>:9000`
+- `MEDIA_PUBLIC_BASE_URL` (recommended): proxied media base, use `http://<EC2_IP>/media`
+- `MINIO_PUBLIC_URL` (legacy fallback): optional compatibility variable
 - `MINIO_PUBLIC_BASE_URL` (legacy fallback): optional compatibility variable
 
 The API generates asset URLs using this priority:
-1. `MINIO_PUBLIC_URL`
-2. `MINIO_PUBLIC_BASE_URL`
-3. `PUBLIC_APP_URL` + `:9000`
+1. `MEDIA_PUBLIC_BASE_URL`
+2. (production fallback) `${PUBLIC_APP_URL}/media`
+3. `MINIO_PUBLIC_URL`
+4. `MINIO_PUBLIC_BASE_URL`
 
-This prevents broken image URLs like `http://localhost:9000/...`, `http://minio:9000/...`, or forced `https://` in HTTP-only IP deployments.
+This serves assets through Caddy on port `80` and prevents broken image URLs like `http://localhost:9000/...`, `http://minio:9000/...`, or forced `https://` in HTTP-only IP deployments.
 
 ## Mode A: IP MODE (Default)
 - HTTP only
@@ -39,6 +41,8 @@ Use this mode when accessing the app via `http://<EC2_IP>/`.
 Important:
 - Do **not** expose port `443` in IP mode.
 - Do **not** expect HTTPS on raw EC2 IP.
+- Keep MinIO API port `9000` closed from the internet (assets are proxied via `/media`).
+- Keep MinIO console `9001` restricted to your IP only (or close it when not needed).
 
 ## Mode B: DOMAIN MODE (Future)
 - HTTPS enabled
@@ -83,8 +87,10 @@ This restores a known commit and redeploys containers.
 ## Media Troubleshooting (Broken Images)
 - Confirm `.env.prod` values:
   - `PUBLIC_APP_URL=http://<EC2_IP>`
-  - `MINIO_PUBLIC_URL=http://<EC2_IP>:9000`
+  - `MEDIA_PUBLIC_BASE_URL=http://<EC2_IP>/media`
 - Re-deploy containers after changing env:
   - `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
 - Verify object URL from browser:
   - Open a returned `publicUrl` directly; it should return `200` and image content.
+- Verify media proxy health:
+  - `curl -I http://127.0.0.1/media/minio/health/live`
