@@ -73,10 +73,16 @@ export class PublishController {
       return ok(null);
     }
 
+    const publishedSlug = typeof project.publishedSlug === 'string' ? project.publishedSlug.trim() : '';
+    const publishedUrl = publishedSlug ? this.publish.publicSiteUrlFromSlug(publishedSlug) : null;
+
     return ok({
       publishId: String(publish._id),
       status: publish.status,
-      url: publish.baseUrl,
+      url: publishedUrl ?? publish.baseUrl,
+      baseUrl: publish.baseUrl,
+      publishedSlug: publishedSlug || null,
+      publishedUrl,
       timestamp: publish.updatedAt ?? publish.createdAt ?? null,
       ...(publish.errorMessage ? { errorMessage: publish.errorMessage } : {}),
     });
@@ -97,10 +103,16 @@ export class PublishController {
       throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
+    const publishedSlug = typeof project.publishedSlug === 'string' ? project.publishedSlug.trim() : '';
+    const publishedUrl = publishedSlug ? this.publish.publicSiteUrlFromSlug(publishedSlug) : null;
+
     return ok({
       publishId: String(publish._id),
       status: publish.status,
-      url: publish.baseUrl,
+      url: publishedUrl ?? publish.baseUrl,
+      baseUrl: publish.baseUrl,
+      publishedSlug: publishedSlug || null,
+      publishedUrl,
       ...(publish.errorMessage ? { errorMessage: publish.errorMessage } : {}),
     });
   }

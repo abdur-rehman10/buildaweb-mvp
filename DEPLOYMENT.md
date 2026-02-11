@@ -17,7 +17,7 @@ cp .env.prod.example .env.prod
 Set real production values in `.env.prod` (JWT secret, Mongo URI, domain, MinIO keys, etc.).
 
 Media URL variables for production:
-- `PUBLIC_APP_URL` (required): public app origin, for IP mode use `http://<EC2_IP>`
+- `PUBLIC_APP_URL` (required): public app origin, for IP mode use `http://<EC2_IP>`; also used to build absolute published site URLs (`/p/<slug>/`)
 - `MINIO_PUBLIC_URL` (recommended): browser-facing MinIO origin, for IP mode use `http://<EC2_IP>:9000`
 - `MINIO_PUBLIC_BASE_URL` (legacy fallback): optional compatibility variable
 

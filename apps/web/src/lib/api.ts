@@ -368,6 +368,9 @@ export type PublishResult = {
   publishId: string;
   status: PublishStatus;
   url: string;
+  publishedUrl?: string | null;
+  publishedSlug?: string | null;
+  baseUrl?: string;
   errorMessage?: string;
 };
 
@@ -375,6 +378,9 @@ export type LatestPublishResult = {
   publishId: string;
   status: PublishStatus;
   url: string;
+  publishedUrl?: string | null;
+  publishedSlug?: string | null;
+  baseUrl?: string;
   timestamp?: string | null;
   errorMessage?: string;
 };
