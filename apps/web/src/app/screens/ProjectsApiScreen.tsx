@@ -69,6 +69,20 @@ function toPublishUrlInput(baseUrl: string): PublishUrlBuilderInput | null {
   return parsePublishBaseUrl(toPublishedDisplayBaseUrl(baseUrl));
 }
 
+function resolvePublishPublicUrl(params: {
+  url?: string | null;
+  publishedUrl?: string | null;
+  slug?: string | null;
+  publishedSlug?: string | null;
+}): string | null {
+  const directUrl = (params.url ?? params.publishedUrl ?? '').trim();
+  if (directUrl) return directUrl;
+
+  const slug = (params.slug ?? params.publishedSlug ?? '').trim().replace(/^\/+/, '').replace(/\/+$/, '');
+  if (!slug) return null;
+  return `${window.location.origin}/p/${encodeURIComponent(slug)}`;
+}
+
 function formatPublishHistoryTime(value?: string | null): string {
   if (!value) return 'Unknown';
   const ts = Date.parse(value);
@@ -479,7 +493,7 @@ export function ProjectsApiScreen({
         if (cancelled) return;
 
         setPublishStatus(result.status);
-        setPublishedUrl(result.publishedUrl ?? result.url);
+        setPublishedUrl(resolvePublishPublicUrl(result));
 
         if (result.status === 'failed') {
           const message = result.errorMessage ?? 'Publish failed';
@@ -526,7 +540,7 @@ export function ProjectsApiScreen({
     if (latestPublish) {
       setPublishId(latestPublish.publishId);
       setPublishStatus(latestPublish.status);
-      setPublishedUrl(latestPublish.publishedUrl ?? latestPublish.url);
+      setPublishedUrl(resolvePublishPublicUrl(latestPublish));
       setPublishError(latestPublish.errorMessage ?? null);
       return;
     }
@@ -655,7 +669,7 @@ export function ProjectsApiScreen({
       const result = await publishApi.create(activeProjectId);
       setPublishId(result.publishId);
       setPublishStatus(result.status);
-      setPublishedUrl(result.publishedUrl ?? result.url);
+      setPublishedUrl(resolvePublishPublicUrl(result));
       setPublishPreflightDetails([]);
       appToast.success('Publish started', {
         eventKey: `publish-started:${result.publishId}`,

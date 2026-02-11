@@ -10,7 +10,11 @@ describe('PublishController', () => {
 
   let controller: PublishController;
   let projects: { getByIdScoped: jest.Mock; setLatestPublish: jest.Mock };
-  let publish: { getByIdScoped: jest.Mock; createAndPublish: jest.Mock; publicSiteUrlFromSlug: jest.Mock };
+  let publish: {
+    getByIdScoped: jest.Mock;
+    createAndPublish: jest.Mock;
+    publicSiteUrlFromSlug: jest.Mock;
+  };
 
   beforeEach(() => {
     projects = {
@@ -46,7 +50,9 @@ describe('PublishController', () => {
         createdAt: timestamp,
       });
 
-      const res = await controller.getLatestPublish(projectId, { user: { sub: ownerUserId, tenantId } });
+      const res = await controller.getLatestPublish(projectId, {
+        user: { sub: ownerUserId, tenantId },
+      });
 
       expect(publish.getByIdScoped).toHaveBeenCalledWith({
         tenantId,
@@ -59,6 +65,7 @@ describe('PublishController', () => {
         data: {
           publishId: '507f1f77bcf86cd799439055',
           status: 'live',
+          slug: 'main-site',
           url: '/p/main-site/',
           baseUrl: 'http://localhost:9000/buildaweb/path/',
           publishedSlug: 'main-site',
@@ -74,7 +81,9 @@ describe('PublishController', () => {
         latestPublishId: null,
       });
 
-      const res = await controller.getLatestPublish(projectId, { user: { sub: ownerUserId, tenantId } });
+      const res = await controller.getLatestPublish(projectId, {
+        user: { sub: ownerUserId, tenantId },
+      });
 
       expect(publish.getByIdScoped).not.toHaveBeenCalled();
       expect(res).toEqual({
@@ -87,7 +96,9 @@ describe('PublishController', () => {
       projects.getByIdScoped.mockResolvedValue(null);
 
       await expect(
-        controller.getLatestPublish(projectId, { user: { sub: ownerUserId, tenantId } }),
+        controller.getLatestPublish(projectId, {
+          user: { sub: ownerUserId, tenantId },
+        }),
       ).rejects.toMatchObject({
         status: 404,
         response: {
@@ -107,19 +118,27 @@ describe('PublishController', () => {
       publish.createAndPublish.mockResolvedValue({
         publishId: '507f1f77bcf86cd799439099',
         status: 'live',
+        slug: 'main-site',
         url: '/p/main-site/',
         publishedUrl: '/p/main-site/',
         publishedSlug: 'main-site',
       });
 
-      const res = await controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } });
+      const res = await controller.publishProject(projectId, {
+        user: { sub: ownerUserId, tenantId },
+      });
 
-      expect(publish.createAndPublish).toHaveBeenCalledWith({ tenantId, projectId, ownerUserId });
+      expect(publish.createAndPublish).toHaveBeenCalledWith({
+        tenantId,
+        projectId,
+        ownerUserId,
+      });
       expect(res).toEqual({
         ok: true,
         data: {
           publishId: '507f1f77bcf86cd799439099',
           status: 'live',
+          slug: 'main-site',
           url: '/p/main-site/',
           publishedUrl: '/p/main-site/',
           publishedSlug: 'main-site',
@@ -137,7 +156,9 @@ describe('PublishController', () => {
       );
 
       await expect(
-        controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } }),
+        controller.publishProject(projectId, {
+          user: { sub: ownerUserId, tenantId },
+        }),
       ).rejects.toMatchObject({
         status: 400,
         response: {
@@ -158,7 +179,9 @@ describe('PublishController', () => {
       projects.getByIdScoped.mockResolvedValue(null);
 
       await expect(
-        controller.publishProject(projectId, { user: { sub: ownerUserId, tenantId } }),
+        controller.publishProject(projectId, {
+          user: { sub: ownerUserId, tenantId },
+        }),
       ).rejects.toMatchObject({
         status: 404,
         response: {

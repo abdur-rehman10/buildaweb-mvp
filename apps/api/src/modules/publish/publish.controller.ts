@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpException, HttpStatus, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Types } from 'mongoose';
 import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -19,13 +30,24 @@ export class PublishController {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
-      const result = await this.publish.createAndPublish({ tenantId, projectId, ownerUserId });
+      const result = await this.publish.createAndPublish({
+        tenantId,
+        projectId,
+        ownerUserId,
+      });
       return ok(result);
     } catch (error) {
       if (error instanceof PublishPreflightError) {
@@ -42,22 +64,38 @@ export class PublishController {
         );
       }
 
-      const message = error instanceof Error ? error.message : 'Failed to publish site';
-      throw new HttpException(fail('PUBLISH_FAILED', message), HttpStatus.INTERNAL_SERVER_ERROR);
+      const message =
+        error instanceof Error ? error.message : 'Failed to publish site';
+      throw new HttpException(
+        fail('PUBLISH_FAILED', message),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
   @Get('latest')
-  async getLatestPublish(@Param('projectId') projectId: string, @Req() req: any) {
+  async getLatestPublish(
+    @Param('projectId') projectId: string,
+    @Req() req: any,
+  ) {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const latestPublishId = project.latestPublishId ? String(project.latestPublishId) : null;
+    const latestPublishId = project.latestPublishId
+      ? String(project.latestPublishId)
+      : null;
     if (!latestPublishId) {
       return ok(null);
     }
@@ -73,13 +111,19 @@ export class PublishController {
       return ok(null);
     }
 
-    const publishedSlug = typeof project.publishedSlug === 'string' ? project.publishedSlug.trim() : '';
-    const publishedUrl = publishedSlug ? this.publish.publicSiteUrlFromSlug(publishedSlug) : null;
+    const publishedSlug =
+      typeof project.publishedSlug === 'string'
+        ? project.publishedSlug.trim()
+        : '';
+    const publishedUrl = publishedSlug
+      ? this.publish.publicSiteUrlFromSlug(publishedSlug)
+      : null;
 
     return ok({
       publishId: String(publish._id),
       status: publish.status,
-      url: publishedUrl ?? publish.baseUrl,
+      slug: publishedSlug || null,
+      url: publishedUrl ?? '',
       baseUrl: publish.baseUrl,
       publishedSlug: publishedSlug || null,
       publishedUrl,
@@ -89,27 +133,52 @@ export class PublishController {
   }
 
   @Get(':publishId')
-  async getPublishStatus(@Param('projectId') projectId: string, @Param('publishId') publishId: string, @Req() req: any) {
+  async getPublishStatus(
+    @Param('projectId') projectId: string,
+    @Param('publishId') publishId: string,
+    @Req() req: any,
+  ) {
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const publish = await this.publish.getByIdScoped({ tenantId, projectId, ownerUserId, publishId });
+    const publish = await this.publish.getByIdScoped({
+      tenantId,
+      projectId,
+      ownerUserId,
+      publishId,
+    });
     if (!publish) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const publishedSlug = typeof project.publishedSlug === 'string' ? project.publishedSlug.trim() : '';
-    const publishedUrl = publishedSlug ? this.publish.publicSiteUrlFromSlug(publishedSlug) : null;
+    const publishedSlug =
+      typeof project.publishedSlug === 'string'
+        ? project.publishedSlug.trim()
+        : '';
+    const publishedUrl = publishedSlug
+      ? this.publish.publicSiteUrlFromSlug(publishedSlug)
+      : null;
 
     return ok({
       publishId: String(publish._id),
       status: publish.status,
-      url: publishedUrl ?? publish.baseUrl,
+      slug: publishedSlug || null,
+      url: publishedUrl ?? '',
       baseUrl: publish.baseUrl,
       publishedSlug: publishedSlug || null,
       publishedUrl,
@@ -123,21 +192,37 @@ export class PublishController {
     @Body() dto: SetLatestPublishDto,
     @Req() req: any,
   ) {
-    if (typeof dto.publishId !== 'string' || dto.publishId.trim().length === 0) {
-      throw new HttpException(fail('BAD_REQUEST', 'publishId is required'), HttpStatus.BAD_REQUEST);
+    if (
+      typeof dto.publishId !== 'string' ||
+      dto.publishId.trim().length === 0
+    ) {
+      throw new HttpException(
+        fail('BAD_REQUEST', 'publishId is required'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const ownerUserId = req.user?.sub as string;
     const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
     const publishId = dto.publishId.trim();
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     if (!Types.ObjectId.isValid(publishId)) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const publish = await this.publish.getByIdScoped({
@@ -147,7 +232,10 @@ export class PublishController {
       publishId,
     });
     if (!publish) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const updatedProject = await this.projects.setLatestPublish({
@@ -158,7 +246,10 @@ export class PublishController {
       publishedAt: new Date(),
     });
     if (!updatedProject) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return ok({
@@ -167,7 +258,9 @@ export class PublishController {
         name: updatedProject.name,
         status: updatedProject.status,
         defaultLocale: updatedProject.defaultLocale,
-        latestPublishId: updatedProject.latestPublishId ? String(updatedProject.latestPublishId) : null,
+        latestPublishId: updatedProject.latestPublishId
+          ? String(updatedProject.latestPublishId)
+          : null,
         publishedAt: updatedProject.publishedAt ?? null,
         createdAt: updatedProject.createdAt,
         updatedAt: updatedProject.updatedAt,

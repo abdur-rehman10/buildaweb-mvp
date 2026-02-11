@@ -4,7 +4,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { AssetsService } from '../assets/assets.service';
 import { MinioService } from '../assets/minio.service';
-import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
+import {
+  Navigation,
+  NavigationDocument,
+} from '../navigation/navigation.schema';
 import { Page, PageDocument } from '../pages/page.schema';
 import { PreviewRendererService } from '../pages/preview-renderer.service';
 import { Project, ProjectDocument } from '../projects/project.schema';
@@ -25,52 +28,67 @@ export class PublishPreflightError extends Error {
 @Injectable()
 export class PublishService {
   private readonly publishSlugPattern = /^[A-Za-z0-9_-]+$/;
-  private readonly reservedPublishSlugs = new Set(['index.html', 'assets', '.', '..']);
+  private readonly reservedPublishSlugs = new Set([
+    'index.html',
+    'assets',
+    '.',
+    '..',
+  ]);
   private readonly publishedSiteSlugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-  private readonly reservedPublishedSiteSlugs = new Set(['api', 'p', 'published', 'assets', 'index', 'index.html']);
+  private readonly reservedPublishedSiteSlugs = new Set([
+    'api',
+    'p',
+    'published',
+    'assets',
+    'index',
+    'index.html',
+  ]);
 
   constructor(
-    @InjectModel(Publish.name) private readonly publishModel: Model<PublishDocument>,
+    @InjectModel(Publish.name)
+    private readonly publishModel: Model<PublishDocument>,
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
-    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
-    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(Navigation.name)
+    private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Project.name)
+    private readonly projectModel: Model<ProjectDocument>,
     private readonly renderer: PreviewRendererService,
     private readonly assets: AssetsService,
     private readonly minio: MinioService,
     private readonly config: ConfigService,
   ) {}
 
-  private publishRootPath(params: { publishedSlug: string; publishedVersion: number }) {
+  private publishRootPath(params: {
+    publishedSlug: string;
+    publishedVersion: number;
+  }) {
     return `published-sites/${params.publishedSlug}/v${params.publishedVersion}`;
   }
 
   private publishBaseUrlFromRoot(publishRootPath: string) {
-    const base = (this.config.get<string>('MINIO_PUBLIC_BASE_URL') ?? 'http://localhost:9000').replace(/\/$/, '');
+    const base = (
+      this.config.get<string>('MINIO_PUBLIC_BASE_URL') ??
+      'http://localhost:9000'
+    ).replace(/\/$/, '');
     const bucket = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
     return `${base}/${bucket}/${publishRootPath}/`;
   }
 
+  private publicAppBaseUrl() {
+    const publicAppUrl =
+      this.config.get<string>('PUBLIC_APP_URL')?.trim() ?? '';
+    return publicAppUrl.replace(/\/$/, '');
+  }
+
   public publicSiteUrlFromSlug(publishedSlug: string) {
-    const publicAppUrl = this.config.get<string>('PUBLIC_APP_URL')?.trim();
-    if (publicAppUrl) {
-      return `${publicAppUrl.replace(/\/$/, '')}/p/${encodeURIComponent(publishedSlug)}/`;
-    }
-
-    const directBaseUrl = this.config.get<string>('PUBLIC_SITE_BASE_URL')?.trim();
-    if (directBaseUrl) {
-      return `${directBaseUrl.replace(/\/$/, '')}/p/${encodeURIComponent(publishedSlug)}/`;
-    }
-
-    const domain = this.config.get<string>('DOMAIN')?.trim();
-    if (domain) {
-      return `https://${domain}/p/${encodeURIComponent(publishedSlug)}/`;
-    }
-
-    return `/p/${encodeURIComponent(publishedSlug)}/`;
+    const baseUrl = this.publicAppBaseUrl();
+    if (!baseUrl) return '';
+    return `${baseUrl}/p/${encodeURIComponent(publishedSlug)}`;
   }
 
   private asRecord(value: unknown): Record<string, unknown> | null {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      return null;
     return value as Record<string, unknown>;
   }
 
@@ -95,10 +113,17 @@ export class PublishService {
   }
 
   private isValidSiteSlug(value: string) {
-    return this.publishedSiteSlugPattern.test(value) && !this.reservedPublishedSiteSlugs.has(value);
+    return (
+      this.publishedSiteSlugPattern.test(value) &&
+      !this.reservedPublishedSiteSlugs.has(value)
+    );
   }
 
-  private async ensureUniquePublishedSlug(params: { tenantId: string; projectId: string; preferredSlug: string }) {
+  private async ensureUniquePublishedSlug(params: {
+    tenantId: string;
+    projectId: string;
+    preferredSlug: string;
+  }) {
     const preferred = this.toSafeSiteSlug(params.preferredSlug);
     let attempt = 0;
 
@@ -120,7 +145,10 @@ export class PublishService {
         .lean()
         .exec();
 
-      if (!conflict || String((conflict as { _id?: unknown })._id ?? '') === params.projectId) {
+      if (
+        !conflict ||
+        String((conflict as { _id?: unknown })._id ?? '') === params.projectId
+      ) {
         return candidate;
       }
       attempt += 1;
@@ -135,7 +163,9 @@ export class PublishService {
     projectName: string;
     existingPublishedSlug?: unknown;
   }) {
-    const current = this.readString(params.existingPublishedSlug).trim().toLowerCase();
+    const current = this.readString(params.existingPublishedSlug)
+      .trim()
+      .toLowerCase();
     if (this.isValidSiteSlug(current)) {
       const conflict = await this.projectModel
         .findOne({
@@ -146,7 +176,11 @@ export class PublishService {
         .select('_id')
         .lean()
         .exec();
-      if (!conflict || String((conflict as { _id?: unknown })._id ?? '') === params.projectId) return current;
+      if (
+        !conflict ||
+        String((conflict as { _id?: unknown })._id ?? '') === params.projectId
+      )
+        return current;
     }
 
     return this.ensureUniquePublishedSlug({
@@ -198,7 +232,12 @@ export class PublishService {
   }
 
   private validatePublishPreflight(params: {
-    pages: Array<{ _id: unknown; title?: string; slug?: string; isHome?: boolean }>;
+    pages: Array<{
+      _id: unknown;
+      title?: string;
+      slug?: string;
+      isHome?: boolean;
+    }>;
     navigationItems: unknown[];
   }) {
     const details: string[] = [];
@@ -236,7 +275,9 @@ export class PublishService {
           }
 
           if (this.reservedPublishSlugs.has(slugKey)) {
-            details.push(`Page "${pageLabel}" uses reserved slug "${normalizedSlug}".`);
+            details.push(
+              `Page "${pageLabel}" uses reserved slug "${normalizedSlug}".`,
+            );
           }
         }
       } else if (normalizedSlug) {
@@ -247,7 +288,9 @@ export class PublishService {
         }
 
         if (this.reservedPublishSlugs.has(slugKey)) {
-          details.push(`Home page "${pageLabel}" uses reserved slug "${normalizedSlug}".`);
+          details.push(
+            `Home page "${pageLabel}" uses reserved slug "${normalizedSlug}".`,
+          );
         }
       }
 
@@ -259,13 +302,17 @@ export class PublishService {
     if (homeCount === 0) {
       details.push('Exactly one home page is required, but none was found.');
     } else if (homeCount > 1) {
-      details.push(`Exactly one home page is required, but found ${homeCount}.`);
+      details.push(
+        `Exactly one home page is required, but found ${homeCount}.`,
+      );
     }
 
     for (const [slugKey, ids] of slugToPageIds.entries()) {
       if (ids.length > 1) {
         const duplicateSlug = slugKey === '/' ? '/' : slugKey;
-        details.push(`Duplicate slug "${duplicateSlug}" found on ${ids.length} pages.`);
+        details.push(
+          `Duplicate slug "${duplicateSlug}" found on ${ids.length} pages.`,
+        );
       }
     }
 
@@ -273,7 +320,9 @@ export class PublishService {
       const record = this.asRecord(item);
       const pageId = this.readString(record?.pageId).trim();
       if (!pageId || !pageIds.has(pageId)) {
-        details.push(`Navigation item ${index + 1} references missing pageId "${pageId || '(empty)'}".`);
+        details.push(
+          `Navigation item ${index + 1} references missing pageId "${pageId || '(empty)'}".`,
+        );
       }
     }
 
@@ -292,7 +341,12 @@ export class PublishService {
     return `${'../'.repeat(depth)}styles.css`;
   }
 
-  private staticHtmlDocument(params: { headTags: string; cssHref: string; bodyHtml: string; lang: string }) {
+  private staticHtmlDocument(params: {
+    headTags: string;
+    cssHref: string;
+    bodyHtml: string;
+    lang: string;
+  }) {
     return `<!doctype html>
 <html lang="${params.lang}">
   <head>
@@ -307,7 +361,9 @@ ${params.bodyHtml}
 </html>`;
   }
 
-  private resolveHomePage<T extends { isHome?: boolean; slug?: string }>(pages: T[]): T | null {
+  private resolveHomePage<T extends { isHome?: boolean; slug?: string }>(
+    pages: T[],
+  ): T | null {
     if (pages.length === 0) return null;
 
     const explicitHome = pages.find((page) => page.isHome === true);
@@ -323,14 +379,21 @@ ${params.bodyHtml}
   }
 
   private resolveNavigationLinks(params: {
-    pages: Array<{ _id: unknown; title?: string; slug?: string; isHome?: boolean }>;
+    pages: Array<{
+      _id: unknown;
+      title?: string;
+      slug?: string;
+      isHome?: boolean;
+    }>;
     navigationItems: unknown[];
   }) {
     const itemsRaw = params.navigationItems;
     if (itemsRaw.length === 0) return [];
 
     const homePage = this.resolveHomePage(params.pages);
-    const pageById = Object.fromEntries(params.pages.map((page) => [String(page._id), page]));
+    const pageById = Object.fromEntries(
+      params.pages.map((page) => [String(page._id), page]),
+    );
 
     const targetSlugByPageId: Record<string, string> = {};
     for (const page of params.pages) {
@@ -357,7 +420,9 @@ ${params.bodyHtml}
 
         return { label, targetSlug };
       })
-      .filter((item): item is { label: string; targetSlug: string } => item !== null);
+      .filter(
+        (item): item is { label: string; targetSlug: string } => item !== null,
+      );
   }
 
   private async resolveAssetUrlById(params: {
@@ -384,10 +449,17 @@ ${params.bodyHtml}
       assetIds: validAssetIds,
     });
 
-    return Object.fromEntries(assets.map((asset) => [String(asset._id), asset.publicUrl]));
+    return Object.fromEntries(
+      assets.map((asset) => [String(asset._id), asset.publicUrl]),
+    );
   }
 
-  async getByIdScoped(params: { tenantId: string; projectId: string; ownerUserId: string; publishId: string }) {
+  async getByIdScoped(params: {
+    tenantId: string;
+    projectId: string;
+    ownerUserId: string;
+    publishId: string;
+  }) {
     return this.publishModel
       .findOne({
         _id: params.publishId,
@@ -415,7 +487,10 @@ ${params.bodyHtml}
       .exec();
   }
 
-  async getProjectByPublishedSlug(params: { slug: string; onlyPublished: boolean }) {
+  async getProjectByPublishedSlug(params: {
+    slug: string;
+    onlyPublished: boolean;
+  }) {
     const normalizedSlug = this.readString(params.slug).trim().toLowerCase();
     if (!this.isValidSiteSlug(normalizedSlug)) return null;
 
@@ -437,8 +512,12 @@ ${params.bodyHtml}
 
   private isObjectNotFoundError(error: unknown) {
     if (!error || typeof error !== 'object') return false;
-    const code = this.readString((error as Record<string, unknown>).code).toLowerCase();
-    return code === 'notfound' || code === 'nosuchkey' || code === 'nosuchobject';
+    const code = this.readString(
+      (error as Record<string, unknown>).code,
+    ).toLowerCase();
+    return (
+      code === 'notfound' || code === 'nosuchkey' || code === 'nosuchobject'
+    );
   }
 
   private resolvePublishedObjectPath(requestPath?: string) {
@@ -457,8 +536,14 @@ ${params.bodyHtml}
     return { relativePath: 'index.html', isAsset: false };
   }
 
-  async loadPublishedObjectBySlug(params: { slug: string; requestPath?: string }) {
-    const project = await this.getProjectByPublishedSlug({ slug: params.slug, onlyPublished: true });
+  async loadPublishedObjectBySlug(params: {
+    slug: string;
+    requestPath?: string;
+  }) {
+    const project = await this.getProjectByPublishedSlug({
+      slug: params.slug,
+      onlyPublished: true,
+    });
     if (!project) return null;
 
     const bucketKey = this.readString(project.publishedBucketKey).trim();
@@ -470,8 +555,11 @@ ${params.bodyHtml}
     try {
       const stat = await this.minio.statObject({ objectPath });
       const stream = await this.minio.getObjectStream({ objectPath });
-      const metadata = (stat as { metaData?: Record<string, string> }).metaData ?? {};
-      const contentType = this.readString(metadata['content-type']).trim() || 'application/octet-stream';
+      const metadata =
+        (stat as { metaData?: Record<string, string> }).metaData ?? {};
+      const contentType =
+        this.readString(metadata['content-type']).trim() ||
+        'application/octet-stream';
       const cacheControl = resolved.isAsset
         ? 'public, max-age=31536000, immutable'
         : 'public, max-age=60, must-revalidate';
@@ -486,7 +574,11 @@ ${params.bodyHtml}
     }
   }
 
-  async unpublishProject(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+  async unpublishProject(params: {
+    tenantId: string;
+    projectId: string;
+    ownerUserId: string;
+  }) {
     return this.projectModel
       .findOneAndUpdate(
         {
@@ -505,14 +597,20 @@ ${params.bodyHtml}
       .exec();
   }
 
-  async createAndPublish(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+  async createAndPublish(params: {
+    tenantId: string;
+    projectId: string;
+    ownerUserId: string;
+  }) {
     const project = await this.projectModel
       .findOne({
         _id: params.projectId,
         tenantId: params.tenantId,
         ownerUserId: params.ownerUserId,
       })
-      .select('_id name defaultLocale locale siteName faviconAssetId defaultOgImageAssetId publishedSlug publishedVersion')
+      .select(
+        '_id name defaultLocale locale siteName faviconAssetId defaultOgImageAssetId publishedSlug publishedVersion',
+      )
       .lean()
       .exec();
     if (!project) {
@@ -545,7 +643,9 @@ ${params.bodyHtml}
 
     const homePage = this.resolveHomePage(pages);
     if (!homePage) {
-      throw new PublishPreflightError(['Exactly one home page is required, but none was found.']);
+      throw new PublishPreflightError([
+        'Exactly one home page is required, but none was found.',
+      ]);
     }
 
     const publishedSlug = await this.resolvePublishedSlug({
@@ -554,7 +654,9 @@ ${params.bodyHtml}
       projectName: this.readString(project.name),
       existingPublishedSlug: project.publishedSlug,
     });
-    const publishedVersion = this.resolvePublishedVersion(project.publishedVersion);
+    const publishedVersion = this.resolvePublishedVersion(
+      project.publishedVersion,
+    );
     const publishedBucketKey = this.publishRootPath({
       publishedSlug,
       publishedVersion,
@@ -579,7 +681,9 @@ ${params.bodyHtml}
 
     try {
       const faviconAssetId = this.readString(project.faviconAssetId).trim();
-      const defaultOgImageAssetId = this.readString(project.defaultOgImageAssetId).trim();
+      const defaultOgImageAssetId = this.readString(
+        project.defaultOgImageAssetId,
+      ).trim();
       const assetUrlById = await this.resolveAssetUrlById({
         tenantId: params.tenantId,
         projectId: params.projectId,
@@ -590,9 +694,16 @@ ${params.bodyHtml}
         pages,
         navigationItems,
       });
-      const faviconUrl = faviconAssetId ? this.readString(assetUrlById[faviconAssetId]).trim() : '';
-      const defaultOgImageUrl = defaultOgImageAssetId ? this.readString(assetUrlById[defaultOgImageAssetId]).trim() : '';
-      const locale = this.readString(project.locale).trim() || this.readString(project.defaultLocale).trim() || 'en';
+      const faviconUrl = faviconAssetId
+        ? this.readString(assetUrlById[faviconAssetId]).trim()
+        : '';
+      const defaultOgImageUrl = defaultOgImageAssetId
+        ? this.readString(assetUrlById[defaultOgImageAssetId]).trim()
+        : '';
+      const locale =
+        this.readString(project.locale).trim() ||
+        this.readString(project.defaultLocale).trim() ||
+        'en';
       const siteName = this.readString(project.siteName).trim();
 
       let sharedCss = '';
@@ -601,7 +712,9 @@ ${params.bodyHtml}
       for (const page of pages) {
         const isHome = String(page._id) === String(homePage._id);
         const normalizedSlug = this.normalizeSlug(this.readString(page.slug));
-        const relativePath = isHome ? 'index.html' : `${normalizedSlug || `page-${String(page._id)}`}/index.html`;
+        const relativePath = isHome
+          ? 'index.html'
+          : `${normalizedSlug || `page-${String(page._id)}`}/index.html`;
         const depth = isHome ? 0 : relativePath.split('/').length - 1;
         const currentSlug =
           this.toPageSlug({
@@ -616,7 +729,8 @@ ${params.bodyHtml}
           navLinks,
           currentSlug,
           linkMode: 'publish',
-          pageTitle: this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
+          pageTitle:
+            this.readString(page.title, 'Buildaweb Site') || 'Buildaweb Site',
           seoJson: page.seoJson,
           siteName,
           faviconUrl,
@@ -685,17 +799,21 @@ ${params.bodyHtml}
         )
         .exec();
 
+      const publicUrl = this.publicSiteUrlFromSlug(publishedSlug);
+
       return {
         publishId: String(publish._id),
         status: publish.status,
-        url: this.publicSiteUrlFromSlug(publishedSlug),
-        publishedUrl: this.publicSiteUrlFromSlug(publishedSlug),
+        slug: publishedSlug,
+        url: publicUrl,
+        publishedUrl: publicUrl,
         publishedSlug,
         publishedVersion,
       };
     } catch (error) {
       publish.status = 'failed';
-      publish.errorMessage = error instanceof Error ? error.message : 'Publish failed';
+      publish.errorMessage =
+        error instanceof Error ? error.message : 'Publish failed';
       await publish.save();
       throw error;
     }

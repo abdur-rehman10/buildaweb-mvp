@@ -368,6 +368,7 @@ export type PublishResult = {
   publishId: string;
   status: PublishStatus;
   url: string;
+  slug?: string | null;
   publishedUrl?: string | null;
   publishedSlug?: string | null;
   baseUrl?: string;
@@ -378,6 +379,7 @@ export type LatestPublishResult = {
   publishId: string;
   status: PublishStatus;
   url: string;
+  slug?: string | null;
   publishedUrl?: string | null;
   publishedSlug?: string | null;
   baseUrl?: string;
