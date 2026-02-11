@@ -18,8 +18,11 @@ export class MinioService {
     const secretKey = this.config.get<string>('MINIO_SECRET_KEY') ?? 'minio12345';
 
     this.bucketName = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
-    this.publicBaseUrl =
-      this.config.get<string>('MINIO_PUBLIC_BASE_URL') ?? `${useSSL ? 'https' : 'http'}://${endPoint}:${port}`;
+    this.publicBaseUrl = this.resolvePublicBaseUrl({
+      endPoint,
+      port,
+      useSSL,
+    });
 
     this.client = new MinioClient({
       endPoint,
@@ -28,6 +31,43 @@ export class MinioService {
       accessKey,
       secretKey,
     });
+  }
+
+  private trimOrEmpty(value: string | undefined | null) {
+    return (value ?? '').trim();
+  }
+
+  private withHttpProtocol(raw: string) {
+    if (/^https?:\/\//i.test(raw)) {
+      return raw;
+    }
+    return `http://${raw}`;
+  }
+
+  private normalizePublicBaseUrl(raw: string) {
+    const parsed = new URL(this.withHttpProtocol(raw));
+    const normalizedPath = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '');
+    return `${parsed.origin}${normalizedPath}`;
+  }
+
+  private resolvePublicBaseUrl(params: { endPoint: string; port: number; useSSL: boolean }) {
+    const explicitMinioUrl = this.trimOrEmpty(this.config.get<string>('MINIO_PUBLIC_URL'));
+    if (explicitMinioUrl) {
+      return this.normalizePublicBaseUrl(explicitMinioUrl);
+    }
+
+    const explicitMinioBaseUrl = this.trimOrEmpty(this.config.get<string>('MINIO_PUBLIC_BASE_URL'));
+    if (explicitMinioBaseUrl) {
+      return this.normalizePublicBaseUrl(explicitMinioBaseUrl);
+    }
+
+    const publicAppUrl = this.trimOrEmpty(this.config.get<string>('PUBLIC_APP_URL'));
+    if (publicAppUrl) {
+      const appUrl = new URL(this.withHttpProtocol(publicAppUrl));
+      return `${appUrl.protocol}//${appUrl.hostname}:${params.port}`;
+    }
+
+    return `${params.useSSL ? 'https' : 'http'}://${params.endPoint}:${params.port}`;
   }
 
   private encodedPath(path: string) {
@@ -73,7 +113,8 @@ export class MinioService {
 
     const base = this.publicBaseUrl.replace(/\/$/, '');
     const objectPath = this.encodedPath(params.objectPath);
-    return `${base}/${this.bucketName}/${objectPath}`;
+    const bucketPath = base.endsWith(`/${this.bucketName}`) ? base : `${base}/${this.bucketName}`;
+    return `${bucketPath}/${objectPath}`;
   }
 
   async statObject(params: { objectPath: string }) {

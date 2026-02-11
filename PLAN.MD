@@ -1,35 +1,23 @@
 # PLAN.md
 
 ## Branch
-fix/auth-signup-hardening
+fix/media-public-url
 
 ## Goal
-Harden signup reliability for production by tightening validation behavior, duplicate handling, safe logging, and targeted tests.
+Fix broken production images by generating browser-accessible MinIO asset URLs for IP + HTTP deployments.
 
 ## In Scope
-- API hardening:
-  - normalize signup email/name safely
-  - preserve strict DTO validation
-  - return stable duplicate-email conflict behavior (including race on unique index)
-  - keep password hashing mandatory
-  - add safe structured signup logs (no password)
-- Web verification:
-  - confirm signup uses `/api/v1/auth/signup`
-  - token persistence + auth redirect flow remains correct
-- Add minimal signup-focused API tests:
-  - signup success returns token
-  - duplicate email returns 409
-  - invalid email/short password returns 400
-  - `/auth/me` works with signup token
+- Backend: harden MinIO public URL generation so assets never resolve to internal hosts or wrong protocol.
+- Backend: support explicit public URL env vars for media URL generation.
+- Infra/env: wire production compose and env examples for stable public media URL configuration.
+- Docs: document required env vars and verification steps for media URL correctness.
 
 ## Out of Scope
-- Auth feature expansion (roles, social login, refresh tokens)
-- UI redesign
-- Deployment/infrastructure changes
+- New media endpoints or storage architecture changes.
+- Frontend refactors.
+- Domain/TLS rollout changes.
 
 ## Definition of Done
-- Signup API consistently returns token on success and 409 on duplicate.
-- Passwords are always hashed and never logged.
-- `/api/v1/auth/me` accepts token from signup.
-- Signup frontend continues to persist session and survive refresh.
-- New tests cover core signup hardening scenarios.
+- Uploaded asset `publicUrl` values are externally reachable in production.
+- Asset URLs never use `localhost`, `minio`, or forced `https` in HTTP-only IP mode.
+- Deployment docs explain `PUBLIC_APP_URL` and `MINIO_PUBLIC_URL` clearly.

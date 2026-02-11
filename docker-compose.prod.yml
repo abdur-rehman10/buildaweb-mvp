@@ -36,6 +36,7 @@ services:
     environment:
       NODE_ENV: production
       DOMAIN: ${DOMAIN:-example.com}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://127.0.0.1}
       PUBLIC_SITE_BASE_URL: ${PUBLIC_SITE_BASE_URL:-}
       PORT: ${PORT:-4000}
       MONGO_URI: ${MONGO_URI:-mongodb://mongo:27017/buildaweb}
@@ -49,7 +50,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minio}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minio12345}
       MINIO_BUCKET: ${MINIO_BUCKET:-buildaweb}
-      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-https://minio.localhost}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-}
+      MINIO_PUBLIC_BASE_URL: ${MINIO_PUBLIC_BASE_URL:-}
     networks:
       - app_net
 
