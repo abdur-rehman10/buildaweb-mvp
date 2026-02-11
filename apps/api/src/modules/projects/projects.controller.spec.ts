@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AiService } from '../ai/ai.service';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 
@@ -18,9 +17,8 @@ describe('ProjectsController.createProject', () => {
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
-    replaceProjectContentFromGeneration: jest.Mock;
+    createFromPrompt: jest.Mock;
   };
-  let ai: { generateSiteFromPrompt: jest.Mock };
   let config: { get: jest.Mock };
 
   beforeEach(() => {
@@ -32,14 +30,12 @@ describe('ProjectsController.createProject', () => {
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
-      replaceProjectContentFromGeneration: jest.fn(),
+      createFromPrompt: jest.fn(),
     };
-    ai = { generateSiteFromPrompt: jest.fn() };
     config = { get: jest.fn().mockReturnValue('http://13.50.101.211') };
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
-      ai as unknown as AiService,
       config as unknown as ConfigService,
     );
   });
@@ -93,9 +89,8 @@ describe('ProjectsController.setProjectHomePage', () => {
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
-    replaceProjectContentFromGeneration: jest.Mock;
+    createFromPrompt: jest.Mock;
   };
-  let ai: { generateSiteFromPrompt: jest.Mock };
   let config: { get: jest.Mock };
 
   beforeEach(() => {
@@ -107,14 +102,12 @@ describe('ProjectsController.setProjectHomePage', () => {
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
-      replaceProjectContentFromGeneration: jest.fn(),
+      createFromPrompt: jest.fn(),
     };
-    ai = { generateSiteFromPrompt: jest.fn() };
     config = { get: jest.fn().mockReturnValue('http://13.50.101.211') };
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
-      ai as unknown as AiService,
       config as unknown as ConfigService,
     );
   });
@@ -179,9 +172,8 @@ describe('ProjectsController.getProject', () => {
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
-    replaceProjectContentFromGeneration: jest.Mock;
+    createFromPrompt: jest.Mock;
   };
-  let ai: { generateSiteFromPrompt: jest.Mock };
   let config: { get: jest.Mock };
 
   beforeEach(() => {
@@ -193,14 +185,12 @@ describe('ProjectsController.getProject', () => {
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
-      replaceProjectContentFromGeneration: jest.fn(),
+      createFromPrompt: jest.fn(),
     };
-    ai = { generateSiteFromPrompt: jest.fn() };
     config = { get: jest.fn().mockReturnValue('http://13.50.101.211') };
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
-      ai as unknown as AiService,
       config as unknown as ConfigService,
     );
   });
@@ -284,9 +274,8 @@ describe('ProjectsController.settings', () => {
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
-    replaceProjectContentFromGeneration: jest.Mock;
+    createFromPrompt: jest.Mock;
   };
-  let ai: { generateSiteFromPrompt: jest.Mock };
   let config: { get: jest.Mock };
 
   beforeEach(() => {
@@ -298,14 +287,12 @@ describe('ProjectsController.settings', () => {
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
-      replaceProjectContentFromGeneration: jest.fn(),
+      createFromPrompt: jest.fn(),
     };
-    ai = { generateSiteFromPrompt: jest.fn() };
     config = { get: jest.fn().mockReturnValue('http://13.50.101.211') };
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
-      ai as unknown as AiService,
       config as unknown as ConfigService,
     );
   });
@@ -384,9 +371,8 @@ describe('ProjectsController.generateProject', () => {
     setHomePage: jest.Mock;
     getSettings: jest.Mock;
     updateSettings: jest.Mock;
-    replaceProjectContentFromGeneration: jest.Mock;
+    createFromPrompt: jest.Mock;
   };
-  let ai: { generateSiteFromPrompt: jest.Mock };
   let config: { get: jest.Mock };
 
   beforeEach(() => {
@@ -398,34 +384,20 @@ describe('ProjectsController.generateProject', () => {
       setHomePage: jest.fn(),
       getSettings: jest.fn(),
       updateSettings: jest.fn(),
-      replaceProjectContentFromGeneration: jest.fn(),
+      createFromPrompt: jest.fn(),
     };
-    ai = { generateSiteFromPrompt: jest.fn() };
     config = { get: jest.fn().mockReturnValue('http://13.50.101.211') };
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
-      ai as unknown as AiService,
       config as unknown as ConfigService,
     );
   });
 
   it('generates site and returns previewUrl', async () => {
-    projects.getByIdScoped.mockResolvedValue({
-      _id: '507f1f77bcf86cd799439100',
-      name: 'Main Site',
-    });
-    ai.generateSiteFromPrompt.mockResolvedValue({
-      pages: [
-        {
-          title: 'Home',
-          slug: '/',
-          isHome: true,
-          editorJson: { sections: [] },
-        },
-      ],
-      navigation: [{ label: 'Home', slug: '/' }],
-      theme: {},
+    projects.createFromPrompt.mockResolvedValue({
+      homePageId: '507f1f77bcf86cd799439011',
+      pageCount: 2,
     });
 
     const result = await controller.generateProject(
@@ -434,7 +406,12 @@ describe('ProjectsController.generateProject', () => {
       { user: { sub: 'user-1', tenantId: 'default' } },
     );
 
-    expect(projects.replaceProjectContentFromGeneration).toHaveBeenCalled();
+    expect(projects.createFromPrompt).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: '507f1f77bcf86cd799439100',
+      prompt: 'Generate a portfolio website',
+    });
     expect(result).toEqual({
       ok: true,
       data: {

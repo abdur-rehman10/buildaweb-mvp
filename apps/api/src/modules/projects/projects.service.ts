@@ -6,7 +6,11 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { AiGeneratedSite } from '../ai/ai.service';
+import {
+  AiGeneratedSection,
+  AiGeneratedSite,
+  AiService,
+} from '../ai/ai.service';
 import {
   Navigation,
   NavigationDocument,
@@ -50,6 +54,7 @@ export class ProjectsService {
     private readonly navigationModel: Model<NavigationDocument>,
     @InjectModel(Publish.name)
     private readonly publishModel: Model<PublishDocument>,
+    private readonly ai: AiService,
   ) {}
 
   private normalizeOptionalString(value: unknown): string | null {
@@ -80,6 +85,162 @@ export class ProjectsService {
   private isValidGeneratedSlug(slug: string) {
     if (slug === '/') return true;
     return /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*)*$/.test(slug);
+  }
+
+  private ensureProjectScopedObjectId(projectId: string) {
+    if (!Types.ObjectId.isValid(projectId)) {
+      throw new NotFoundException('Project not found');
+    }
+    return new Types.ObjectId(projectId);
+  }
+
+  private toNodeId(pageIndex: number, sectionIndex: number, nodeIndex: number) {
+    return `node-${pageIndex + 1}-${sectionIndex + 1}-${nodeIndex + 1}`;
+  }
+
+  private toSectionId(pageIndex: number, sectionIndex: number) {
+    return `section-${pageIndex + 1}-${sectionIndex + 1}`;
+  }
+
+  private toBlockId(pageIndex: number, sectionIndex: number) {
+    return `block-${pageIndex + 1}-${sectionIndex + 1}-1`;
+  }
+
+  private sectionToEditorNodes(params: {
+    section: AiGeneratedSection;
+    pageIndex: number;
+    sectionIndex: number;
+  }) {
+    const { section, pageIndex, sectionIndex } = params;
+    const nodes: Array<Record<string, unknown>> = [];
+
+    if (section.type === 'hero') {
+      nodes.push({
+        id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+        type: 'text',
+        tag: 'h1',
+        content: section.headline,
+      });
+      nodes.push({
+        id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+        type: 'text',
+        tag: 'p',
+        content: section.subheadline,
+      });
+      nodes.push({
+        id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+        type: 'button',
+        label: section.cta,
+        href: '#',
+      });
+      if (section.imageUrl) {
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'image',
+          src: section.imageUrl,
+          alt: section.headline,
+        });
+      }
+      return nodes;
+    }
+
+    if (section.type === 'features') {
+      section.items.forEach((item) => {
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'h2',
+          content: item.title,
+        });
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'p',
+          content: item.description,
+        });
+      });
+      return nodes;
+    }
+
+    if (section.type === 'testimonials') {
+      section.items.forEach((item) => {
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'h2',
+          content: item.name,
+        });
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'p',
+          content: item.quote,
+        });
+      });
+      return nodes;
+    }
+
+    nodes.push({
+      id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+      type: 'text',
+      tag: 'h2',
+      content: section.headline,
+    });
+    nodes.push({
+      id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+      type: 'button',
+      label: section.cta,
+      href: '#',
+    });
+    if (section.imageUrl) {
+      nodes.push({
+        id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+        type: 'image',
+        src: section.imageUrl,
+        alt: section.headline,
+      });
+    }
+    return nodes;
+  }
+
+  private toEditorJsonFromSections(params: {
+    sections: AiGeneratedSection[];
+    pageIndex: number;
+  }) {
+    const { sections, pageIndex } = params;
+    return {
+      sections: sections.map((section, sectionIndex) => ({
+        id: this.toSectionId(pageIndex, sectionIndex),
+        type: section.type,
+        blocks: [
+          {
+            id: this.toBlockId(pageIndex, sectionIndex),
+            nodes: this.sectionToEditorNodes({
+              section,
+              pageIndex,
+              sectionIndex,
+            }),
+          },
+        ],
+      })),
+    };
+  }
+
+  private toSeoJson(params: {
+    generated: AiGeneratedSite;
+    pageTitle: string;
+    isHome: boolean;
+  }) {
+    const keywords = Array.isArray(params.generated.seo.keywords)
+      ? params.generated.seo.keywords
+      : [];
+    return {
+      title: params.isHome
+        ? params.generated.seo.title
+        : `${params.pageTitle} | ${params.generated.project.name}`,
+      description: params.generated.seo.description,
+      keywords,
+    };
   }
 
   private isDuplicateKeyError(error: unknown) {
@@ -268,10 +429,7 @@ export class ProjectsService {
 
       for (const publish of publishes) {
         if (publish.draftSnapshot) {
-          publishSnapshotById.set(
-            String(publish._id),
-            publish.draftSnapshot as PublishDraftSnapshot,
-          );
+          publishSnapshotById.set(String(publish._id), publish.draftSnapshot);
         }
       }
     }
@@ -462,6 +620,30 @@ export class ProjectsService {
     return this.mapSettings(refreshedProject);
   }
 
+  async createFromPrompt(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId: string;
+    prompt: string;
+  }) {
+    const project = await this.getByIdScoped({
+      tenantId: params.tenantId,
+      ownerUserId: params.ownerUserId,
+      projectId: params.projectId,
+    });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const generated = await this.ai.generateSiteFromPrompt(params.prompt);
+    return this.replaceProjectContentFromGeneration({
+      tenantId: params.tenantId,
+      ownerUserId: params.ownerUserId,
+      projectId: params.projectId,
+      generated,
+    });
+  }
+
   async replaceProjectContentFromGeneration(params: {
     tenantId: string;
     ownerUserId: string;
@@ -487,8 +669,7 @@ export class ProjectsService {
     }
 
     let explicitHomeIndex = generatedPages.findIndex(
-      (page) =>
-        page.isHome === true || this.normalizeGeneratedSlug(page.slug) === '/',
+      (page) => this.normalizeGeneratedSlug(page.slug) === '/',
     );
     if (explicitHomeIndex < 0) explicitHomeIndex = 0;
 
@@ -520,8 +701,21 @@ export class ProjectsService {
       seenSlugs.add(normalizedSlug);
 
       const pageId = new Types.ObjectId();
-      const editorJson = this.asRecord(source.editorJson) ?? {};
-      const seoJson = this.asRecord(source.seoJson) ?? {};
+      if (!Array.isArray(source.sections) || source.sections.length === 0) {
+        throw new InternalServerErrorException(
+          `Generated page "${normalizedTitle}" has no sections`,
+        );
+      }
+
+      const editorJson = this.toEditorJsonFromSections({
+        sections: source.sections,
+        pageIndex: index,
+      });
+      const seoJson = this.toSeoJson({
+        generated: params.generated,
+        pageTitle: normalizedTitle,
+        isHome: index === explicitHomeIndex,
+      });
 
       const storedSlug = normalizedSlug === '/' ? '/' : normalizedSlug;
       pageIdBySlug.set(normalizedSlug, String(pageId));
@@ -530,7 +724,7 @@ export class ProjectsService {
       pageDocs.push({
         _id: pageId,
         tenantId: params.tenantId,
-        projectId: new Types.ObjectId(params.projectId),
+        projectId: this.ensureProjectScopedObjectId(params.projectId),
         title: normalizedTitle,
         slug: storedSlug,
         isHome: index === explicitHomeIndex,
@@ -540,40 +734,18 @@ export class ProjectsService {
       });
     }
 
-    const generatedNavigation = Array.isArray(params.generated.navigation)
-      ? params.generated.navigation
-      : [];
     const navigationItems: Array<{ label: string; pageId: string }> = [];
-
-    for (const navItem of generatedNavigation) {
-      const navSlug = this.normalizeGeneratedSlug(navItem.slug);
-      const pageId = pageIdBySlug.get(navSlug);
-      if (!pageId) {
-        throw new InternalServerErrorException(
-          `Generated navigation references missing slug "${navItem.slug}"`,
-        );
-      }
-
-      const navLabel = this.normalizeOptionalString(navItem.label);
+    for (const [slug, pageId] of pageIdBySlug.entries()) {
       navigationItems.push({
-        label: navLabel ?? pageTitleBySlug.get(navSlug) ?? navSlug,
+        label: pageTitleBySlug.get(slug) ?? slug,
         pageId,
       });
     }
-
-    if (navigationItems.length === 0) {
-      for (const [slug, pageId] of pageIdBySlug.entries()) {
-        navigationItems.push({
-          label: pageTitleBySlug.get(slug) ?? slug,
-          pageId,
-        });
-      }
-      navigationItems.sort(
-        (a, b) =>
-          Number(b.pageId === pageIdBySlug.get('/')) -
-          Number(a.pageId === pageIdBySlug.get('/')),
-      );
-    }
+    navigationItems.sort(
+      (a, b) =>
+        Number(b.pageId === pageIdBySlug.get('/')) -
+        Number(a.pageId === pageIdBySlug.get('/')),
+    );
 
     await this.pageModel.deleteMany({
       tenantId: params.tenantId,
@@ -614,6 +786,8 @@ export class ProjectsService {
         {
           $set: {
             homePageId: homePageId,
+            name: params.generated.project.name,
+            siteName: params.generated.project.name,
           },
         },
       )
