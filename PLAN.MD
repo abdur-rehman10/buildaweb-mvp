@@ -2,11 +2,11 @@
 
 ## Branch
 
-feat/ai-full-site-generator
+chore/lint-scope-ai
 
 ## Goal
 
-Deliver a full structured AI website generator with OpenAI + Pexels, schema validation, and safe persistence of generated sections/pages.
+Add a scoped lint workflow for AI generator files so current PRs can pass quality checks while legacy repo-wide lint debt is tracked for a dedicated cleanup phase.
 
 ## In Scope
 
@@ -94,3 +94,14 @@ Deliver a full structured AI website generator with OpenAI + Pexels, schema vali
   - Added service-level generation flow `ProjectsService.createFromPrompt()` to build project pages/navigation from generated schema.
   - Enforced non-empty generated sections/pages and home-page section quality checks.
   - Added tests for generation success, invalid JSON rejection, empty-section rejection, and image injection cleanup.
+
+### Step 8: Scoped lint baseline for AI generator
+
+- Status: DONE
+- Changes:
+  - Added `pnpm --dir apps/api run lint:ai` to lint only AI generator files (`src/modules/ai/**` + `test/ai-generator.spec.ts`).
+  - Kept global lint rules unchanged to avoid masking existing strict-rule debt across legacy modules.
+  - Confirmed AI generator files are lint-clean under scoped lint and covered by tests.
+- Lint debt note:
+  - Repo-wide `pnpm --dir apps/api lint` still reports legacy violations outside this scope.
+  - A dedicated future milestone is required for full repository lint cleanup.

@@ -20,7 +20,7 @@ function createConfigService(values: MockConfigMap) {
 function openAiResponse(content: string) {
   return {
     ok: true,
-    json: async () => ({
+    json: () => ({
       choices: [
         {
           message: {
@@ -35,7 +35,7 @@ function openAiResponse(content: string) {
 function pexelsResponse(url: string) {
   return {
     ok: true,
-    json: async () => ({
+    json: () => ({
       photos: [
         {
           src: {
@@ -45,6 +45,13 @@ function pexelsResponse(url: string) {
       ],
     }),
   } as Response;
+}
+
+function requestUrlToString(input: RequestInfo | URL): string {
+  if (input instanceof URL) return input.toString();
+  if (typeof input === 'string') return input;
+  if (input instanceof Request) return input.url;
+  return '';
 }
 
 const validAiJson = JSON.stringify({
@@ -119,15 +126,15 @@ describe('AiService full generator', () => {
       PEXELS_API_KEY: 'pexels-test-key',
     });
 
-    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    const fetchMock = jest.fn((input: RequestInfo | URL) => {
+      const url = requestUrlToString(input);
       if (url.includes('openai.com')) return openAiResponse(validAiJson);
       if (url.includes('pexels.com')) {
         return pexelsResponse(
           'https://images.pexels.com/photos/123/photo.jpeg',
         );
       }
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, json: () => ({}) } as Response;
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -151,10 +158,10 @@ describe('AiService full generator', () => {
       PEXELS_API_KEY: 'pexels-test-key',
     });
 
-    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    const fetchMock = jest.fn((input: RequestInfo | URL) => {
+      const url = requestUrlToString(input);
       if (url.includes('openai.com')) return openAiResponse('not-json');
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, json: () => ({}) } as Response;
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -197,10 +204,10 @@ describe('AiService full generator', () => {
       ],
     });
 
-    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    const fetchMock = jest.fn((input: RequestInfo | URL) => {
+      const url = requestUrlToString(input);
       if (url.includes('openai.com')) return openAiResponse(invalidSite);
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, json: () => ({}) } as Response;
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -220,15 +227,15 @@ describe('AiService full generator', () => {
       PEXELS_API_KEY: 'pexels-test-key',
     });
 
-    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    const fetchMock = jest.fn((input: RequestInfo | URL) => {
+      const url = requestUrlToString(input);
       if (url.includes('openai.com')) return openAiResponse(validAiJson);
       if (url.includes('pexels.com')) {
         return pexelsResponse(
           'https://images.pexels.com/photos/999/photo.jpeg',
         );
       }
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, json: () => ({}) } as Response;
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -254,15 +261,15 @@ describe('AiService full generator', () => {
       PEXELS_API_KEY: 'pexels-test-key',
     });
 
-    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
+    const fetchMock = jest.fn((input: RequestInfo | URL) => {
+      const url = requestUrlToString(input);
       if (url.includes('openai.com')) return openAiResponse(validAiJson);
       if (url.includes('pexels.com')) {
         return pexelsResponse(
           'https://images.pexels.com/photos/777/photo.jpeg',
         );
       }
-      return { ok: false, json: async () => ({}) } as Response;
+      return { ok: false, json: () => ({}) } as Response;
     });
 
     global.fetch = fetchMock as unknown as typeof fetch;
@@ -363,9 +370,15 @@ describe('ProjectsService.createFromPrompt', () => {
     });
 
     expect(pageModel.insertMany).toHaveBeenCalledTimes(1);
-    const insertedDocs = pageModel.insertMany.mock.calls[0][0] as Array<
-      Record<string, unknown>
+    const insertManyMock = pageModel.insertMany as jest.Mock<
+      unknown,
+      [Array<Record<string, unknown>>]
     >;
+    const firstInsertCall = insertManyMock.mock.calls.at(0);
+    if (!firstInsertCall) {
+      throw new Error('insertMany was not called');
+    }
+    const [insertedDocs] = firstInsertCall;
     const serialized = JSON.stringify(insertedDocs);
 
     expect(insertedDocs.length).toBeGreaterThan(0);
