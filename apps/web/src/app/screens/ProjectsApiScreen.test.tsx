@@ -25,6 +25,7 @@ vi.mock('../../lib/api', () => {
     projectsApi: {
       list: vi.fn(),
       create: vi.fn(),
+      generate: vi.fn(),
       get: vi.fn(),
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
@@ -91,7 +92,9 @@ const pages = [
   },
 ];
 
-function renderScreen() {
+function renderScreen(
+  overrides: Partial<React.ComponentProps<typeof ProjectsApiScreen>> = {},
+) {
   return render(
     <ProjectsApiScreen
       activeProjectId="project-1"
@@ -100,6 +103,7 @@ function renderScreen() {
       onSelectProject={() => {}}
       onOpenPage={() => {}}
       onOpenAssetsLibrary={() => {}}
+      {...overrides}
     />,
   );
 }
@@ -136,6 +140,11 @@ describe('ProjectsApiScreen toasts', () => {
         publishedAt: null,
         hasUnpublishedChanges: true,
       },
+    });
+    vi.mocked(projectsApi.generate).mockResolvedValue({
+      success: true,
+      projectId: 'project-1',
+      previewUrl: '/editor/project-1',
     });
     vi.mocked(projectsApi.getSettings).mockResolvedValue({
       settings: {
@@ -192,6 +201,94 @@ describe('ProjectsApiScreen toasts', () => {
         }),
       );
     });
+  });
+
+  it('calls generate API with prompt and opens the generated project page', async () => {
+    const onOpenPage = vi.fn();
+    const onSelectActivePageId = vi.fn();
+
+    renderScreen({ onOpenPage, onSelectActivePageId });
+
+    const promptInput = await screen.findByLabelText('AI prompt');
+    fireEvent.change(promptInput, {
+      target: {
+        value: 'Create a modern SaaS site for a startup with Home, Pricing, About, and Contact pages.',
+      },
+    });
+
+    const generateButton = screen.getByRole('button', { name: 'Generate' });
+    fireEvent.click(generateButton);
+
+    await waitFor(() => {
+      expect(projectsApi.generate).toHaveBeenCalledWith('project-1', {
+        prompt: 'Create a modern SaaS site for a startup with Home, Pricing, About, and Contact pages.',
+      });
+    });
+
+    await waitFor(() => {
+      expect(onSelectActivePageId).toHaveBeenCalledWith('page-home');
+      expect(onOpenPage).toHaveBeenCalledWith('project-1', 'page-home');
+    });
+  });
+
+  it('disables generate button while AI generation is running', async () => {
+    let resolveGenerate: ((value: { success: boolean; projectId: string; previewUrl: string }) => void) | null = null;
+    const generatePromise = new Promise<{ success: boolean; projectId: string; previewUrl: string }>((resolve) => {
+      resolveGenerate = resolve;
+    });
+    vi.mocked(projectsApi.generate).mockReturnValueOnce(generatePromise);
+
+    renderScreen();
+
+    const promptInput = await screen.findByLabelText('AI prompt');
+    fireEvent.change(promptInput, {
+      target: {
+        value: 'Build a website for a photography studio with Home, Portfolio, Packages, and Contact pages.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    const generatingButton = await screen.findByRole('button', { name: 'Generating...' });
+    expect((generatingButton as HTMLButtonElement).disabled).toBe(true);
+
+    resolveGenerate?.({ success: true, projectId: 'project-1', previewUrl: '/editor/project-1' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Generate' })).not.toBeNull();
+    });
+  });
+
+  it('shows AI failure message when generation endpoint returns bad gateway', async () => {
+    vi.mocked(projectsApi.generate).mockRejectedValue(
+      new ApiError({
+        status: 502,
+        code: 'AI_INVALID_JSON',
+        message: 'AI returned invalid JSON',
+      }),
+    );
+
+    const onOpenPage = vi.fn();
+    renderScreen({ onOpenPage });
+
+    const promptInput = await screen.findByLabelText('AI prompt');
+    fireEvent.change(promptInput, {
+      target: {
+        value: 'Create a website for a yoga studio with Home, Classes, Pricing, and Contact pages.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    await waitFor(() => {
+      expect(appToast.error).toHaveBeenCalledWith(
+        'AI response failed, try again.',
+        expect.objectContaining({
+          eventKey: 'generate-error:project-1',
+        }),
+      );
+    });
+    expect(onOpenPage).not.toHaveBeenCalled();
   });
 
   it('shows API error message toast on delete version conflict', async () => {

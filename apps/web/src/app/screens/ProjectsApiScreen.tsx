@@ -22,6 +22,7 @@ import {
 import { useLatestPublish } from '../hooks/useLatestPublish';
 import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
 import { appToast } from '../../lib/toast';
+import { clearAuthToken } from '../../lib/auth';
 import {
   buildPublishIndexUrl,
   buildPublishPageUrl,
@@ -117,6 +118,9 @@ export function ProjectsApiScreen({
 
   const [name, setName] = useState('');
   const [defaultLocale, setDefaultLocale] = useState('en');
+  const [generatePrompt, setGeneratePrompt] = useState('');
+  const [generatingSite, setGeneratingSite] = useState(false);
+  const [generateMessage, setGenerateMessage] = useState<string | null>(null);
 
   const [newPageTitle, setNewPageTitle] = useState('');
   const [newPageSlug, setNewPageSlug] = useState('');
@@ -211,6 +215,8 @@ export function ProjectsApiScreen({
         ? 'Create at least one page before publishing.'
         : null;
   const previewDisabledReason = projectPages.length === 0 ? 'Create at least one page before previewing.' : null;
+  const normalizedGeneratePrompt = generatePrompt.trim();
+  const generatePromptIsTooShort = normalizedGeneratePrompt.length > 0 && normalizedGeneratePrompt.length < 20;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
     if (!Array.isArray(items)) return [];
@@ -248,7 +254,7 @@ export function ProjectsApiScreen({
     return `${title} (${slug})`;
   };
 
-  const loadProjectPages = async (projectId: string) => {
+  const loadProjectPages = async (projectId: string): Promise<PageMetaSummary[]> => {
     setLoadingProjectDetails(true);
     setError(null);
     try {
@@ -268,10 +274,12 @@ export function ProjectsApiScreen({
         setLastPageId(null);
         onSelectActivePageId(null);
       }
+      return pages;
     } catch (err) {
       const message = getUserFriendlyErrorMessage(err, 'Failed to load project pages');
       setError(message);
       setProjectPages([]);
+      return [];
     } finally {
       setLoadingProjectDetails(false);
     }
@@ -447,6 +455,7 @@ export function ProjectsApiScreen({
     if (!activeProjectId) {
       setLastPageId(null);
       setProjectPages([]);
+      setGenerateMessage(null);
       setProjectSettings(emptyProjectSettings());
       setProjectSettingsAssetUrls({});
       setProjectSettingsMessage(null);
@@ -460,6 +469,7 @@ export function ProjectsApiScreen({
 
     const stored = window.localStorage.getItem(`baw_last_page_${activeProjectId}`);
     setLastPageId(stored);
+    setGenerateMessage(null);
     void loadProjectPages(activeProjectId);
     void loadProjectSettings(activeProjectId, activeProject?.defaultLocale ?? 'en');
     void loadPublishHistory(activeProjectId);
@@ -785,6 +795,79 @@ export function ProjectsApiScreen({
     await loadNavigation(projectId);
   };
 
+  const ensureProjectForGeneration = async () => {
+    if (activeProjectId) return activeProjectId;
+
+    const existingProjectId = projects[0]?.id;
+    if (existingProjectId) {
+      onSelectProject(existingProjectId);
+      return existingProjectId;
+    }
+
+    const created = await projectsApi.create({
+      name: 'My Website',
+      defaultLocale: defaultLocale.trim() || 'en',
+    });
+    await loadProjects();
+    onSelectProject(created.project_id);
+    appToast.success('Project created', {
+      eventKey: `project-created:${created.project_id}`,
+    });
+    return created.project_id;
+  };
+
+  const startAiGeneration = async () => {
+    if (!normalizedGeneratePrompt) {
+      setGenerateMessage('Please describe your website before generating.');
+      return;
+    }
+
+    setGeneratingSite(true);
+    setGenerateMessage(null);
+    setError(null);
+
+    try {
+      const projectId = await ensureProjectForGeneration();
+      await projectsApi.generate(projectId, { prompt: normalizedGeneratePrompt });
+      const pages = await loadProjectPages(projectId);
+      await loadNavigation(projectId);
+      await loadPublishHistory(projectId);
+
+      const resolvedPageId = pages[0]?.id ?? null;
+      if (resolvedPageId) {
+        window.localStorage.setItem(`baw_last_page_${projectId}`, resolvedPageId);
+        setLastPageId(resolvedPageId);
+        onSelectActivePageId(resolvedPageId);
+        onOpenPage(projectId, resolvedPageId);
+      } else {
+        onSelectProject(projectId);
+      }
+
+      setGenerateMessage('AI generation completed. Your pages are ready.');
+      appToast.success('Site generated with AI', {
+        eventKey: `generate-success:${projectId}`,
+      });
+    } catch (err) {
+      const apiError = err instanceof ApiError ? err : null;
+      if (apiError?.status === 401) {
+        clearAuthToken();
+        appToast.error('Session expired. Please login again.', {
+          eventKey: 'generate-auth-expired',
+        });
+        window.location.reload();
+        return;
+      }
+
+      const message = getUserFriendlyErrorMessage(err, 'Failed to generate site');
+      setGenerateMessage(message);
+      appToast.error(message, {
+        eventKey: `generate-error:${activeProjectId ?? 'new-project'}`,
+      });
+    } finally {
+      setGeneratingSite(false);
+    }
+  };
+
   const resolvePreviewTargetPageId = () => {
     if (activePageId && projectPages.some((page) => page.id === activePageId)) {
       return activePageId;
@@ -1015,6 +1098,55 @@ export function ProjectsApiScreen({
         </form>
         {hasReachedProjectLimit && (
           <p className="mt-3 text-sm text-muted-foreground">MVP limit: one project per user.</p>
+        )}
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <div>
+          <h2 className="font-semibold">Generate with AI</h2>
+          <p className="text-sm text-muted-foreground">
+            Describe your business, style, and pages you need.
+          </p>
+        </div>
+        <label className="block text-sm font-medium text-foreground">
+          Prompt
+          <textarea
+            value={generatePrompt}
+            onChange={(event) => setGeneratePrompt(event.target.value)}
+            placeholder="Create a modern website for a coffee shop with Home, Menu, About, and Contact pages."
+            className="mt-1 min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
+            aria-label="AI prompt"
+          />
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            onClick={() => void startAiGeneration()}
+            disabled={generatingSite || !normalizedGeneratePrompt}
+          >
+            {generatingSite ? 'Generating...' : 'Generate'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setGeneratePrompt(
+                'Create a clean portfolio website for a freelance product designer with Home, Work, About, and Contact pages.',
+              )
+            }
+            disabled={generatingSite}
+          >
+            Try example prompt
+          </Button>
+          <span className="text-xs text-muted-foreground">{normalizedGeneratePrompt.length} characters</span>
+        </div>
+        {generatePromptIsTooShort && (
+          <p className="text-xs text-muted-foreground">Add more detail. 20+ characters is recommended.</p>
+        )}
+        {generateMessage && (
+          <p className="text-sm text-muted-foreground" role="status">
+            {generateMessage}
+          </p>
         )}
       </Card>
 
