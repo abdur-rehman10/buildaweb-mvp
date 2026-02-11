@@ -5,6 +5,11 @@
 :80 {
   encode zstd gzip
 
+  # Public media proxy (MinIO via app host)
+  handle_path /media/* {
+    reverse_proxy minio:9000
+  }
+
   # Published sites (path-based)
   handle /p/* {
     rewrite * /api/v1{uri}

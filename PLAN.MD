@@ -1,23 +1,27 @@
 # PLAN.md
 
 ## Branch
-fix/publish-link-output
+feat/infra-media-proxy
 
 ## Goal
-Ensure publish responses and frontend mapping always show a user-visible published website link immediately after publish.
+Proxy MinIO asset delivery through Caddy (`/media`) so public images load from the app host/port in IP-based HTTP deployments without exposing MinIO API port 9000.
 
 ## In Scope
-- Backend: return `publishedSlug` + absolute `publishedUrl` from publish response.
-- Backend: keep compatible fields for existing callers.
-- Frontend: consume `publishedUrl` and render publish link even when URL is path-based (`/p/<slug>/`).
-- Docs: clarify `PUBLIC_APP_URL` is required for absolute publish links in IP mode.
+- Caddy: add `/media/*` reverse proxy to MinIO.
+- API: generate asset `publicUrl` with `MEDIA_PUBLIC_BASE_URL` (fallback `${PUBLIC_APP_URL}/media` in production).
+- Infra: remove requirement to publicly expose MinIO `9000` in production compose.
+- Docs: update deployment guidance and security-group recommendations.
 
 ## Out of Scope
-- Publish pipeline/storage refactors.
-- New endpoints.
-- UI redesign.
+- New media endpoints.
+- Frontend UI changes.
+- Domain/TLS rollout changes.
 
 ## Definition of Done
-- Publish API returns `publishedSlug` and `publishedUrl`.
-- Publish success UI always shows “Open published site” link immediately.
-- Link opens the published site, and link is hidden when there is no live publish URL.
+- Asset URLs resolve via `http://<PUBLIC_APP_URL>/media/...`.
+- Caddy serves media proxy on port 80.
+- MinIO API port 9000 is no longer required to be public.
+- Deployment docs include `/media` proxy setup and SG hardening notes.
+
+## Status
+- Completed: Proxy MinIO assets through Caddy and remove need for public port 9000.

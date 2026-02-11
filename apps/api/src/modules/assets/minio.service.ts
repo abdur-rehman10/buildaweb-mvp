@@ -51,6 +51,20 @@ export class MinioService {
   }
 
   private resolvePublicBaseUrl(params: { endPoint: string; port: number; useSSL: boolean }) {
+    const mediaPublicBaseUrl = this.trimOrEmpty(this.config.get<string>('MEDIA_PUBLIC_BASE_URL'));
+    if (mediaPublicBaseUrl) {
+      return this.normalizePublicBaseUrl(mediaPublicBaseUrl);
+    }
+
+    const isProduction = this.trimOrEmpty(this.config.get<string>('NODE_ENV')).toLowerCase() === 'production';
+    if (isProduction) {
+      const publicAppUrl = this.trimOrEmpty(this.config.get<string>('PUBLIC_APP_URL'));
+      if (publicAppUrl) {
+        const appUrl = new URL(this.withHttpProtocol(publicAppUrl));
+        return `${appUrl.origin}/media`;
+      }
+    }
+
     const explicitMinioUrl = this.trimOrEmpty(this.config.get<string>('MINIO_PUBLIC_URL'));
     if (explicitMinioUrl) {
       return this.normalizePublicBaseUrl(explicitMinioUrl);
@@ -59,12 +73,6 @@ export class MinioService {
     const explicitMinioBaseUrl = this.trimOrEmpty(this.config.get<string>('MINIO_PUBLIC_BASE_URL'));
     if (explicitMinioBaseUrl) {
       return this.normalizePublicBaseUrl(explicitMinioBaseUrl);
-    }
-
-    const publicAppUrl = this.trimOrEmpty(this.config.get<string>('PUBLIC_APP_URL'));
-    if (publicAppUrl) {
-      const appUrl = new URL(this.withHttpProtocol(publicAppUrl));
-      return `${appUrl.protocol}//${appUrl.hostname}:${params.port}`;
     }
 
     return `${params.useSSL ? 'https' : 'http'}://${params.endPoint}:${params.port}`;
