@@ -30,7 +30,6 @@ function validateRequiredEnvForProduction() {
     'MINIO_ACCESS_KEY',
     'MINIO_SECRET_KEY',
     'MINIO_BUCKET',
-    'MINIO_PUBLIC_BASE_URL',
     'CORS_ORIGINS',
   ];
 
@@ -44,6 +43,15 @@ function validateRequiredEnvForProduction() {
   const corsOrigins = parseOrigins(process.env.CORS_ORIGINS ?? '');
   if (corsOrigins.includes('*')) {
     errors.push('CORS_ORIGINS cannot include "*" in production.');
+  }
+
+  const hasMinioPublicUrl = (process.env.MINIO_PUBLIC_URL ?? '').trim().length > 0;
+  const hasMinioPublicBaseUrl = (process.env.MINIO_PUBLIC_BASE_URL ?? '').trim().length > 0;
+  const hasPublicAppUrl = (process.env.PUBLIC_APP_URL ?? '').trim().length > 0;
+  if (!hasMinioPublicUrl && !hasMinioPublicBaseUrl && !hasPublicAppUrl) {
+    errors.push(
+      'Set one of MINIO_PUBLIC_URL, MINIO_PUBLIC_BASE_URL, or PUBLIC_APP_URL in production for browser-accessible asset URLs.',
+    );
   }
 
   if (errors.length > 0) {

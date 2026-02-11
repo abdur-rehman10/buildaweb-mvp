@@ -16,6 +16,18 @@ cp .env.prod.example .env.prod
 
 Set real production values in `.env.prod` (JWT secret, Mongo URI, domain, MinIO keys, etc.).
 
+Media URL variables for production:
+- `PUBLIC_APP_URL` (required): public app origin, for IP mode use `http://<EC2_IP>`
+- `MINIO_PUBLIC_URL` (recommended): browser-facing MinIO origin, for IP mode use `http://<EC2_IP>:9000`
+- `MINIO_PUBLIC_BASE_URL` (legacy fallback): optional compatibility variable
+
+The API generates asset URLs using this priority:
+1. `MINIO_PUBLIC_URL`
+2. `MINIO_PUBLIC_BASE_URL`
+3. `PUBLIC_APP_URL` + `:9000`
+
+This prevents broken image URLs like `http://localhost:9000/...`, `http://minio:9000/...`, or forced `https://` in HTTP-only IP deployments.
+
 ## Mode A: IP MODE (Default)
 - HTTP only
 - Caddy exposed on port `80` only
@@ -67,3 +79,12 @@ make deploy-prod
 ```
 
 This restores a known commit and redeploys containers.
+
+## Media Troubleshooting (Broken Images)
+- Confirm `.env.prod` values:
+  - `PUBLIC_APP_URL=http://<EC2_IP>`
+  - `MINIO_PUBLIC_URL=http://<EC2_IP>:9000`
+- Re-deploy containers after changing env:
+  - `docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build`
+- Verify object URL from browser:
+  - Open a returned `publicUrl` directly; it should return `200` and image content.
