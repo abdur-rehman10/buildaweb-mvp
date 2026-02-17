@@ -38,7 +38,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm -s run typecheck --if-present
+        run: |
+          echo "node=$(node -v) pnpm=$(pnpm -v)"
+          pnpm run typecheck --if-present
 
       - name: Test
         run: pnpm -s run test --if-present
@@ -73,7 +75,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm -s run typecheck --if-present
+        run: |
+          echo "node=$(node -v) pnpm=$(pnpm -v)"
+          pnpm run typecheck --if-present
 
       - name: Test
         run: pnpm -s run test --if-present
