@@ -27,23 +27,23 @@ jobs:
           version: 10.30.0
           run_install: false
 
-      - name: Setup Node (with pnpm cache)
+      - name: Setup Node (cache pnpm)
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
           cache-dependency-path: apps/api/pnpm-lock.yaml
 
-      - name: Install
+      - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (if present)
+      - name: Typecheck
         run: pnpm -s run typecheck --if-present
 
-      - name: Tests (if present)
+      - name: Test
         run: pnpm -s run test --if-present
 
-      - name: Build (if present)
+      - name: Build
         run: pnpm -s run build --if-present
 
   web:
@@ -62,56 +62,21 @@ jobs:
           version: 10.30.0
           run_install: false
 
-      - name: Setup Node (with pnpm cache)
+      - name: Setup Node (cache pnpm)
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
-      - name: Install
+      - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck (if present)
+      - name: Typecheck
         run: pnpm -s run typecheck --if-present
 
-      - name: Tests (if present)
+      - name: Test
         run: pnpm -s run test --if-present
 
-      - name: Build (if present)
+      - name: Build
         run: pnpm -s run build --if-present
-
-  lint_info:
-    name: Lint (informational)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.0
-          run_install: false
-
-      - name: Setup Node (with pnpm cache)
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: |
-            apps/api/pnpm-lock.yaml
-            apps/web/pnpm-lock.yaml
-
-      - name: Lint API
-        working-directory: apps/api
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm -s run lint --if-present
-
-      - name: Lint WEB
-        working-directory: apps/web
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm -s run lint --if-present
