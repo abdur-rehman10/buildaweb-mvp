@@ -37,16 +37,14 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: |
-          echo "node=$(node -v) pnpm=$(pnpm -v)"
-          pnpm run typecheck --if-present
+      - name: Typecheck (if configured)
+        run: pnpm run --if-present typecheck
 
-      - name: Test
-        run: pnpm -s run test --if-present
+      - name: Test (if configured)
+        run: pnpm run --if-present test
 
-      - name: Build
-        run: pnpm -s run build --if-present
+      - name: Build (if configured)
+        run: pnpm run --if-present build
 
   web:
     name: QA / WEB
@@ -74,13 +72,11 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: |
-          echo "node=$(node -v) pnpm=$(pnpm -v)"
-          pnpm run typecheck --if-present
+      - name: Typecheck (if configured)
+        run: pnpm run --if-present typecheck
 
-      - name: Test
-        run: pnpm -s run test --if-present
+      - name: Test (if configured)
+        run: pnpm run --if-present test
 
-      - name: Build
-        run: pnpm -s run build --if-present
+      - name: Build (if configured)
+        run: pnpm run --if-present build
