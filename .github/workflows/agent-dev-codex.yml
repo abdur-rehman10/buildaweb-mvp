@@ -83,18 +83,27 @@ jobs:
       - name: Codex implement & commit
         run: |
           set -e
-          codex --approval-mode full-auto --no-terminal --quiet \
-            "Open and follow CODEX_PROMPT.md, AGENTS.md, and PLAN.MD.
-             Implement GitHub issue #${{ steps.issue.outputs.num }}: ${{ steps.issue_data.outputs.title }}.
-             Issue link: ${{ steps.issue_data.outputs.url }}
-             Requirements (issue body):
-             ${{ steps.issue_data.outputs.body }}
-             Constraints:
-             - Keep changes minimal and scoped to the issue.
-             - Update/add tests if needed.
-             - Run relevant tests/commands and ensure they pass.
-             Deliverable:
-             - Code changes committed on this branch."
+
+          PROMPT="$(cat <<'PROMPT'
+Open and follow CODEX_PROMPT.md, AGENTS.md, and PLAN.MD.
+
+Implement GitHub issue #${{ steps.issue.outputs.num }}: ${{ steps.issue_data.outputs.title }}
+Issue link: ${{ steps.issue_data.outputs.url }}
+
+Requirements (issue body):
+${{ steps.issue_data.outputs.body }}
+
+Constraints:
+- Keep changes minimal and scoped to the issue.
+- Update/add tests if needed.
+- Run relevant tests and ensure they pass.
+
+Deliverable:
+- Code changes committed on this branch.
+PROMPT
+)"
+
+          codex exec --full-auto --sandbox workspace-write "$PROMPT"
 
           git add -A
           git commit -m "feat(issue-${{ steps.issue.outputs.num }}): ${{ steps.issue_data.outputs.title }}" || echo "No changes to commit."
