@@ -34,10 +34,26 @@ jobs:
         id: issue
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "num=${{ inputs.issue_number }}" >> $GITHUB_OUTPUT
+            RAW="${{ inputs.issue_number }}"
           else
-            echo "num=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            RAW="${{ github.event.issue.number }}"
           fi
+
+          echo "raw_issue_number=$RAW"
+          # allow "47" or "#47" etc.
+          NUM="$(echo "$RAW" | tr -cd '0-9')"
+
+          if [ -z "$NUM" ]; then
+            echo "Invalid or missing issue number: '$RAW'"
+            exit 1
+          fi
+
+          echo "num=$NUM" >> "$GITHUB_OUTPUT"
+
+      - name: Debug resolved issue number
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "resolved=${{ steps.issue.outputs.num }}"
 
       - name: Fetch issue title/body
         id: issue_data
