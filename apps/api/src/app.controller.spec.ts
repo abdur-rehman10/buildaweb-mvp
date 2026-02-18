@@ -1,25 +1,27 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
+import { Connection } from 'mongoose';
 
 describe('AppController', () => {
   let appController: AppController;
 
-  beforeEach(async () => {
-    const moduleRef: TestingModule = await Test.createTestingModule({
-      controllers: [AppController],
-      providers: [
-        AppService,
-        { provide: 'DatabaseConnection', useValue: {} },
-      ],
-    }).compile();
+  beforeEach(() => {
+    const connectionMock = {
+      readyState: 1,
+      name: 'test',
+    } as Connection;
 
-    appController = moduleRef.get<AppController>(AppController);
+    appController = new AppController(connectionMock);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  describe('health', () => {
+    it('should return API health payload', () => {
+      const result = appController.health();
+
+      expect(result).toMatchObject({
+        ok: true,
+        service: 'buildaweb-api',
+      });
+      expect(result.ts).toEqual(expect.any(String));
     });
   });
 });
