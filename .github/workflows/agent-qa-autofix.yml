@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ["QA"]
     types: [completed]
+    branches: [main]
 
 permissions:
   contents: write
@@ -11,9 +12,7 @@ permissions:
 
 jobs:
   auto-fix:
-    if: |
-      github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.head_branch == 'main'
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
