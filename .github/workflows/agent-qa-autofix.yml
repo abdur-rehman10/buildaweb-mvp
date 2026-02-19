@@ -101,12 +101,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: pnpm
+          cache-dependency-path: |
+            apps/api/pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+          run_install: false
 
       - name: Install deps (API + WEB)
+        env:
+          NODE_ENV: development
         run: |
-          corepack enable
-          pnpm --dir apps/api install --frozen-lockfile
-          pnpm --dir apps/web install --frozen-lockfile
+          pnpm --dir apps/api install --frozen-lockfile --prod=false
+          pnpm --dir apps/web install --frozen-lockfile --prod=false
 
       - name: Run Codex to fix QA failure
         uses: openai/codex-action@main
@@ -125,6 +136,7 @@ jobs:
 
       - name: Verify QA locally
         run: |
+          pnpm --dir apps/api exec jest --version
           pnpm --dir apps/api test
           pnpm --dir apps/web test --if-present
 
