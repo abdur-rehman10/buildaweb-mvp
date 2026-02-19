@@ -23,7 +23,6 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       CODEX_QUIET_MODE: "1"
 
     steps:
@@ -37,21 +36,23 @@ jobs:
           node-version: 20
 
       - name: Validate OpenAI API key
+        env:
+          RAW_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
 
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
+          if [ -z "${RAW_OPENAI_API_KEY:-}" ]; then
             echo "::error::OPENAI_API_KEY is empty in this run. Check repository secret availability for this workflow trigger."
             exit 1
           fi
 
-          SANITIZED_KEY="$(printf '%s' "$OPENAI_API_KEY" | tr -d '\r\n')"
+          SANITIZED_KEY="$(printf '%s' "$RAW_OPENAI_API_KEY" | tr -d '\r\n')"
           if [ -z "$SANITIZED_KEY" ]; then
             echo "::error::OPENAI_API_KEY resolved to an empty value after newline trimming."
             exit 1
           fi
 
-          if [ "$SANITIZED_KEY" != "$OPENAI_API_KEY" ]; then
+          if [ "$SANITIZED_KEY" != "$RAW_OPENAI_API_KEY" ]; then
             echo "::warning::OPENAI_API_KEY contained newline characters; trimmed for this run."
           fi
 
@@ -76,6 +77,15 @@ jobs:
           if [ "$HTTP_CODE" -ge 400 ]; then
             echo "::warning::OpenAI preflight returned HTTP $HTTP_CODE. Continuing because only 401 is treated as a hard auth failure."
           fi
+
+      - name: Assert OpenAI key is available for Codex
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENAI_API_KEY:-}" ]; then
+            echo "::error::OPENAI_API_KEY is missing before Codex execution."
+            exit 1
+          fi
+          echo "OPENAI_API_KEY length: ${#OPENAI_API_KEY}"
 
       - name: Configure git author
         run: |
@@ -149,7 +159,7 @@ jobs:
           PROMPT
           )"
 
-          codex exec --full-auto --sandbox workspace-write "$PROMPT"
+          OPENAI_API_KEY="$OPENAI_API_KEY" codex exec --full-auto --sandbox workspace-write "$PROMPT"
 
           git add -A
           CLEAN_TITLE="$(printf '%s' "$ISSUE_TITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
