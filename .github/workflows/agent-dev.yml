@@ -124,9 +124,6 @@ jobs:
             core.setOutput("body", data.body || "");
             core.setOutput("url", data.html_url || "");
 
-      - name: Install Codex CLI
-        run: npm i -g @openai/codex
-
       - name: Create working branch
         id: br
         run: |
@@ -134,32 +131,33 @@ jobs:
           echo "branch=$BR" >> "$GITHUB_OUTPUT"
           git checkout -b "$BR"
 
-      - name: Codex implement & commit
+      - name: Codex implement
+        uses: openai/codex-action@main
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          sandbox: workspace-write
+          prompt: |
+            Open and follow CODEX_PROMPT.md, AGENTS.md, and PLAN.MD.
+
+            Implement GitHub issue #${{ steps.issue.outputs.num }}: ${{ steps.issue_data.outputs.title }}
+            Issue link: ${{ steps.issue_data.outputs.url }}
+
+            Requirements (issue body):
+            ${{ steps.issue_data.outputs.body }}
+
+            Constraints:
+            - Keep changes minimal and scoped to the issue.
+            - Update/add tests if needed.
+            - Run relevant tests and ensure they pass.
+
+            Deliverable:
+            - Code changes committed on this branch.
+
+      - name: Commit Codex changes
         env:
           ISSUE_TITLE: ${{ steps.issue_data.outputs.title }}
         run: |
           set -euo pipefail
-
-          PROMPT="$(cat <<'PROMPT'
-          Open and follow CODEX_PROMPT.md, AGENTS.md, and PLAN.MD.
-
-          Implement GitHub issue #${{ steps.issue.outputs.num }}: ${{ steps.issue_data.outputs.title }}
-          Issue link: ${{ steps.issue_data.outputs.url }}
-
-          Requirements (issue body):
-          ${{ steps.issue_data.outputs.body }}
-
-          Constraints:
-          - Keep changes minimal and scoped to the issue.
-          - Update/add tests if needed.
-          - Run relevant tests and ensure they pass.
-
-          Deliverable:
-          - Code changes committed on this branch.
-          PROMPT
-          )"
-
-          OPENAI_API_KEY="$OPENAI_API_KEY" codex exec --full-auto --sandbox workspace-write "$PROMPT"
 
           git add -A
           CLEAN_TITLE="$(printf '%s' "$ISSUE_TITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
