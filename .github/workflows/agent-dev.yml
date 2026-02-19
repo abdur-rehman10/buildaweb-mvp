@@ -84,37 +84,40 @@ jobs:
           git checkout -b "$BR"
 
       - name: Codex implement & commit
+        env:
+          ISSUE_TITLE: ${{ steps.issue_data.outputs.title }}
         run: |
-          set -e
+          set -euo pipefail
 
           PROMPT="$(cat <<'PROMPT'
-Open and follow CODEX_PROMPT.md, AGENTS.md, and PLAN.MD.
+          Open and follow CODEX_PROMPT.md, AGENTS.md, and PLAN.MD.
 
-Implement GitHub issue #${{ steps.issue.outputs.num }}: ${{ steps.issue_data.outputs.title }}
-Issue link: ${{ steps.issue_data.outputs.url }}
+          Implement GitHub issue #${{ steps.issue.outputs.num }}: ${{ steps.issue_data.outputs.title }}
+          Issue link: ${{ steps.issue_data.outputs.url }}
 
-Requirements (issue body):
-${{ steps.issue_data.outputs.body }}
+          Requirements (issue body):
+          ${{ steps.issue_data.outputs.body }}
 
-Constraints:
-- Keep changes minimal and scoped to the issue.
-- Update/add tests if needed.
-- Run relevant tests and ensure they pass.
+          Constraints:
+          - Keep changes minimal and scoped to the issue.
+          - Update/add tests if needed.
+          - Run relevant tests and ensure they pass.
 
-Deliverable:
-- Code changes committed on this branch.
-PROMPT
-)"
+          Deliverable:
+          - Code changes committed on this branch.
+          PROMPT
+          )"
 
           codex exec --full-auto --sandbox workspace-write "$PROMPT"
 
           git add -A
-          git commit -m "feat(issue-${{ steps.issue.outputs.num }}): ${{ steps.issue_data.outputs.title }}" || echo "No changes to commit."
+          CLEAN_TITLE="$(printf '%s' "$ISSUE_TITLE" | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')"
+          git commit -m "feat(issue-${{ steps.issue.outputs.num }}): $CLEAN_TITLE" || echo "No changes to commit."
 
       - name: Open PR
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GH_BOT_TOKEN }}
+          token: ${{ secrets.GH_BOT_TOKEN != '' && secrets.GH_BOT_TOKEN || github.token }}
           base: main
           branch: ${{ steps.br.outputs.branch }}
           title: "Agent Dev: #${{ steps.issue.outputs.num }} — ${{ steps.issue_data.outputs.title }}"
