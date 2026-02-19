@@ -5,6 +5,17 @@ on:
     workflows: ["QA"]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      qa_run_id:
+        description: "QA workflow run ID to replay for autofix testing"
+        required: true
+        type: string
+      create_pr:
+        description: "Create PR from autofix changes (false = dry run)"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -12,19 +23,78 @@ permissions:
 
 jobs:
   auto-fix:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'failure') ||
+      (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      FAILED_RUN_URL: ${{ github.event.workflow_run.html_url }}
-      FAILED_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
-      FAILED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
+      - name: Resolve QA run context
+        id: qa_context
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const eventName = context.eventName;
+            let run;
+
+            if (eventName === "workflow_run") {
+              run = context.payload.workflow_run;
+            } else {
+              const rawRunId = "${{ inputs.qa_run_id }}".trim();
+              const runId = Number(rawRunId);
+              if (!Number.isInteger(runId) || runId <= 0) {
+                core.setFailed(`Invalid qa_run_id: '${rawRunId}'. Provide a numeric QA run ID.`);
+                return;
+              }
+
+              const { data } = await github.rest.actions.getWorkflowRun({
+                owner,
+                repo,
+                run_id: runId,
+              });
+              run = data;
+            }
+
+            if (!run) {
+              core.setFailed("Could not resolve QA run context.");
+              return;
+            }
+
+            if (run.name !== "QA") {
+              core.setFailed(`Run #${run.id} is '${run.name}', expected 'QA'.`);
+              return;
+            }
+
+            if (!run.head_sha || !run.head_branch) {
+              core.setFailed(`Run #${run.id} is missing head SHA or head branch.`);
+              return;
+            }
+
+            const shouldCreatePr = eventName === "workflow_run"
+              ? true
+              : "${{ inputs.create_pr }}".toLowerCase() === "true";
+
+            if (eventName === "workflow_dispatch" && run.conclusion !== "failure") {
+              core.warning(
+                `QA run #${run.id} conclusion is '${run.conclusion}'. Codex may have nothing to fix.`,
+              );
+            }
+
+            core.setOutput("run_id", String(run.id));
+            core.setOutput("run_url", run.html_url || "");
+            core.setOutput("head_branch", run.head_branch);
+            core.setOutput("head_sha", run.head_sha);
+            core.setOutput("conclusion", run.conclusion || "");
+            core.setOutput("should_create_pr", shouldCreatePr ? "true" : "false");
+
       - name: Checkout failing SHA
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.FAILED_HEAD_SHA }}
+          ref: ${{ steps.qa_context.outputs.head_sha }}
           fetch-depth: 0
 
       - name: Setup Node
@@ -44,9 +114,9 @@ jobs:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt: |
             You are fixing a CI failure from the "QA" workflow.
-            Failed run: ${{ env.FAILED_RUN_URL }}
-            Branch: ${{ env.FAILED_HEAD_BRANCH }}
-            SHA: ${{ env.FAILED_HEAD_SHA }}
+            Failed run: ${{ steps.qa_context.outputs.run_url }}
+            Branch: ${{ steps.qa_context.outputs.head_branch }}
+            SHA: ${{ steps.qa_context.outputs.head_sha }}
 
             Do the minimal change needed to make QA pass.
             Run tests/builds locally in this runner as needed.
@@ -59,14 +129,21 @@ jobs:
           pnpm --dir apps/web test --if-present
 
       - name: Create PR with fixes
+        if: ${{ steps.qa_context.outputs.should_create_pr == 'true' }}
         uses: peter-evans/create-pull-request@v6
         with:
           token: ${{ github.token != '' && github.token || secrets.GH_BOT_TOKEN }}
           commit-message: "fix(ci): auto-fix QA failure via Codex"
-          branch: codex/qa-autofix-${{ github.event.workflow_run.run_id }}
-          base: ${{ env.FAILED_HEAD_BRANCH }}
+          branch: codex/qa-autofix-${{ steps.qa_context.outputs.run_id }}
+          base: ${{ steps.qa_context.outputs.head_branch }}
           title: "QA Auto-fix via Codex"
           body: |
             Codex generated this PR after QA failed.
-            Failed run: ${{ env.FAILED_RUN_URL }}
-            Base branch: `${{ env.FAILED_HEAD_BRANCH }}`
+            Failed run: ${{ steps.qa_context.outputs.run_url }}
+            Base branch: `${{ steps.qa_context.outputs.head_branch }}`
+
+      - name: Dry-run summary
+        if: ${{ steps.qa_context.outputs.should_create_pr != 'true' }}
+        run: |
+          echo "Workflow dispatch dry-run mode: PR creation disabled."
+          echo "Resolved QA run: ${{ steps.qa_context.outputs.run_id }}"
