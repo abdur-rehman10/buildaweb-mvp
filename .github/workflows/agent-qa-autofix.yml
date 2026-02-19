@@ -11,7 +11,9 @@ permissions:
 
 jobs:
   auto-fix:
-    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -40,7 +42,7 @@ jobs:
       - name: Run Codex to fix QA failure
         uses: openai/codex-action@main
         with:
-          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt: |
             You are fixing a CI failure from the "QA" workflow.
             Failed run: ${{ env.FAILED_RUN_URL }}
@@ -50,7 +52,7 @@ jobs:
             Do the minimal change needed to make QA pass.
             Run tests/builds locally in this runner as needed.
             Do not refactor unrelated code.
-          codex_args: '["--config","sandbox_mode=\"workspace-write\""]'
+          codex-args: '["--config","sandbox_mode=\"workspace-write\""]'
 
       - name: Verify QA locally
         run: |
@@ -60,6 +62,7 @@ jobs:
       - name: Create PR with fixes
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ github.token != '' && github.token || secrets.GH_BOT_TOKEN }}
           commit-message: "fix(ci): auto-fix QA failure via Codex"
           branch: codex/qa-autofix-${{ github.event.workflow_run.run_id }}
           base: ${{ env.FAILED_HEAD_BRANCH }}
