@@ -1,26 +1,39 @@
-FROM node:22-alpine AS build
-WORKDIR /app
+FROM node:20-alpine AS base
+
+ENV PNPM_HOME=/pnpm
+ENV PATH=$PNPM_HOME:$PATH
 
 RUN corepack enable
+WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+FROM base AS deps
+
+COPY apps/api/package.json apps/api/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
-COPY . .
-RUN pnpm build
+FROM base AS build
 
-FROM node:22-alpine AS runtime
-WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY apps/api/ ./
+RUN pnpm run build
+
+FROM base AS prod-deps
+
+COPY apps/api/package.json apps/api/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+FROM node:20-alpine AS runtime
 
 ENV NODE_ENV=production
+WORKDIR /app
 
-RUN corepack enable
+RUN addgroup -S nodejs && adduser -S nestjs -G nodejs
 
-COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
-
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY apps/api/package.json ./package.json
 
+USER nestjs
 EXPOSE 4000
 
 CMD ["node", "dist/main"]
