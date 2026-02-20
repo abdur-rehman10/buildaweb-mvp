@@ -18,6 +18,7 @@ jobs:
       ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB }}
       ECR_REPO_API: ${{ vars.ECR_REPO_API }}
       ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
+      PROD_BASE_URL: ${{ vars.PROD_BASE_URL }}
 
     steps:
       - name: Checkout
@@ -82,3 +83,43 @@ jobs:
           service: ${{ env.ECS_SERVICE_WEB }}
           cluster: ${{ env.ECS_CLUSTER }}
           wait-for-service-stability: true
+
+      - name: Post-deploy API health check
+        run: |
+          set -euo pipefail
+
+          if [ -z "${PROD_BASE_URL:-}" ]; then
+            echo "::error::Missing required repository variable PROD_BASE_URL."
+            exit 1
+          fi
+
+          HEALTH_URL="${PROD_BASE_URL%/}/api/health"
+          MAX_ATTEMPTS=7
+
+          echo "Checking ${HEALTH_URL} after ECS deploy..."
+
+          for ATTEMPT in $(seq 1 "${MAX_ATTEMPTS}"); do
+            STATUS_CODE="$(curl -sS -o /tmp/api-health-response.txt -w "%{http_code}" --max-time 10 "${HEALTH_URL}" || true)"
+
+            if [ "${STATUS_CODE}" = "200" ]; then
+              echo "Health check passed on attempt ${ATTEMPT}/${MAX_ATTEMPTS} (HTTP 200)."
+              exit 0
+            fi
+
+            echo "Attempt ${ATTEMPT}/${MAX_ATTEMPTS} failed: HTTP ${STATUS_CODE} from ${HEALTH_URL}"
+
+            if [ -s /tmp/api-health-response.txt ]; then
+              echo "Response snippet:"
+              head -c 300 /tmp/api-health-response.txt || true
+              echo
+            fi
+
+            if [ "${ATTEMPT}" -lt "${MAX_ATTEMPTS}" ]; then
+              BACKOFF_SECONDS=$((5 + ATTEMPT * 5))
+              echo "Retrying in ${BACKOFF_SECONDS}s..."
+              sleep "${BACKOFF_SECONDS}"
+            fi
+          done
+
+          echo "::error::API health check failed after ${MAX_ATTEMPTS} attempts: ${HEALTH_URL}"
+          exit 1

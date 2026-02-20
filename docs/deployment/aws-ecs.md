@@ -138,6 +138,7 @@ Required repository variables:
 - `ECS_SERVICE_WEB`
 - `ECR_REPO_API`
 - `ECR_REPO_WEB`
+- `PROD_BASE_URL` (example: `https://app.example.com`)
 
 Required repository secret:
 - `AWS_ROLE_ARN`
@@ -178,6 +179,9 @@ Container ports:
 - Updates ECS services:
   - `${{ vars.ECS_SERVICE_API }}`
   - `${{ vars.ECS_SERVICE_WEB }}`
+- Runs post-deploy health check:
+  - `${{ vars.PROD_BASE_URL }}/api/health`
+  - Retries with backoff for about 2-3 minutes before failing
 
 ## Related Plan
 - Deployment plan: `infra/deploy/PLAN.md`
