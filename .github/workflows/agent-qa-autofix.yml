@@ -97,6 +97,12 @@ jobs:
           ref: ${{ steps.qa_context.outputs.head_sha }}
           fetch-depth: 0
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.0
+          run_install: false
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -105,12 +111,6 @@ jobs:
           cache-dependency-path: |
             apps/api/pnpm-lock.yaml
             apps/web/pnpm-lock.yaml
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.30.0
-          run_install: false
 
       - name: Install deps (API + WEB)
         env:
