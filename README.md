@@ -1,6 +1,11 @@
 # buildaweb-mvp
 Build a web is an AI Website Builder. 
 
+## AWS ECS Deployment Docs
+
+- Deployment plan: [infra/deploy/PLAN.md](infra/deploy/PLAN.md)
+- AWS ECS setup runbook: [docs/deployment/aws-ecs.md](docs/deployment/aws-ecs.md)
+
 ## Local Pretty URL Proxy
 
 For local published-site browsing with pretty URLs, use the Nginx reverse proxy:
