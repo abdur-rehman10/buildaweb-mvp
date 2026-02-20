@@ -24,6 +24,22 @@ Use consistent names per environment.
 - Enable image scanning.
 - (Optional) Set lifecycle policy for old tags.
 
+Terraform option:
+
+```bash
+cd infra/iac/ecr
+terraform init
+terraform apply \
+  -var="aws_region=us-east-1" \
+  -var="api_repository_name=buildaweb-api" \
+  -var="web_repository_name=buildaweb-web" \
+  -var="lifecycle_keep_last_n=30"
+```
+
+Use Terraform outputs for GitHub repository variables:
+- `ECR_REPO_API=<output api_repository_name>`
+- `ECR_REPO_WEB=<output web_repository_name>`
+
 ### 2. Create ECS cluster and task execution roles
 - Create ECS cluster for Fargate.
 - Ensure ECS task execution role can:
@@ -36,6 +52,22 @@ Use consistent names per environment.
 - Configure container ports and health checks.
 - Configure CloudWatch log driver for both containers.
 - Use SSM/Secrets Manager references for runtime secrets.
+
+Task definition templates in this repository default to:
+- API log group: `/ecs/buildaweb-api`
+- WEB log group: `/ecs/buildaweb-web`
+
+Provision these log groups with Terraform:
+
+```bash
+cd infra/iac/logs
+terraform init
+terraform apply \
+  -var="aws_region=us-east-1" \
+  -var="api_log_group_name=/ecs/buildaweb-api" \
+  -var="web_log_group_name=/ecs/buildaweb-web" \
+  -var="retention_in_days=30"
+```
 
 ### 4. Create ALB and target groups
 - Create ALB in public subnets.
@@ -90,8 +122,8 @@ Repository Variables:
 - `ECS_CLUSTER`
 - `ECS_SERVICE_API`
 - `ECS_SERVICE_WEB`
-- `ECR_REPO_API`
-- `ECR_REPO_WEB`
+- `ECR_REPO_API` (example: `buildaweb-api`)
+- `ECR_REPO_WEB` (example: `buildaweb-web`)
 
 Repository Secret:
 - `AWS_ROLE_ARN` = Terraform output `github_actions_role_arn`
@@ -136,3 +168,5 @@ Container ports:
 ## Related Plan
 - Deployment plan: `infra/deploy/PLAN.md`
 - Terraform OIDC config: `infra/iac/oidc/`
+- Terraform ECR config: `infra/iac/ecr/`
+- Terraform logs config: `infra/iac/logs/`
