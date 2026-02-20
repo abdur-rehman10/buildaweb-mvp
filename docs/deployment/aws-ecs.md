@@ -72,7 +72,19 @@ Add the following in repository variables/secrets:
 - Do not commit `.env` production secrets.
 - Do not expose backend secrets to frontend code.
 
-### 9. Manual rollback procedure
+### 9. Docker build contexts and ports
+Build from repository root so both Dockerfiles can copy app files correctly:
+
+- API image:
+  - `docker build -f apps/api/Dockerfile -t buildaweb-api:latest .`
+- Web image:
+  - `docker build -f apps/web/Dockerfile -t buildaweb-web:latest .`
+
+Container ports:
+- API container: `4000`
+- Web container: `80`
+
+### 10. Manual rollback procedure
 - In ECS service, select previous healthy task definition revision.
 - Redeploy that revision.
 - Validate ALB target health and `/api/v1/health`.
