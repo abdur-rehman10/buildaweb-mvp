@@ -24,6 +24,22 @@ Use consistent names per environment.
 - Enable image scanning.
 - (Optional) Set lifecycle policy for old tags.
 
+Terraform option:
+
+```bash
+cd infra/iac/ecr
+terraform init
+terraform apply \
+  -var="aws_region=us-east-1" \
+  -var="api_repository_name=buildaweb-api" \
+  -var="web_repository_name=buildaweb-web" \
+  -var="lifecycle_keep_last_n=30"
+```
+
+Use Terraform outputs for GitHub repository variables:
+- `ECR_REPO_API=<output api_repository_name>`
+- `ECR_REPO_WEB=<output web_repository_name>`
+
 ### 2. Create ECS cluster and task execution roles
 - Create ECS cluster for Fargate.
 - Ensure ECS task execution role can:
@@ -37,6 +53,22 @@ Use consistent names per environment.
 - Configure CloudWatch log driver for both containers.
 - Use SSM/Secrets Manager references for runtime secrets.
 
+Task definition templates in this repository default to:
+- API log group: `/ecs/buildaweb-api`
+- WEB log group: `/ecs/buildaweb-web`
+
+Provision these log groups with Terraform:
+
+```bash
+cd infra/iac/logs
+terraform init
+terraform apply \
+  -var="aws_region=us-east-1" \
+  -var="api_log_group_name=/ecs/buildaweb-api" \
+  -var="web_log_group_name=/ecs/buildaweb-web" \
+  -var="retention_in_days=30"
+```
+
 ### 4. Create ALB and target groups
 - Create ALB in public subnets.
 - Create target groups for API and web services.
@@ -49,22 +81,67 @@ Use consistent names per environment.
 - Create Fargate web service using web task definition and web target group.
 - Set desired count and deployment strategy.
 
-### 6. Configure IAM role for GitHub OIDC
-- Add GitHub OIDC identity provider in AWS IAM.
-- Create deploy role trusted by GitHub OIDC for this repository.
-- Restrict trust policy to the expected repo and branch.
-- Attach least-privilege policy for ECR push + ECS service update.
+### 6. Provision GitHub OIDC deploy role with Terraform
+Use `infra/iac/oidc` to provision AWS OIDC trust and deploy role permissions.
+
+Required inputs:
+- `AWS_ACCOUNT_ID` (12-digit account ID)
+- IAM role name (default: `buildaweb-github-oidc-deploy`)
+- GitHub repository (`owner/repo`)
+- ECR repository names for API and WEB
+- ECS cluster name and ECS service names
+- ECS task execution role ARN
+
+Apply:
+
+```bash
+cd infra/iac/oidc
+terraform init
+terraform apply \
+  -var="aws_region=us-east-1" \
+  -var="aws_account_id=123456789012" \
+  -var="role_name=buildaweb-github-oidc-deploy" \
+  -var="github_repository=abdur-rehman10/buildaweb-mvp" \
+  -var='ecr_repository_names=["buildaweb-prod-api","buildaweb-prod-web"]' \
+  -var="ecs_cluster_name=buildaweb-prod-cluster" \
+  -var='ecs_service_names=["buildaweb-prod-api","buildaweb-prod-web"]' \
+  -var="ecs_task_execution_role_arn=arn:aws:iam::123456789012:role/buildaweb-ecs-task-execution-role"
+```
+
+If the OIDC provider does not yet exist in the account, include:
+
+```bash
+-var="create_oidc_provider=true"
+```
 
 ### 7. Configure GitHub repository settings
-Add the following in repository variables/secrets:
+Set these in **Settings -> Secrets and variables -> Actions**.
 
-- `AWS_ROLE_ARN`
+Repository Variables:
+- `AWS_REGION`
+- `ECS_CLUSTER`
+- `ECS_SERVICE_API`
+- `ECS_SERVICE_WEB`
+- `ECR_REPO_API` (example: `buildaweb-api`)
+- `ECR_REPO_WEB` (example: `buildaweb-web`)
+
+Repository Secret:
+- `AWS_ROLE_ARN` = Terraform output `github_actions_role_arn`
+
+## Required GitHub Deployment Configuration
+Set these in **Settings -> Secrets and variables -> Actions** before running `.github/workflows/deploy-aws-ecs.yml`.
+
+Required repository variables:
 - `AWS_REGION`
 - `ECS_CLUSTER`
 - `ECS_SERVICE_API`
 - `ECS_SERVICE_WEB`
 - `ECR_REPO_API`
 - `ECR_REPO_WEB`
+- `PROD_BASE_URL` (example: `https://app.example.com`)
+
+Required repository secret:
+- `AWS_ROLE_ARN`
 
 ### 8. Secrets handling policy
 - Store runtime values in AWS SSM/Secrets Manager.
@@ -75,40 +152,18 @@ Add the following in repository variables/secrets:
 ### 9. Docker build contexts and ports
 Build from repository root so both Dockerfiles can copy app files correctly:
 
-- API image:
-  - `docker build -f apps/api/Dockerfile -t buildaweb-api:latest .`
-- Web image:
-  - `docker build -f apps/web/Dockerfile -t buildaweb-web:latest .`
+- API image: `docker build -f apps/api/Dockerfile -t buildaweb-api:latest .`
+- WEB image: `docker build -f apps/web/Dockerfile -t buildaweb-web:latest .`
 
 Container ports:
 - API container: `4000`
-- Web container: `80`
+- WEB container: `80`
 
 ### 10. Manual rollback procedure
 - In ECS service, select previous healthy task definition revision.
 - Redeploy that revision.
 - Validate ALB target health and `/api/v1/health`.
 - Confirm web root route is healthy.
-
-## Related Plan
-- Deployment plan: `infra/deploy/PLAN.md`
-### Example Variable Values
-Use values that match your AWS account resources.
-
-- `AWS_REGION=us-east-1`
-- `ECS_CLUSTER=buildaweb-prod-cluster`
-- `ECS_SERVICE_API=buildaweb-prod-api`
-- `ECS_SERVICE_WEB=buildaweb-prod-web`
-- `ECR_REPO_API=buildaweb-prod-api`
-- `ECR_REPO_WEB=buildaweb-prod-web`
-
-## Required GitHub Repository Secrets
-Set these in **Settings -> Secrets and variables -> Actions -> Secrets**.
-
-- `AWS_ROLE_ARN`
-
-### Example Secret Value
-- `AWS_ROLE_ARN=arn:aws:iam::123456789012:role/buildaweb-github-oidc-deploy`
 
 ## Authentication Model
 - Deploy workflow uses GitHub OIDC via `aws-actions/configure-aws-credentials`.
@@ -117,17 +172,19 @@ Set these in **Settings -> Secrets and variables -> Actions -> Secrets**.
 
 ## Deploy Workflow Inputs and Artifacts
 - Trigger: push to `main`
-- Builds and pushes:
-  - API image from `apps/api/Dockerfile`
-  - WEB image from `apps/web/Dockerfile`
-- Image tags: `${github.sha}`
-- Task definitions rendered from:
+- Builds and pushes API and WEB images tagged with `${github.sha}`
+- Uses task definition templates:
   - `infra/ecs/taskdef-api.json` (container name `api`)
   - `infra/ecs/taskdef-web.json` (container name `web`)
-- ECS services updated:
+- Updates ECS services:
   - `${{ vars.ECS_SERVICE_API }}`
   - `${{ vars.ECS_SERVICE_WEB }}`
+- Runs post-deploy health check:
+  - `${{ vars.PROD_BASE_URL }}/api/health`
+  - Retries with backoff for about 2-3 minutes before failing
 
-## Notes
-- Keep real ARNs and secret values out of git.
-- Ensure `infra/ecs/taskdef-api.json` and `infra/ecs/taskdef-web.json` exist and include valid ECS configuration for your environment.
+## Related Plan
+- Deployment plan: `infra/deploy/PLAN.md`
+- Terraform OIDC config: `infra/iac/oidc/`
+- Terraform ECR config: `infra/iac/ecr/`
+- Terraform logs config: `infra/iac/logs/`
