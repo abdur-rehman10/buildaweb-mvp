@@ -128,6 +128,20 @@ Repository Variables:
 Repository Secret:
 - `AWS_ROLE_ARN` = Terraform output `github_actions_role_arn`
 
+## Required GitHub Deployment Configuration
+Set these in **Settings -> Secrets and variables -> Actions** before running `.github/workflows/deploy-aws-ecs.yml`.
+
+Required repository variables:
+- `AWS_REGION`
+- `ECS_CLUSTER`
+- `ECS_SERVICE_API`
+- `ECS_SERVICE_WEB`
+- `ECR_REPO_API`
+- `ECR_REPO_WEB`
+
+Required repository secret:
+- `AWS_ROLE_ARN`
+
 ### 8. Secrets handling policy
 - Store runtime values in AWS SSM/Secrets Manager.
 - Reference them from ECS task definitions.
