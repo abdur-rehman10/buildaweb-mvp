@@ -54,7 +54,6 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            tags: |
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_WEB }}:${{ env.IMAGE_TAG }}
 
       - name: Install jq
