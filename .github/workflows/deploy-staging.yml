@@ -1,12 +1,294 @@
-name: Deploy Staging
+name: Deploy Staging to ECS
 
 on:
   push:
     branches:
       - develop
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  placeholder:
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: buildaweb-prod
+      ECS_SERVICE_API: buildaweb-api-stg-svc
+      ECS_SERVICE_WEB: buildaweb-web-stg-svc
+      API_ECR_REPO: buildaweb-api
+      WEB_ECR_REPO: buildaweb-web
+      STAGING_BASE_URL: https://staging.buildaweb.ai
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
+
     steps:
-      - run: echo "Staging deployment will be configured after ECS staging setup."
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push API (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.API_ECR_REPO }}:${{ env.IMAGE_TAG }}
+
+      - name: Build & push WEB (linux/amd64)
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.WEB_ECR_REPO }}:${{ env.IMAGE_TAG }}
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Register new API task definition revision (update image to SHA)
+        id: api_td
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ env.API_ECR_REPO }}:${{ env.IMAGE_TAG }}"
+
+          CURR_TD_ARN="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API" \
+            --query "services[0].taskDefinition" \
+            --output text)"
+
+          echo "Current API task definition: $CURR_TD_ARN"
+          echo "New API image: $IMAGE"
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURR_TD_ARN" \
+            --query "taskDefinition" \
+            --output json > api-td.json
+
+          jq --arg IMAGE "$IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions = (
+                .containerDefinitions
+                | map(if .name == "api" then .image = $IMAGE else . end)
+              )
+          ' api-td.json > api-td-new.json
+
+          NEW_API_TD_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://api-td-new.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)"
+
+          echo "new_api_td_arn=$NEW_API_TD_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy API service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_API" \
+            --task-definition "${{ steps.api_td.outputs.new_api_td_arn }}" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API"
+
+      - name: Register new WEB task definition revision (update image to SHA)
+        id: web_td
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ env.WEB_ECR_REPO }}:${{ env.IMAGE_TAG }}"
+
+          CURR_TD_ARN="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB" \
+            --query "services[0].taskDefinition" \
+            --output text)"
+
+          echo "Current WEB task definition: $CURR_TD_ARN"
+          echo "New WEB image: $IMAGE"
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURR_TD_ARN" \
+            --query "taskDefinition" \
+            --output json > web-td.json
+
+          jq --arg IMAGE "$IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions = (
+                .containerDefinitions
+                | map(if .name == "web" then .image = $IMAGE else . end)
+              )
+          ' web-td.json > web-td-new.json
+
+          NEW_WEB_TD_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://web-td-new.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)"
+
+          echo "new_web_td_arn=$NEW_WEB_TD_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy WEB service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_WEB" \
+            --task-definition "${{ steps.web_td.outputs.new_web_td_arn }}" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB"
+
+      - name: Smoke test staging web
+        run: |
+          set -euo pipefail
+          URL="${STAGING_BASE_URL%/}/"
+          code="$(curl -sS -D /tmp/stg-web-headers.txt -o /tmp/stg-web-body.txt -w "%{http_code}" "$URL" || true)"
+          if [ "$code" -lt 200 ] || [ "$code" -ge 400 ]; then
+            echo "::error::Smoke test failed for $URL (HTTP $code)"
+            echo "--- response headers ---"
+            cat /tmp/stg-web-headers.txt || true
+            echo "--- response body (first 500 bytes) ---"
+            head -c 500 /tmp/stg-web-body.txt || true
+            echo
+            exit 1
+          fi
+
+      - name: Smoke test staging API health
+        run: |
+          set -euo pipefail
+          URL="${STAGING_BASE_URL%/}/api/v1/health"
+          code="$(curl -sS -D /tmp/stg-api-headers.txt -o /tmp/stg-api-body.txt -w "%{http_code}" "$URL" || true)"
+          if [ "$code" -lt 200 ] || [ "$code" -ge 400 ]; then
+            echo "::error::Smoke test failed for $URL (HTTP $code)"
+            echo "--- response headers ---"
+            cat /tmp/stg-api-headers.txt || true
+            echo "--- response body (first 500 bytes) ---"
+            head -c 500 /tmp/stg-api-body.txt || true
+            echo
+            exit 1
+          fi
+
+      - name: Failure summary (ECS events + logs)
+        if: failure()
+        run: |
+          set +e
+
+          echo "=== ECS service events: ${ECS_SERVICE_API} ==="
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API" \
+            --query 'services[0].events[0:20].[createdAt,message]' \
+            --output table || true
+
+          echo "=== ECS service events: ${ECS_SERVICE_WEB} ==="
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB" \
+            --query 'services[0].events[0:20].[createdAt,message]' \
+            --output table || true
+
+          fetch_logs_for_service() {
+            local service_name="$1"
+            echo "=== CloudWatch logs for ${service_name} (last 50 lines per container) ==="
+
+            local td_arn
+            td_arn="$(aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$service_name" \
+              --query 'services[0].taskDefinition' \
+              --output text 2>/dev/null)"
+
+            if [ -z "$td_arn" ] || [ "$td_arn" = "None" ]; then
+              echo "Could not discover task definition for ${service_name}."
+              return
+            fi
+
+            aws ecs describe-task-definition \
+              --task-definition "$td_arn" \
+              --query 'taskDefinition.containerDefinitions[].{name:name,group:logConfiguration.options."awslogs-group",region:logConfiguration.options."awslogs-region",streamPrefix:logConfiguration.options."awslogs-stream-prefix"}' \
+              --output json > /tmp/container-log-configs.json 2>/dev/null
+
+            if [ ! -s /tmp/container-log-configs.json ]; then
+              echo "No container log configuration discovered for ${service_name}."
+              return
+            fi
+
+            jq -c '.[]' /tmp/container-log-configs.json | while read -r cfg; do
+              cname="$(echo "$cfg" | jq -r '.name')"
+              group="$(echo "$cfg" | jq -r '.group')"
+              region="$(echo "$cfg" | jq -r '.region')"
+              prefix="$(echo "$cfg" | jq -r '.streamPrefix')"
+
+              if [ -z "$group" ] || [ "$group" = "null" ] || [ -z "$prefix" ] || [ "$prefix" = "null" ]; then
+                echo "Container ${cname}: missing awslogs-group or awslogs-stream-prefix."
+                continue
+              fi
+
+              stream="$(aws logs describe-log-streams \
+                --log-group-name "$group" \
+                --order-by LastEventTime \
+                --descending \
+                --max-items 1 \
+                --query 'logStreams[0].logStreamName' \
+                --output text \
+                --region "${region:-$AWS_REGION}" 2>/dev/null)"
+
+              if [ -z "$stream" ] || [ "$stream" = "None" ]; then
+                echo "Container ${cname}: no log streams found in ${group}."
+                continue
+              fi
+
+              echo "--- ${service_name}/${cname} (${group} :: ${stream}) ---"
+              aws logs get-log-events \
+                --log-group-name "$group" \
+                --log-stream-name "$stream" \
+                --limit 50 \
+                --query 'events[].message' \
+                --output text \
+                --region "${region:-$AWS_REGION}" 2>/dev/null || true
+            done
+          }
+
+          fetch_logs_for_service "$ECS_SERVICE_API"
+          fetch_logs_for_service "$ECS_SERVICE_WEB"
+
+          echo "If logs are unavailable, check ECS service events and CloudWatch logs in AWS console for cluster ${ECS_CLUSTER}."
