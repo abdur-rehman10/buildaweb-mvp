@@ -178,3 +178,14 @@ jobs:
           aws ecs wait services-stable \
             --cluster "$ECS_CLUSTER" \
             --services "$ECS_SERVICE_WEB"
+
+
+      - name: Smoke test WEB
+        run: |
+          set -e
+          curl -fsS "http://${{ vars.ALB_DNS }}/" >/dev/null
+
+      - name: Smoke test API health
+        run: |
+          set -e
+          curl -fsS "http://${{ vars.ALB_DNS }}/api/v1/health" >/dev/null      
