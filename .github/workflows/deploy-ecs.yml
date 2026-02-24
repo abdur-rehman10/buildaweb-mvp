@@ -1,8 +1,7 @@
-name: Deploy to ECS (manual)
+name: Deploy to ECS (SHA taskdef)
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -13,7 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
-      ECR_REGISTRY: 809683733205.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API }}
+      ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB }}
+      ECR_REPO_API: ${{ vars.ECR_REPO_API }}
+      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
 
     steps:
       - name: Checkout
@@ -26,12 +29,13 @@ jobs:
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build & push API image (amd64)
+      - name: Build & push API (linux/amd64)
         uses: docker/build-push-action@v6
         with:
           context: apps/api
@@ -39,9 +43,9 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.ECR_REGISTRY }}/${{ vars.ECR_REPO_API }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_API }}:${{ github.sha }}
 
-      - name: Build & push WEB image (amd64)
+      - name: Build & push WEB (linux/amd64)
         uses: docker/build-push-action@v6
         with:
           context: apps/web
@@ -49,20 +53,125 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ${{ env.ECR_REGISTRY }}/${{ vars.ECR_REPO_WEB }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_WEB }}:${{ github.sha }}
 
-      - name: Force new deployment (API)
-        run: |
-          aws ecs update-service \
-            --cluster "${{ vars.ECS_CLUSTER }}" \
-            --service "${{ vars.ECS_SERVICE_API }}" \
-            --force-new-deployment \
-            --region "${{ vars.AWS_REGION }}"
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Force new deployment (WEB)
+      # --- API: register new task def revision with new image ---
+      - name: Register new API task definition revision (update image to SHA)
+        id: api_td
         run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_API }}:${{ github.sha }}"
+
+          # Pull the currently running task definition from the service
+          CURR_TD_ARN="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API" \
+            --query "services[0].taskDefinition" \
+            --output text)"
+
+          echo "Current API task definition: $CURR_TD_ARN"
+          echo "New API image: $IMAGE"
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURR_TD_ARN" \
+            --query "taskDefinition" \
+            --output json > api-td.json
+
+          # Remove read-only fields and update container image for container name 'api'
+          jq --arg IMAGE "$IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions = (
+                .containerDefinitions
+                | map(if .name == "api" then .image = $IMAGE else . end)
+              )
+          ' api-td.json > api-td-new.json
+
+          NEW_API_TD_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://api-td-new.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)"
+
+          echo "new_api_td_arn=$NEW_API_TD_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy API service
+        run: |
+          set -euo pipefail
           aws ecs update-service \
-            --cluster "${{ vars.ECS_CLUSTER }}" \
-            --service "${{ vars.ECS_SERVICE_WEB }}" \
-            --force-new-deployment \
-            --region "${{ vars.AWS_REGION }}"
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_API" \
+            --task-definition "${{ steps.api_td.outputs.new_api_td_arn }}" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API"
+
+      # --- WEB: register new task def revision with new image ---
+      - name: Register new WEB task definition revision (update image to SHA)
+        id: web_td
+        run: |
+          set -euo pipefail
+
+          IMAGE="${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_WEB }}:${{ github.sha }}"
+
+          CURR_TD_ARN="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB" \
+            --query "services[0].taskDefinition" \
+            --output text)"
+
+          echo "Current WEB task definition: $CURR_TD_ARN"
+          echo "New WEB image: $IMAGE"
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURR_TD_ARN" \
+            --query "taskDefinition" \
+            --output json > web-td.json
+
+          jq --arg IMAGE "$IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions = (
+                .containerDefinitions
+                | map(if .name == "web" then .image = $IMAGE else . end)
+              )
+          ' web-td.json > web-td-new.json
+
+          NEW_WEB_TD_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://web-td-new.json \
+            --query "taskDefinition.taskDefinitionArn" \
+            --output text)"
+
+          echo "new_web_td_arn=$NEW_WEB_TD_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy WEB service
+        run: |
+          set -euo pipefail
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_WEB" \
+            --task-definition "${{ steps.web_td.outputs.new_web_td_arn }}" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB"
