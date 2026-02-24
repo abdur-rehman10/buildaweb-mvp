@@ -228,3 +228,10 @@ jobs:
               body,
               labels: ['ci', 'staging', 'smoke-test-failure']
             });
+
+      - run: echo "Staging deployment will be configured after ECS staging setup."
+
+permissions:
+  id-token: write
+  contents: read
+
