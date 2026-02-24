@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { MobileNav } from './components/MobileNav';
@@ -24,8 +24,8 @@ import { Notifications } from './screens/Notifications';
 import { ProjectsApiScreen } from './screens/ProjectsApiScreen';
 import { PageApiScreen } from './screens/PageApiScreen';
 import { MediaLibrary } from './screens/MediaLibrary';
-import { clearAuthToken, getAuthToken } from '../lib/auth';
-import { authApi } from '../lib/api';
+import { getAuthToken } from '../lib/auth';
+import { hydrateCurrentUser, logout } from '../lib/auth-service';
 
 type Screen = 
   | 'signup' 
@@ -55,6 +55,31 @@ export default function App() {
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [resetTokenPrefill, setResetTokenPrefill] = useState<string>('');
 
+  const resolveScreenFromPath = (): Screen => {
+    const { pathname } = window.location;
+    if (pathname === '/signup') return 'signup';
+    if (pathname === '/login') return 'login';
+    if (pathname === '/dashboard' || pathname === '/') return 'dashboard';
+    return 'login';
+  };
+
+  const getPathForScreen = (screen: Screen): string => {
+    if (screen === 'signup') return '/signup';
+    if (screen === 'login') return '/login';
+    return '/dashboard';
+  };
+
+  const isProtectedScreen = (screen: Screen): boolean => !['login', 'signup', 'forgot-password', 'reset-password'].includes(screen);
+
+  const navigateToLogin = (redirect?: string) => {
+    const search = redirect ? `?redirect=${encodeURIComponent(redirect)}` : '';
+    const path = `/login${search}`;
+    if (window.location.pathname + window.location.search !== path) {
+      window.history.replaceState(null, '', path);
+    }
+    setCurrentScreen('login');
+  };
+
   // Announce route changes to screen readers
   useRouteAnnouncer(currentScreen);
 
@@ -82,27 +107,52 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const onPopState = () => {
+      const nextScreen = resolveScreenFromPath();
+      if (!isAuthenticated && isProtectedScreen(nextScreen)) {
+        navigateToLogin(window.location.pathname + window.location.search);
+        return;
+      }
+
+      setCurrentScreen(nextScreen);
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     if (!activeProjectId || !activePageId) return;
     window.localStorage.setItem(`baw_last_page_${activeProjectId}`, activePageId);
   }, [activeProjectId, activePageId]);
 
   useEffect(() => {
+    const screenFromPath = resolveScreenFromPath();
+    setCurrentScreen(screenFromPath);
+
     const token = getAuthToken();
     if (!token) {
+      if (isProtectedScreen(screenFromPath)) {
+        navigateToLogin(window.location.pathname + window.location.search);
+      }
       setAuthChecking(false);
       return;
     }
 
-    authApi
-      .me()
-      .then(() => {
+    hydrateCurrentUser()
+      .then((user) => {
+        if (!user) {
+          navigateToLogin(window.location.pathname + window.location.search);
+          return;
+        }
+
         setIsAuthenticated(true);
-        setCurrentScreen('dashboard');
-      })
-      .catch(() => {
-        clearAuthToken();
-        setIsAuthenticated(false);
-        setCurrentScreen('login');
+        if (screenFromPath === 'login' || screenFromPath === 'signup') {
+          setCurrentScreen('dashboard');
+          window.history.replaceState(null, '', '/dashboard');
+        } else {
+          setCurrentScreen(screenFromPath);
+        }
       })
       .finally(() => {
         setAuthChecking(false);
@@ -110,17 +160,33 @@ export default function App() {
   }, []);
 
   const navigate = (screen: Screen) => {
+    const path = getPathForScreen(screen);
+    if (window.location.pathname !== path) {
+      window.history.pushState(null, '', path);
+    }
     setCurrentScreen(screen);
   };
 
   const handleSignUp = () => {
     setIsAuthenticated(true);
-    navigate('dashboard');
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
+    if (redirect?.startsWith('/')) {
+      window.history.replaceState(null, '', redirect);
+    } else {
+      window.history.replaceState(null, '', '/dashboard');
+    }
+    setCurrentScreen('dashboard');
   };
 
   const handleLogin = () => {
     setIsAuthenticated(true);
-    navigate('dashboard');
+    const redirect = new URLSearchParams(window.location.search).get('redirect');
+    if (redirect?.startsWith('/')) {
+      window.history.replaceState(null, '', redirect);
+    } else {
+      window.history.replaceState(null, '', '/dashboard');
+    }
+    setCurrentScreen('dashboard');
   };
 
   const handleOnboardingComplete = () => {
@@ -129,12 +195,12 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    clearAuthToken();
+    logout();
     setIsAuthenticated(false);
     setShowOnboarding(false);
     setActiveProjectId(null);
     setActivePageId(null);
-    navigate('login');
+    navigateToLogin();
   };
 
   if (authChecking) {

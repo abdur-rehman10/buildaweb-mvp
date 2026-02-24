@@ -1,4 +1,4 @@
-export const AUTH_TOKEN_KEY = 'baw_token';
+export const AUTH_TOKEN_KEY = 'baw_access_token';
 
 export function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;

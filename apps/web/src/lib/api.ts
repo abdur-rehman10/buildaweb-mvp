@@ -6,7 +6,8 @@ type ApiEnvelope<T> = ApiSuccess<T> | ApiFailure;
 
 type JsonRecord = Record<string, unknown>;
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '';
+const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api';
+const API_BASE_URL = rawApiBaseUrl.endsWith('/') ? rawApiBaseUrl.slice(0, -1) : rawApiBaseUrl;
 
 function isObject(value: unknown): value is JsonRecord {
   return typeof value === 'object' && value !== null;
@@ -94,6 +95,14 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (body && isApiSuccess<T>(body)) {
     return body.data;
+  }
+
+  if (response.ok && isObject(body)) {
+    if ('data' in body) {
+      return (body as { data: T }).data;
+    }
+
+    return body as T;
   }
 
   if (!response.ok) {
@@ -418,30 +427,30 @@ export type SetLatestPublishResult = {
 
 export const authApi = {
   signup(input: SignupInput) {
-    return apiRequest<SignupResult>('/api/v1/auth/signup', {
+    return apiRequest<SignupResult>('/v1/auth/signup', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   login(input: LoginInput) {
-    return apiRequest<LoginResult>('/api/v1/auth/login', {
+    return apiRequest<LoginResult>('/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   me() {
-    return apiRequest<MeResult>('/api/v1/auth/me', {
+    return apiRequest<MeResult>('/v1/auth/me', {
       method: 'GET',
     });
   },
   forgotPassword(input: ForgotPasswordInput) {
-    return apiRequest<ForgotPasswordResult>('/api/v1/auth/forgot-password', {
+    return apiRequest<ForgotPasswordResult>('/v1/auth/forgot-password', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   resetPassword(input: ResetPasswordInput) {
-    return apiRequest<ResetPasswordResult>('/api/v1/auth/reset-password', {
+    return apiRequest<ResetPasswordResult>('/v1/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(input),
     });
@@ -450,40 +459,40 @@ export const authApi = {
 
 export const projectsApi = {
   list() {
-    return apiRequest<ListProjectsResult>('/api/v1/projects', {
+    return apiRequest<ListProjectsResult>('/v1/projects', {
       method: 'GET',
     });
   },
   create(input: CreateProjectInput) {
-    return apiRequest<CreateProjectResult>('/api/v1/projects', {
+    return apiRequest<CreateProjectResult>('/v1/projects', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   get(projectId: string) {
-    return apiRequest<GetProjectResult>(`/api/v1/projects/${encodeURIComponent(projectId)}`, {
+    return apiRequest<GetProjectResult>(`/v1/projects/${encodeURIComponent(projectId)}`, {
       method: 'GET',
     });
   },
   setHome(projectId: string, input: SetProjectHomeInput) {
-    return apiRequest<SetProjectHomeResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/home`, {
+    return apiRequest<SetProjectHomeResult>(`/v1/projects/${encodeURIComponent(projectId)}/home`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
   },
   getSettings(projectId: string) {
-    return apiRequest<GetProjectSettingsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`, {
+    return apiRequest<GetProjectSettingsResult>(`/v1/projects/${encodeURIComponent(projectId)}/settings`, {
       method: 'GET',
     });
   },
   updateSettings(projectId: string, input: UpdateProjectSettingsInput) {
-    return apiRequest<UpdateProjectSettingsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/settings`, {
+    return apiRequest<UpdateProjectSettingsResult>(`/v1/projects/${encodeURIComponent(projectId)}/settings`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
   },
   generate(projectId: string, input: GenerateProjectInput) {
-    return apiRequest<GenerateProjectResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/generate`, {
+    return apiRequest<GenerateProjectResult>(`/v1/projects/${encodeURIComponent(projectId)}/generate`, {
       method: 'POST',
       body: JSON.stringify(input),
     });
@@ -492,19 +501,19 @@ export const projectsApi = {
 
 export const pagesApi = {
   create(projectId: string, input: CreatePageInput) {
-    return apiRequest<CreatePageResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
+    return apiRequest<CreatePageResult>(`/v1/projects/${encodeURIComponent(projectId)}/pages`, {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   list(projectId: string) {
-    return apiRequest<ListPagesResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/pages`, {
+    return apiRequest<ListPagesResult>(`/v1/projects/${encodeURIComponent(projectId)}/pages`, {
       method: 'GET',
     });
   },
   get(projectId: string, pageId: string) {
     return apiRequest<GetPageResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      `/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
       {
         method: 'GET',
       },
@@ -512,7 +521,7 @@ export const pagesApi = {
   },
   update(projectId: string, pageId: string, input: UpdatePageInput) {
     return apiRequest<UpdatePageResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
+      `/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}`,
       {
         method: 'PUT',
         body: JSON.stringify(input),
@@ -521,7 +530,7 @@ export const pagesApi = {
   },
   updateMeta(projectId: string, pageId: string, input: UpdatePageMetaInput) {
     return apiRequest<UpdatePageMetaResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/meta`,
+      `/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/meta`,
       {
         method: 'PATCH',
         body: JSON.stringify(input),
@@ -530,7 +539,7 @@ export const pagesApi = {
   },
   duplicate(projectId: string, pageId: string, input?: DuplicatePageInput) {
     return apiRequest<DuplicatePageResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/duplicate`,
+      `/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}/duplicate`,
       {
         method: 'POST',
         ...(input ? { body: JSON.stringify(input) } : {}),
@@ -540,7 +549,7 @@ export const pagesApi = {
   remove(projectId: string, pageId: string, version?: number) {
     const query = typeof version === 'number' ? `?version=${encodeURIComponent(String(version))}` : '';
     return apiRequest<DeletePageResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}${query}`,
+      `/v1/projects/${encodeURIComponent(projectId)}/pages/${encodeURIComponent(pageId)}${query}`,
       {
         method: 'DELETE',
       },
@@ -548,7 +557,7 @@ export const pagesApi = {
   },
   preview(projectId: string, pageId: string) {
     return apiRequest<PagePreviewResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/preview/${encodeURIComponent(pageId)}`,
+      `/v1/projects/${encodeURIComponent(projectId)}/preview/${encodeURIComponent(pageId)}`,
       {
         method: 'GET',
       },
@@ -558,12 +567,12 @@ export const pagesApi = {
 
 export const navigationApi = {
   get(projectId: string) {
-    return apiRequest<NavigationResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
+    return apiRequest<NavigationResult>(`/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
       method: 'GET',
     });
   },
   update(projectId: string, input: UpdateNavigationInput) {
-    return apiRequest<NavigationResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
+    return apiRequest<NavigationResult>(`/v1/projects/${encodeURIComponent(projectId)}/navigation`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
@@ -572,7 +581,7 @@ export const navigationApi = {
 
 export const assetsApi = {
   list(projectId: string) {
-    return apiRequest<ListAssetsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets`, {
+    return apiRequest<ListAssetsResult>(`/v1/projects/${encodeURIComponent(projectId)}/assets`, {
       method: 'GET',
     });
   },
@@ -580,13 +589,13 @@ export const assetsApi = {
     const body = new FormData();
     body.append('file', file);
 
-    return apiRequest<UploadAssetResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets/upload`, {
+    return apiRequest<UploadAssetResult>(`/v1/projects/${encodeURIComponent(projectId)}/assets/upload`, {
       method: 'POST',
       body,
     });
   },
   resolve(projectId: string, assetIds: string[]) {
-    return apiRequest<ResolveAssetsResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/assets/resolve`, {
+    return apiRequest<ResolveAssetsResult>(`/v1/projects/${encodeURIComponent(projectId)}/assets/resolve`, {
       method: 'POST',
       body: JSON.stringify({ assetIds }),
     });
@@ -595,33 +604,33 @@ export const assetsApi = {
 
 export const publishApi = {
   create(projectId: string) {
-    return apiRequest<PublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish`, {
+    return apiRequest<PublishResult>(`/v1/projects/${encodeURIComponent(projectId)}/publish`, {
       method: 'POST',
     });
   },
   list(projectId: string, limit = 10) {
     const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 10;
     return apiRequest<ListPublishesResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/publishes?limit=${encodeURIComponent(String(normalizedLimit))}`,
+      `/v1/projects/${encodeURIComponent(projectId)}/publishes?limit=${encodeURIComponent(String(normalizedLimit))}`,
       {
         method: 'GET',
       },
     );
   },
   setLatest(projectId: string, input: SetLatestPublishInput) {
-    return apiRequest<SetLatestPublishResult>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
+    return apiRequest<SetLatestPublishResult>(`/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
   },
   getLatest(projectId: string) {
-    return apiRequest<LatestPublishResult | null>(`/api/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
+    return apiRequest<LatestPublishResult | null>(`/v1/projects/${encodeURIComponent(projectId)}/publish/latest`, {
       method: 'GET',
     });
   },
   getStatus(projectId: string, publishId: string) {
     return apiRequest<PublishResult>(
-      `/api/v1/projects/${encodeURIComponent(projectId)}/publish/${encodeURIComponent(publishId)}`,
+      `/v1/projects/${encodeURIComponent(projectId)}/publish/${encodeURIComponent(publishId)}`,
       {
         method: 'GET',
       },
