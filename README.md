@@ -31,3 +31,4 @@ Use the production stack with Caddy host routing + local TLS:
 Notes:
 - `*.localhost` resolves locally by default on modern systems.
 - Caddy uses internal local TLS, so `curl` examples use `-k`.
+
