@@ -18,7 +18,7 @@ type MockUsersService = {
   safeById: jest.Mock;
 };
 
-describe('AuthController signup hardening', () => {
+describe('AuthController auth endpoints', () => {
   let app: INestApplication;
   let authService: MockAuthService;
   let usersService: MockUsersService;
@@ -73,7 +73,7 @@ describe('AuthController signup hardening', () => {
     await app.close();
   });
 
-  it('creates user, returns token, and allows /auth/me with that token', async () => {
+  it('supports signup, register alias, login, and protected /me', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
 
     authService.signup.mockResolvedValue({
@@ -100,13 +100,46 @@ describe('AuthController signup hardening', () => {
     expect(signupRes.body.ok).toBe(true);
     expect(signupRes.body.data.accessToken).toBe(token);
 
+    const registerRes = await request(app.getHttpServer()).post('/api/v1/auth/register').send({
+      email: 'new@example.com',
+      password: 'Password123',
+      name: 'New User',
+    });
+
+    expect(registerRes.status).toBe(201);
+    expect(registerRes.body).toEqual(signupRes.body);
+
+    authService.login.mockResolvedValue({
+      ok: true,
+      user: { id: 'user-1', email: 'new@example.com', name: 'New User', tenantId: 'default' },
+      accessToken: token,
+    });
+
+    const loginRes = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+      email: 'new@example.com',
+      password: 'Password123',
+    });
+
+    expect(loginRes.status).toBe(201);
+    expect(loginRes.body.ok).toBe(true);
+    expect(loginRes.body.data.accessToken).toBe(token);
+
+    const meUnauthorizedRes = await request(app.getHttpServer()).get('/api/v1/auth/me');
+
+    expect(meUnauthorizedRes.status).toBe(401);
+
     const meRes = await request(app.getHttpServer())
       .get('/api/v1/auth/me')
       .set('Authorization', `Bearer ${signupRes.body.data.accessToken}`);
 
     expect(meRes.status).toBe(200);
     expect(meRes.body.ok).toBe(true);
-    expect(meRes.body.data.user.email).toBe('new@example.com');
+    expect(meRes.body.data.user).toEqual({
+      id: 'user-1',
+      email: 'new@example.com',
+      name: 'New User',
+      tenantId: 'default',
+    });
   });
 
   it('returns 409 for duplicate email', async () => {

@@ -25,6 +25,20 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Auth endpoints (MVP)
+
+- `POST /api/v1/auth/signup`
+- `POST /api/v1/auth/register` (alias of signup)
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/signin` (alias of login)
+- `GET /api/v1/auth/me` (JWT bearer token required)
+
+Required environment variables for auth/runtime:
+
+- `JWT_SECRET`
+- `BCRYPT_SALT_ROUNDS`
+- `MONGO_URI`
+
 ## Project setup
 
 ```bash

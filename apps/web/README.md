@@ -1,11 +1,21 @@
+# Buildaweb Web App
 
-  # Untitled
+## Local development
 
-  This is a code bundle for Untitled. The original project is available at https://www.figma.com/design/eniaN6B6lUovCRlhx4qqLt/Untitled.
+1. Install dependencies:
+   - `pnpm install`
+2. Create env file:
+   - `cp .env.example .env`
+3. Start dev server:
+   - `pnpm dev`
 
-  ## Running the code
+## Environment variables
 
-  Run `npm i` to install the dependencies.
+- `VITE_API_BASE_URL` (default: `/api`)
+  - Local ALB-style routing: keep `/api`
+  - Production: set to your API base path if different (example: `https://your-domain.com/api`)
 
-  Run `npm run dev` to start the development server.
-  
+The frontend calls auth endpoints at:
+- `${VITE_API_BASE_URL}/v1/auth/signup`
+- `${VITE_API_BASE_URL}/v1/auth/login`
+- `${VITE_API_BASE_URL}/v1/auth/me`
