@@ -59,11 +59,21 @@ export class AuthController {
     return ok({ user: res.user, accessToken: res.accessToken });
   }
 
+  @Post('register')
+  async register(@Body() dto: SignupDto, @Req() req: any) {
+    return this.signup(dto, req);
+  }
+
   @Post('login')
   async login(@Body() dto: LoginDto) {
     const res = await this.auth.login(dto);
     if (!res.ok) return fail(res.code, res.message);
     return ok({ user: res.user, accessToken: res.accessToken });
+  }
+
+  @Post('signin')
+  async signin(@Body() dto: LoginDto) {
+    return this.login(dto);
   }
 
   @Post('forgot-password')
@@ -88,6 +98,24 @@ export class AuthController {
     const userId = req.user?.sub as string;
     const user = await this.users.safeById(userId);
     if (!user) return fail('USER_NOT_FOUND', 'User not found');
-    return ok({ user });
+
+    const data: {
+      id: string;
+      email: string;
+      name?: string | null;
+      tenantId?: string;
+      role?: string;
+    } = {
+      id: String(user._id),
+      email: user.email,
+      name: user.name ?? null,
+      tenantId: user.tenantId,
+    };
+
+    if ('role' in user && typeof user.role === 'string') {
+      data.role = user.role;
+    }
+
+    return ok({ user: data });
   }
 }
