@@ -9,13 +9,21 @@ export type JwtPayload = { sub: string; tenantId: string };
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {
     const secret = config.get<string>('JWT_SECRET');
-    if (!secret) {
-      throw new Error('Missing JWT_SECRET. Set it in apps/api/.env or environment variables.');
+    const isProduction =
+      (
+        config.get<string>('NODE_ENV') ??
+        process.env.NODE_ENV ??
+        ''
+      ).toLowerCase() === 'production';
+    if (isProduction && !secret) {
+      throw new Error(
+        'Missing JWT_SECRET. Set it in apps/api/.env or environment variables.',
+      );
     }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: secret,
+      secretOrKey: secret ?? 'dev-jwt-secret',
     });
   }
 

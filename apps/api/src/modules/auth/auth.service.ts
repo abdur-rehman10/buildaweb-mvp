@@ -6,7 +6,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes } from 'node:crypto';
 import { Model, Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
-import { PasswordResetToken, PasswordResetTokenDocument } from './password-reset-token.schema';
+import {
+  PasswordResetToken,
+  PasswordResetTokenDocument,
+} from './password-reset-token.schema';
 
 const DEFAULT_TENANT = 'default';
 
@@ -29,25 +32,22 @@ export class AuthService {
     return email.trim().toLowerCase();
   }
 
-  private normalizeName(name?: string) {
-    if (typeof name !== 'string') return null;
-    const trimmed = name.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
   private isDuplicateKeyError(error: unknown) {
     if (!error || typeof error !== 'object') return false;
     const code = (error as { code?: unknown }).code;
     return code === 11000;
   }
 
-  async signup(params: { email: string; password: string; name?: string }) {
+  async register(params: { email: string; password: string }) {
     const tenantId = this.tenantId();
     const normalizedEmail = this.normalizeEmail(params.email);
-    const normalizedName = this.normalizeName(params.name);
     const exists = await this.users.findByEmail(tenantId, normalizedEmail);
     if (exists) {
-      return { ok: false as const, code: 'EMAIL_ALREADY_EXISTS', message: 'Email already in use' };
+      return {
+        ok: false as const,
+        code: 'EMAIL_ALREADY_EXISTS',
+        message: 'Email already in use',
+      };
     }
 
     const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
@@ -58,21 +58,36 @@ export class AuthService {
         tenantId,
         email: normalizedEmail,
         passwordHash,
-        name: normalizedName,
       });
     } catch (error) {
       if (this.isDuplicateKeyError(error)) {
-        return { ok: false as const, code: 'EMAIL_ALREADY_EXISTS', message: 'Email already in use' };
+        return {
+          ok: false as const,
+          code: 'EMAIL_ALREADY_EXISTS',
+          message: 'Email already in use',
+        };
       }
       throw error;
     }
 
-    const accessToken = await this.signToken({ sub: String(user._id), tenantId });
+    const accessToken = await this.signToken({
+      sub: String(user._id),
+      tenantId,
+    });
     return {
       ok: true as const,
-      user: { id: String(user._id), email: user.email, name: user.name, tenantId: user.tenantId },
+      user: {
+        id: String(user._id),
+        email: user.email,
+        tenantId: user.tenantId,
+        role: user.role,
+      },
       accessToken,
     };
+  }
+
+  async signup(params: { email: string; password: string }) {
+    return this.register(params);
   }
 
   async login(params: { email: string; password: string }) {
@@ -80,36 +95,63 @@ export class AuthService {
     const normalizedEmail = this.normalizeEmail(params.email);
     const user = await this.users.findByEmail(tenantId, normalizedEmail);
     if (!user) {
-      return { ok: false as const, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' };
+      return {
+        ok: false as const,
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid credentials',
+      };
     }
 
     const valid = await bcrypt.compare(params.password, user.passwordHash);
     if (!valid) {
-      return { ok: false as const, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' };
+      return {
+        ok: false as const,
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid credentials',
+      };
     }
 
-    const accessToken = await this.signToken({ sub: String(user._id), tenantId });
+    const accessToken = await this.signToken({
+      sub: String(user._id),
+      tenantId,
+    });
     return {
       ok: true as const,
-      user: { id: String(user._id), email: user.email, name: user.name, tenantId: user.tenantId },
+      user: {
+        id: String(user._id),
+        email: user.email,
+        tenantId: user.tenantId,
+        role: user.role,
+      },
       accessToken,
     };
   }
 
   private resetTokenPepper() {
-    return this.config.get<string>('PASSWORD_RESET_TOKEN_PEPPER') ?? this.config.get<string>('JWT_SECRET') ?? 'dev-reset-pepper';
+    return (
+      this.config.get<string>('PASSWORD_RESET_TOKEN_PEPPER') ??
+      this.config.get<string>('JWT_SECRET') ??
+      'dev-reset-pepper'
+    );
   }
 
   private resetTokenTtlMs() {
-    return Number(this.config.get<string>('PASSWORD_RESET_TTL_MINUTES') ?? 30) * 60 * 1000;
+    return (
+      Number(this.config.get<string>('PASSWORD_RESET_TTL_MINUTES') ?? 30) *
+      60 *
+      1000
+    );
   }
 
   private hashResetToken(token: string) {
-    return createHash('sha256').update(`${token}:${this.resetTokenPepper()}`).digest('hex');
+    return createHash('sha256')
+      .update(`${token}:${this.resetTokenPepper()}`)
+      .digest('hex');
   }
 
   private isProductionMode() {
-    const env = this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? '';
+    const env =
+      this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? '';
     return env.toLowerCase() === 'production';
   }
 
@@ -159,7 +201,10 @@ export class AuthService {
 
     const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
     const passwordHash = await bcrypt.hash(params.newPassword, rounds);
-    const updateResult = await this.users.updatePasswordHashById(String(resetRecord.userId), passwordHash);
+    const updateResult = await this.users.updatePasswordHashById(
+      String(resetRecord.userId),
+      passwordHash,
+    );
 
     if (!updateResult.acknowledged || updateResult.matchedCount === 0) {
       return {

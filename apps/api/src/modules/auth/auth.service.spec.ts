@@ -62,19 +62,18 @@ describe('AuthService password reset flow', () => {
     );
   });
 
-  it('creates user on signup and returns access token', async () => {
+  it('creates user on register and returns access token', async () => {
     users.findByEmail.mockResolvedValue(null);
     users.create.mockResolvedValue({
       _id: '507f1f77bcf86cd799439011',
       email: 'new@example.com',
-      name: 'New User',
       tenantId: 'default',
+      role: 'user',
     });
 
-    const result = await service.signup({
+    const result = await service.register({
       email: '  NEW@example.com  ',
       password: 'Password123',
-      name: '  New User  ',
     });
 
     expect(result).toEqual({
@@ -82,8 +81,8 @@ describe('AuthService password reset flow', () => {
       user: {
         id: '507f1f77bcf86cd799439011',
         email: 'new@example.com',
-        name: 'New User',
         tenantId: 'default',
+        role: 'user',
       },
       accessToken: 'test-access-token',
     });
@@ -92,16 +91,15 @@ describe('AuthService password reset flow', () => {
       tenantId: 'default',
       email: 'new@example.com',
       passwordHash: expect.any(String),
-      name: 'New User',
     });
     expect(users.create.mock.calls[0][0].passwordHash).not.toBe('Password123');
   });
 
-  it('returns duplicate email error when signup hits unique index race', async () => {
+  it('returns duplicate email error when register hits unique index race', async () => {
     users.findByEmail.mockResolvedValue(null);
     users.create.mockRejectedValue({ code: 11000 });
 
-    const result = await service.signup({
+    const result = await service.register({
       email: 'exists@example.com',
       password: 'Password123',
     });
@@ -116,7 +114,9 @@ describe('AuthService password reset flow', () => {
   it('returns ok for unknown email without creating token (no enumeration)', async () => {
     users.findByEmail.mockResolvedValue(null);
 
-    const result = await service.forgotPassword({ email: 'missing@example.com' });
+    const result = await service.forgotPassword({
+      email: 'missing@example.com',
+    });
 
     expect(result).toEqual({ ok: true });
     expect(resetTokenModel.create).not.toHaveBeenCalled();
@@ -157,7 +157,10 @@ describe('AuthService password reset flow', () => {
       exec: jest.fn().mockResolvedValue(null),
     });
 
-    const result = await service.resetPassword({ token: 'bad-token', newPassword: 'Password123' });
+    const result = await service.resetPassword({
+      token: 'bad-token',
+      newPassword: 'Password123',
+    });
 
     expect(result).toEqual({
       ok: false,
@@ -176,9 +179,15 @@ describe('AuthService password reset flow', () => {
         save,
       }),
     });
-    users.updatePasswordHashById.mockResolvedValue({ acknowledged: true, matchedCount: 1 });
+    users.updatePasswordHashById.mockResolvedValue({
+      acknowledged: true,
+      matchedCount: 1,
+    });
 
-    const result = await service.resetPassword({ token: 'valid-token', newPassword: 'Password123' });
+    const result = await service.resetPassword({
+      token: 'valid-token',
+      newPassword: 'Password123',
+    });
 
     expect(result).toEqual({ ok: true });
     expect(users.updatePasswordHashById).toHaveBeenCalledTimes(1);

@@ -1,8 +1,4 @@
-import {
-  MiddlewareConsumer,
-  Module,
-  NestModule,
-} from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
@@ -11,25 +7,38 @@ import { UsersModule } from '../users/users.module';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
-import { PasswordResetToken, PasswordResetTokenSchema } from './password-reset-token.schema';
+import {
+  PasswordResetToken,
+  PasswordResetTokenSchema,
+} from './password-reset-token.schema';
 import { AuthRateLimitMiddleware } from './auth-rate-limit.middleware';
 
 @Module({
   imports: [
     UsersModule,
-    MongooseModule.forFeature([{ name: PasswordResetToken.name, schema: PasswordResetTokenSchema }]),
+    MongooseModule.forFeature([
+      { name: PasswordResetToken.name, schema: PasswordResetTokenSchema },
+    ]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const secret = config.get<string>('JWT_SECRET');
-        if (!secret) {
-          throw new Error('Missing JWT_SECRET. Set it in apps/api/.env or environment variables.');
+        const isProduction =
+          (
+            config.get<string>('NODE_ENV') ??
+            process.env.NODE_ENV ??
+            ''
+          ).toLowerCase() === 'production';
+        if (isProduction && !secret) {
+          throw new Error(
+            'Missing JWT_SECRET. Set it in apps/api/.env or environment variables.',
+          );
         }
 
         return {
-          secret,
+          secret: secret ?? 'dev-jwt-secret',
           signOptions: { expiresIn: config.get('JWT_EXPIRES_IN') ?? '1d' },
         };
       },
@@ -40,8 +49,6 @@ import { AuthRateLimitMiddleware } from './auth-rate-limit.middleware';
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(AuthRateLimitMiddleware)
-      .forRoutes(AuthController);
+    consumer.apply(AuthRateLimitMiddleware).forRoutes(AuthController);
   }
 }

@@ -5,27 +5,42 @@ import { User, UserDocument } from './user.schema';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private readonly userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+  ) {}
 
   async findByEmail(tenantId: string, email: string) {
-    return this.userModel.findOne({ tenantId, email: email.toLowerCase() }).exec();
+    return this.userModel
+      .findOne({ tenantId, email: email.toLowerCase() })
+      .exec();
   }
 
-  async create(params: { tenantId: string; email: string; passwordHash: string; name?: string | null }) {
+  async create(params: {
+    tenantId: string;
+    email: string;
+    passwordHash: string;
+    name?: string | null;
+  }) {
     return this.userModel.create({
       tenantId: params.tenantId,
       email: params.email.toLowerCase(),
       passwordHash: params.passwordHash,
       name: params.name ?? null,
       status: 'active',
+      role: 'user',
     });
   }
 
   async safeById(id: string) {
-    return this.userModel.findById(id).select('_id email name tenantId status createdAt updatedAt').exec();
+    return this.userModel
+      .findById(id)
+      .select('_id email name tenantId status role createdAt updatedAt')
+      .exec();
   }
 
   async updatePasswordHashById(id: string, passwordHash: string) {
-    return this.userModel.updateOne({ _id: id }, { $set: { passwordHash } }).exec();
+    return this.userModel
+      .updateOne({ _id: id }, { $set: { passwordHash } })
+      .exec();
   }
 }

@@ -1,4 +1,9 @@
-import { ExecutionContext, INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import {
+  ExecutionContext,
+  INestApplication,
+  UnauthorizedException,
+  ValidationPipe,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -8,6 +13,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
 
 type MockAuthService = {
+  register: jest.Mock;
   signup: jest.Mock;
   login: jest.Mock;
   forgotPassword: jest.Mock;
@@ -18,7 +24,7 @@ type MockUsersService = {
   safeById: jest.Mock;
 };
 
-describe('AuthController signup hardening', () => {
+describe('AuthController register hardening', () => {
   let app: INestApplication;
   let authService: MockAuthService;
   let usersService: MockUsersService;
@@ -26,6 +32,7 @@ describe('AuthController signup hardening', () => {
 
   beforeEach(async () => {
     authService = {
+      register: jest.fn(),
       signup: jest.fn(),
       login: jest.fn(),
       forgotPassword: jest.fn(),
@@ -51,7 +58,10 @@ describe('AuthController signup hardening', () => {
       canActivate: (context: ExecutionContext) => {
         const req = context.switchToHttp().getRequest();
         const authHeader = req.headers?.authorization;
-        if (typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
+        if (
+          typeof authHeader !== 'string' ||
+          !authHeader.startsWith('Bearer ')
+        ) {
           throw new UnauthorizedException();
         }
 
@@ -65,7 +75,9 @@ describe('AuthController signup hardening', () => {
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
+    );
     await app.init();
   });
 
@@ -76,33 +88,38 @@ describe('AuthController signup hardening', () => {
   it('creates user, returns token, and allows /auth/me with that token', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
 
-    authService.signup.mockResolvedValue({
+    authService.register.mockResolvedValue({
       ok: true,
-      user: { id: 'user-1', email: 'new@example.com', name: 'New User', tenantId: 'default' },
+      user: {
+        id: 'user-1',
+        email: 'new@example.com',
+        tenantId: 'default',
+        role: 'user',
+      },
       accessToken: token,
     });
 
     usersService.safeById.mockResolvedValue({
       _id: 'user-1',
       email: 'new@example.com',
-      name: 'New User',
       tenantId: 'default',
       status: 'active',
     });
 
-    const signupRes = await request(app.getHttpServer()).post('/api/v1/auth/signup').send({
-      email: 'new@example.com',
-      password: 'Password123',
-      name: 'New User',
-    });
+    const registerRes = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        email: 'new@example.com',
+        password: 'Password123',
+      });
 
-    expect(signupRes.status).toBe(201);
-    expect(signupRes.body.ok).toBe(true);
-    expect(signupRes.body.data.accessToken).toBe(token);
+    expect(registerRes.status).toBe(201);
+    expect(registerRes.body.ok).toBe(true);
+    expect(registerRes.body.data.accessToken).toBe(token);
 
     const meRes = await request(app.getHttpServer())
       .get('/api/v1/auth/me')
-      .set('Authorization', `Bearer ${signupRes.body.data.accessToken}`);
+      .set('Authorization', `Bearer ${registerRes.body.data.accessToken}`);
 
     expect(meRes.status).toBe(200);
     expect(meRes.body.ok).toBe(true);
@@ -110,16 +127,18 @@ describe('AuthController signup hardening', () => {
   });
 
   it('returns 409 for duplicate email', async () => {
-    authService.signup.mockResolvedValue({
+    authService.register.mockResolvedValue({
       ok: false,
       code: 'EMAIL_ALREADY_EXISTS',
       message: 'Email already in use',
     });
 
-    const res = await request(app.getHttpServer()).post('/api/v1/auth/signup').send({
-      email: 'dup@example.com',
-      password: 'Password123',
-    });
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        email: 'dup@example.com',
+        password: 'Password123',
+      });
 
     expect(res.status).toBe(409);
     expect(res.body).toEqual({
@@ -132,10 +151,12 @@ describe('AuthController signup hardening', () => {
   });
 
   it('returns 400 for invalid email and short password', async () => {
-    const res = await request(app.getHttpServer()).post('/api/v1/auth/signup').send({
-      email: 'not-an-email',
-      password: '123',
-    });
+    const res = await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({
+        email: 'not-an-email',
+        password: '123',
+      });
 
     expect(res.status).toBe(400);
   });
