@@ -1,9 +1,9 @@
-name: Deploy Staging
+name: Deploy Production
 
 on:
   push:
     branches:
-      - develop
+      - main
 
 permissions:
   id-token: write
@@ -11,17 +11,17 @@ permissions:
   issues: write
 
 jobs:
-  deploy-staging:
-    name: Deploy to ECS Staging
+  deploy-prod:
+    name: Deploy to ECS Production
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-      API_SERVICE: ${{ vars.STG_API_SERVICE }}
-      WEB_SERVICE: ${{ vars.STG_WEB_SERVICE }}
+      API_SERVICE: ${{ vars.PROD_API_SERVICE }}
+      WEB_SERVICE: ${{ vars.PROD_WEB_SERVICE }}
       API_ECR_REPO: ${{ vars.API_ECR_REPO }}
       WEB_ECR_REPO: ${{ vars.WEB_ECR_REPO }}
-      DEPLOY_DOMAIN: ${{ vars.STAGING_DOMAIN }}
+      DEPLOY_DOMAIN: ${{ vars.PROD_DOMAIN }}
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
 
     steps:
@@ -140,7 +140,7 @@ jobs:
             --force-new-deployment
           aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$WEB_SERVICE"
 
-      - name: Run staging smoke tests
+      - name: Run production smoke tests
         id: smoke
         run: |
           set -euo pipefail
@@ -200,7 +200,7 @@ jobs:
           set -euo pipefail
           exit 1
 
-      - name: Create issue for staging smoke test failure
+      - name: Create issue for production smoke test failure
         if: failure() && steps.smoke.outputs.failed == 'true'
         uses: actions/github-script@v7
         env:
@@ -209,16 +209,16 @@ jobs:
           script: |
             const fs = require('fs');
             const failures = fs.readFileSync('smoke-failures.md', 'utf8');
-            const title = `Staging smoke test failure (${context.sha.slice(0,7)})`;
+            const title = `Production smoke test failure (${context.sha.slice(0,7)})`;
             const body = [
-              'Staging smoke tests failed after deployment.',
+              'Production smoke tests failed after deployment.',
               '',
               '**Failing endpoints:**',
               failures,
               '',
               `Workflow run: ${process.env.RUN_LINK}`,
               '',
-              `@codex fix staging failure: ${title}`
+              `@codex fix production failure: ${title}`
             ].join('\n');
 
             await github.rest.issues.create({
@@ -226,5 +226,5 @@ jobs:
               repo: context.repo.repo,
               title,
               body,
-              labels: ['ci', 'staging', 'smoke-test-failure']
+              labels: ['ci', 'production', 'smoke-test-failure']
             });
