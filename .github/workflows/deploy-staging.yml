@@ -22,7 +22,9 @@ env:
 
 jobs:
   deploy:
-    environment: staging
+    environment:
+      name: staging
+      url: https://staging.buildaweb.ai
     runs-on: ubuntu-latest
 
     steps:
