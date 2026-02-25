@@ -1,5 +1,4 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
-import type { NextFunction, Request, Response } from 'express';
 import { fail } from '../../common/api-response';
 
 type Bucket = {
@@ -23,20 +22,20 @@ export class AuthRateLimitMiddleware implements NestMiddleware {
     return Math.floor(parsed);
   }
 
-  private requestIp(req: Request) {
-    const xff = req.headers['x-forwarded-for'];
+  private requestIp(req: Record<string, unknown>) {
+    const forwardedFor = req.headers as Record<string, unknown> | undefined;
+    const xff = forwardedFor?.['x-forwarded-for'];
     if (typeof xff === 'string' && xff.trim()) {
       const first = xff.split(',')[0]?.trim();
       if (first) return first;
     }
 
-    if (typeof req.ip === 'string' && req.ip.trim()) return req.ip.trim();
+    const ip = req.ip;
+    if (typeof ip === 'string' && ip.trim()) return ip.trim();
 
-    if (
-      typeof req.connection?.remoteAddress === 'string' &&
-      req.connection.remoteAddress.trim()
-    ) {
-      return req.connection.remoteAddress.trim();
+    const connection = req.connection as { remoteAddress?: unknown } | undefined;
+    if (typeof connection?.remoteAddress === 'string' && connection.remoteAddress.trim()) {
+      return connection.remoteAddress.trim();
     }
 
     return 'unknown';
@@ -51,11 +50,11 @@ export class AuthRateLimitMiddleware implements NestMiddleware {
     }
   }
 
-  use(req: Request, res: Response, next: NextFunction): void {
+  use(req: Record<string, unknown>, res: any, next: () => void) {
     const now = Date.now();
     const windowMs = this.windowMs();
     const max = this.maxRequests();
-    const path = req.originalUrl;
+    const path = typeof req.originalUrl === 'string' ? req.originalUrl : '';
     const key = `${this.requestIp(req)}:${path.split('?')[0] ?? ''}`;
 
     const existing = this.buckets.get(key);
@@ -69,19 +68,11 @@ export class AuthRateLimitMiddleware implements NestMiddleware {
     this.maybePruneOldBuckets(now);
 
     if (bucket.count > max) {
-      const retryAfterSeconds = Math.max(
-        1,
-        Math.ceil((bucket.resetAt - now) / 1000),
-      );
+      const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
       res.setHeader('Retry-After', String(retryAfterSeconds));
-      res
-        .status(429)
-        .json(
-          fail('RATE_LIMITED', 'Too many requests. Please try again shortly.'),
-        );
-      return;
+      return res.status(429).json(fail('RATE_LIMITED', 'Too many requests. Please try again shortly.'));
     }
 
-    next();
+    return next();
   }
 }

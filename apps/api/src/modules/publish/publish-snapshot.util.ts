@@ -37,8 +37,7 @@ export type PublishDraftSnapshot = {
 };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value))
-    return null;
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
 }
 
@@ -57,11 +56,7 @@ function normalizeSlug(slug: string): string {
   return slug.trim().replace(/^\/+/, '').replace(/\/+$/, '');
 }
 
-function toPageSlug(params: {
-  slug: unknown;
-  isHome?: boolean;
-  fallbackPageId: string;
-}): string {
+function toPageSlug(params: { slug: unknown; isHome?: boolean; fallbackPageId: string }): string {
   const rawSlug = readString(params.slug).trim();
   if (params.isHome || rawSlug === '/') return '/';
 
@@ -78,9 +73,7 @@ function resolveHomePage(pages: SnapshotPageInput[]): SnapshotPageInput | null {
   const slashHome = pages.find((page) => readString(page.slug).trim() === '/');
   if (slashHome) return slashHome;
 
-  const emptySlugHome = pages.find(
-    (page) => readString(page.slug).trim() === '',
-  );
+  const emptySlugHome = pages.find((page) => readString(page.slug).trim() === '');
   if (emptySlugHome) return emptySlugHome;
 
   return pages[0];
@@ -107,29 +100,17 @@ function stableStringify(value: unknown): string {
   return JSON.stringify(stableClone(value));
 }
 
-function stringifyId(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (value && typeof value === 'object' && 'toHexString' in value) {
-    const maybe = value as { toHexString?: () => string };
-    if (typeof maybe.toHexString === 'function') {
-      return maybe.toHexString();
-    }
-  }
-
-  return '';
-}
-
 export function buildPublishDraftSnapshot(params: {
   project: SnapshotProjectInput;
   pages: SnapshotPageInput[];
   navigationItems: SnapshotNavigationInput[];
 }): PublishDraftSnapshot {
   const homePage = resolveHomePage(params.pages);
-  const homePageId = homePage?._id ? stringifyId(homePage._id) : '';
+  const homePageId = homePage?._id ? String(homePage._id) : '';
 
   const pagesNormalized = params.pages
     .map((page) => {
-      const pageId = page._id ? stringifyId(page._id) : 'unknown';
+      const pageId = page._id ? String(page._id) : 'unknown';
       const isHome = homePageId ? pageId === homePageId : false;
       return {
         pageId,
@@ -169,9 +150,7 @@ export function buildPublishDraftSnapshot(params: {
         targetSlug: pageMeta.slug,
       };
     })
-    .filter(
-      (item): item is { label: string; targetSlug: string } => item !== null,
-    );
+    .filter((item): item is { label: string; targetSlug: string } => item !== null);
 
   return {
     pages: pagesNormalized.map((page) => ({
@@ -184,20 +163,13 @@ export function buildPublishDraftSnapshot(params: {
     settings: {
       siteName: normalizeOptionalString(params.project.siteName),
       faviconAssetId: normalizeOptionalString(params.project.faviconAssetId),
-      locale:
-        normalizeOptionalString(params.project.locale) ??
-        normalizeOptionalString(params.project.defaultLocale) ??
-        'en',
-      defaultOgImageAssetId: normalizeOptionalString(
-        params.project.defaultOgImageAssetId,
-      ),
+      locale: normalizeOptionalString(params.project.locale) ?? normalizeOptionalString(params.project.defaultLocale) ?? 'en',
+      defaultOgImageAssetId: normalizeOptionalString(params.project.defaultOgImageAssetId),
     },
   };
 }
 
-export function snapshotSignature(
-  snapshot: PublishDraftSnapshot | null | undefined,
-): string {
+export function snapshotSignature(snapshot: PublishDraftSnapshot | null | undefined): string {
   if (!snapshot) return '';
   return stableStringify(snapshot);
 }

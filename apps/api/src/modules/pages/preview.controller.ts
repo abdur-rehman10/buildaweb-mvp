@@ -1,23 +1,10 @@
-import type { AuthRequest } from '../../types/auth-request';
-import { getAuthContext } from '../../common/auth-context';
-import {
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Param,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus, Param, Req, UseGuards } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { fail, ok } from '../../common/api-response';
 import { AssetsService } from '../assets/assets.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import {
-  Navigation,
-  NavigationDocument,
-} from '../navigation/navigation.schema';
+import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
 import { ProjectsService } from '../projects/projects.service';
 import { PagesService } from './pages.service';
 import { PreviewRendererService } from './preview-renderer.service';
@@ -30,13 +17,11 @@ export class PreviewController {
     private readonly pages: PagesService,
     private readonly assets: AssetsService,
     private readonly previewRenderer: PreviewRendererService,
-    @InjectModel(Navigation.name)
-    private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
   ) {}
 
   private asRecord(value: unknown): Record<string, unknown> | null {
-    if (typeof value !== 'object' || value === null || Array.isArray(value))
-      return null;
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
     return value as Record<string, unknown>;
   }
 
@@ -75,9 +60,7 @@ export class PreviewController {
     return `/${normalized}`;
   }
 
-  private resolveHomePage<T extends { isHome?: boolean; slug?: string }>(
-    pages: T[],
-  ): T | null {
+  private resolveHomePage<T extends { isHome?: boolean; slug?: string }>(pages: T[]): T | null {
     if (pages.length === 0) return null;
 
     const explicitHome = pages.find((page) => page.isHome === true);
@@ -92,11 +75,7 @@ export class PreviewController {
     return pages[0];
   }
 
-  private async resolvePageBySlugRef(params: {
-    tenantId: string;
-    projectId: string;
-    slugRef: string;
-  }) {
+  private async resolvePageBySlugRef(params: { tenantId: string; projectId: string; slugRef: string }) {
     const pages = await this.pages.listPages({
       tenantId: params.tenantId,
       projectId: params.projectId,
@@ -110,12 +89,7 @@ export class PreviewController {
     if (!normalizedTargetSlug) {
       pageSummary = this.resolveHomePage(pages);
     } else {
-      pageSummary =
-        pages.find(
-          (page) =>
-            this.normalizeSlug(this.readString(page.slug)) ===
-            normalizedTargetSlug,
-        ) ?? null;
+      pageSummary = pages.find((page) => this.normalizeSlug(this.readString(page.slug)) === normalizedTargetSlug) ?? null;
     }
 
     if (!pageSummary) return null;
@@ -148,10 +122,7 @@ export class PreviewController {
     });
   }
 
-  private async loadNavigationLinks(params: {
-    tenantId: string;
-    projectId: string;
-  }) {
+  private async loadNavigationLinks(params: { tenantId: string; projectId: string }) {
     const nav = await this.navigationModel
       .findOne({
         tenantId: params.tenantId,
@@ -195,15 +166,10 @@ export class PreviewController {
 
         return { label, targetSlug };
       })
-      .filter(
-        (item): item is { label: string; targetSlug: string } => item !== null,
-      );
+      .filter((item): item is { label: string; targetSlug: string } => item !== null);
   }
 
-  private collectAssetRefs(
-    editorJson: unknown,
-    additionalRefs: string[] = [],
-  ): string[] {
+  private collectAssetRefs(editorJson: unknown, additionalRefs: string[] = []): string[] {
     const page = this.asRecord(editorJson);
     const sections = this.asArray(page?.sections);
     const refs = new Set<string>();
@@ -244,21 +210,15 @@ export class PreviewController {
   private async renderPreview(params: {
     projectId: string;
     pageRef: string;
-    req: AuthRequest;
+    req: any;
     preferSlug?: boolean;
   }) {
-    const { ownerUserId, tenantId } = getAuthContext(params.req);
+    const ownerUserId = params.req.user?.sub as string;
+    const tenantId = (params.req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({
-      tenantId,
-      ownerUserId,
-      projectId: params.projectId,
-    });
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId: params.projectId });
     if (!project) {
-      throw new HttpException(
-        fail('NOT_FOUND', 'Not found'),
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
     const page = await this.resolvePageByReference({
@@ -268,40 +228,24 @@ export class PreviewController {
       preferSlug: params.preferSlug,
     });
     if (!page) {
-      throw new HttpException(
-        fail('NOT_FOUND', 'Not found'),
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
     const faviconAssetId = this.readString(project.faviconAssetId).trim();
-    const defaultOgImageAssetId = this.readString(
-      project.defaultOgImageAssetId,
-    ).trim();
-    const assetRefs = this.collectAssetRefs(page.editorJson, [
-      faviconAssetId,
-      defaultOgImageAssetId,
-    ]);
-    const validAssetIds = assetRefs.filter((assetId) =>
-      Types.ObjectId.isValid(assetId),
-    );
+    const defaultOgImageAssetId = this.readString(project.defaultOgImageAssetId).trim();
+    const assetRefs = this.collectAssetRefs(page.editorJson, [faviconAssetId, defaultOgImageAssetId]);
+    const validAssetIds = assetRefs.filter((assetId) => Types.ObjectId.isValid(assetId));
     const assets = await this.assets.getByIdsScoped({
       tenantId,
       projectId: params.projectId,
       assetIds: validAssetIds,
     });
-    const assetUrlById = Object.fromEntries(
-      assets.map((asset) => [String(asset._id), asset.publicUrl]),
-    );
-    const navLinks = await this.loadNavigationLinks({
-      tenantId,
-      projectId: params.projectId,
-    });
-    const currentSlug =
-      this.toPageSlug({
-        slug: this.readString(page.slug),
-        isHome: page.isHome,
-      }) ?? '/';
+    const assetUrlById = Object.fromEntries(assets.map((asset) => [String(asset._id), asset.publicUrl]));
+    const navLinks = await this.loadNavigationLinks({ tenantId, projectId: params.projectId });
+    const currentSlug = this.toPageSlug({
+      slug: this.readString(page.slug),
+      isHome: page.isHome,
+    }) ?? '/';
 
     const preview = this.previewRenderer.render({
       pageId: String(page._id),
@@ -312,26 +256,16 @@ export class PreviewController {
       pageTitle: this.readString(page.title) || 'Buildaweb Site',
       seoJson: page.seoJson,
       siteName: this.readString(project.siteName),
-      faviconUrl: faviconAssetId
-        ? this.readString(assetUrlById[faviconAssetId])
-        : '',
-      defaultOgImageUrl: defaultOgImageAssetId
-        ? this.readString(assetUrlById[defaultOgImageAssetId])
-        : '',
-      locale:
-        this.readString(project.locale) ||
-        this.readString(project.defaultLocale) ||
-        'en',
+      faviconUrl: faviconAssetId ? this.readString(assetUrlById[faviconAssetId]) : '',
+      defaultOgImageUrl: defaultOgImageAssetId ? this.readString(assetUrlById[defaultOgImageAssetId]) : '',
+      locale: this.readString(project.locale) || this.readString(project.defaultLocale) || 'en',
     });
 
     return ok(preview);
   }
 
   @Get()
-  async previewHome(
-    @Param('projectId') projectId: string,
-    @Req() req: AuthRequest,
-  ) {
+  async previewHome(@Param('projectId') projectId: string, @Req() req: any) {
     return this.renderPreview({
       projectId,
       pageRef: '/',
@@ -341,11 +275,7 @@ export class PreviewController {
   }
 
   @Get(':slug/index.html')
-  async previewBySlugWithIndex(
-    @Param('projectId') projectId: string,
-    @Param('slug') slug: string,
-    @Req() req: AuthRequest,
-  ) {
+  async previewBySlugWithIndex(@Param('projectId') projectId: string, @Param('slug') slug: string, @Req() req: any) {
     return this.renderPreview({
       projectId,
       pageRef: `${slug}/index.html`,
@@ -355,11 +285,7 @@ export class PreviewController {
   }
 
   @Get(':pageRef')
-  async previewPage(
-    @Param('projectId') projectId: string,
-    @Param('pageRef') pageRef: string,
-    @Req() req: AuthRequest,
-  ) {
+  async previewPage(@Param('projectId') projectId: string, @Param('pageRef') pageRef: string, @Req() req: any) {
     return this.renderPreview({
       projectId,
       pageRef,

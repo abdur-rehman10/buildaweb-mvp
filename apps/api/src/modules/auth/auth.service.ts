@@ -6,10 +6,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { createHash, randomBytes } from 'node:crypto';
 import { Model, Types } from 'mongoose';
 import { UsersService } from '../users/users.service';
-import {
-  PasswordResetToken,
-  PasswordResetTokenDocument,
-} from './password-reset-token.schema';
+import { PasswordResetToken, PasswordResetTokenDocument } from './password-reset-token.schema';
 
 const DEFAULT_TENANT = 'default';
 
@@ -44,54 +41,20 @@ export class AuthService {
     return code === 11000;
   }
 
-  private readUser(value: unknown): {
-    _id: unknown;
-    email: string;
-    name: string | null;
-    tenantId: string;
-    passwordHash: string;
-  } {
-    const candidate = value as {
-      _id?: unknown;
-      email?: unknown;
-      name?: unknown;
-      tenantId?: unknown;
-      passwordHash?: unknown;
-    };
-
-    return {
-      _id: candidate._id,
-      email: typeof candidate.email === 'string' ? candidate.email : '',
-      name: typeof candidate.name === 'string' ? candidate.name : null,
-      tenantId:
-        typeof candidate.tenantId === 'string'
-          ? candidate.tenantId
-          : this.tenantId(),
-      passwordHash:
-        typeof candidate.passwordHash === 'string'
-          ? candidate.passwordHash
-          : '',
-    };
-  }
-
   async signup(params: { email: string; password: string; name?: string }) {
     const tenantId = this.tenantId();
     const normalizedEmail = this.normalizeEmail(params.email);
     const normalizedName = this.normalizeName(params.name);
     const exists = await this.users.findByEmail(tenantId, normalizedEmail);
     if (exists) {
-      return {
-        ok: false as const,
-        code: 'EMAIL_ALREADY_EXISTS',
-        message: 'Email already in use',
-      };
+      return { ok: false as const, code: 'EMAIL_ALREADY_EXISTS', message: 'Email already in use' };
     }
 
     const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
     const passwordHash = await bcrypt.hash(params.password, rounds);
-    let createdUser: unknown;
+    let user;
     try {
-      createdUser = await this.users.create({
+      user = await this.users.create({
         tenantId,
         email: normalizedEmail,
         passwordHash,
@@ -99,29 +62,15 @@ export class AuthService {
       });
     } catch (error) {
       if (this.isDuplicateKeyError(error)) {
-        return {
-          ok: false as const,
-          code: 'EMAIL_ALREADY_EXISTS',
-          message: 'Email already in use',
-        };
+        return { ok: false as const, code: 'EMAIL_ALREADY_EXISTS', message: 'Email already in use' };
       }
       throw error;
     }
 
-    const user = this.readUser(createdUser);
-
-    const accessToken = await this.signToken({
-      sub: String(user._id),
-      tenantId,
-    });
+    const accessToken = await this.signToken({ sub: String(user._id), tenantId });
     return {
       ok: true as const,
-      user: {
-        id: String(user._id),
-        email: user.email,
-        name: user.name,
-        tenantId: user.tenantId,
-      },
+      user: { id: String(user._id), email: user.email, name: user.name, tenantId: user.tenantId },
       accessToken,
     };
   }
@@ -129,85 +78,48 @@ export class AuthService {
   async login(params: { email: string; password: string }) {
     const tenantId = this.tenantId();
     const normalizedEmail = this.normalizeEmail(params.email);
-    const rawUser: unknown = await this.users.findByEmail(
-      tenantId,
-      normalizedEmail,
-    );
-    if (!rawUser) {
-      return {
-        ok: false as const,
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid credentials',
-      };
+    const user = await this.users.findByEmail(tenantId, normalizedEmail);
+    if (!user) {
+      return { ok: false as const, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' };
     }
-
-    const user = this.readUser(rawUser);
 
     const valid = await bcrypt.compare(params.password, user.passwordHash);
     if (!valid) {
-      return {
-        ok: false as const,
-        code: 'INVALID_CREDENTIALS',
-        message: 'Invalid credentials',
-      };
+      return { ok: false as const, code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' };
     }
 
-    const accessToken = await this.signToken({
-      sub: String(user._id),
-      tenantId,
-    });
+    const accessToken = await this.signToken({ sub: String(user._id), tenantId });
     return {
       ok: true as const,
-      user: {
-        id: String(user._id),
-        email: user.email,
-        name: user.name,
-        tenantId: user.tenantId,
-      },
+      user: { id: String(user._id), email: user.email, name: user.name, tenantId: user.tenantId },
       accessToken,
     };
   }
 
   private resetTokenPepper() {
-    return (
-      this.config.get<string>('PASSWORD_RESET_TOKEN_PEPPER') ??
-      this.config.get<string>('JWT_SECRET') ??
-      'dev-reset-pepper'
-    );
+    return this.config.get<string>('PASSWORD_RESET_TOKEN_PEPPER') ?? this.config.get<string>('JWT_SECRET') ?? 'dev-reset-pepper';
   }
 
   private resetTokenTtlMs() {
-    return (
-      Number(this.config.get<string>('PASSWORD_RESET_TTL_MINUTES') ?? 30) *
-      60 *
-      1000
-    );
+    return Number(this.config.get<string>('PASSWORD_RESET_TTL_MINUTES') ?? 30) * 60 * 1000;
   }
 
   private hashResetToken(token: string) {
-    return createHash('sha256')
-      .update(`${token}:${this.resetTokenPepper()}`)
-      .digest('hex');
+    return createHash('sha256').update(`${token}:${this.resetTokenPepper()}`).digest('hex');
   }
 
   private isProductionMode() {
-    const env =
-      this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? '';
+    const env = this.config.get<string>('NODE_ENV') ?? process.env.NODE_ENV ?? '';
     return env.toLowerCase() === 'production';
   }
 
   async forgotPassword(params: { email: string }) {
     const tenantId = this.tenantId();
-    const rawUser: unknown = await this.users.findByEmail(
-      tenantId,
-      params.email,
-    );
+    const user = await this.users.findByEmail(tenantId, params.email);
 
-    if (!rawUser) {
+    if (!user) {
       return { ok: true as const };
     }
-
-    const user = this.readUser(rawUser);
 
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = this.hashResetToken(rawToken);
@@ -247,10 +159,7 @@ export class AuthService {
 
     const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
     const passwordHash = await bcrypt.hash(params.newPassword, rounds);
-    const updateResult = await this.users.updatePasswordHashById(
-      String(resetRecord.userId),
-      passwordHash,
-    );
+    const updateResult = await this.users.updatePasswordHashById(String(resetRecord.userId), passwordHash);
 
     if (!updateResult.acknowledged || updateResult.matchedCount === 0) {
       return {
@@ -267,7 +176,7 @@ export class AuthService {
   }
 
   private async signToken(payload: { sub: string; tenantId: string }) {
-    const expiresIn = this.config.get<string>('JWT_EXPIRES_IN') ?? '1d';
+    const expiresIn = this.config.get('JWT_EXPIRES_IN') ?? '1d';
     return this.jwt.signAsync(payload, { expiresIn });
   }
 }

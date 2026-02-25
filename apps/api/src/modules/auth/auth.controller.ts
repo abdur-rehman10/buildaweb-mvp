@@ -1,16 +1,4 @@
-import type { AuthRequest } from '../../types/auth-request';
-import { getAuthContext } from '../../common/auth-context';
-import {
-  Body,
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Logger,
-  Post,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpException, HttpStatus, Logger, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { SignupDto } from './dto/signup.dto';
 import { LoginDto } from './dto/login.dto';
@@ -24,26 +12,18 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(
-    private readonly auth: AuthService,
-    private readonly users: UsersService,
-  ) {}
+  constructor(private readonly auth: AuthService, private readonly users: UsersService) {}
 
-  private requestId(req: AuthRequest) {
-    const headerId = req.headers['x-request-id'] ?? req.headers['x-requestid'];
-    if (typeof req.id === 'string' && req.id.trim()) return req.id.trim();
+  private requestId(req: any) {
+    const headerId = req?.headers?.['x-request-id'] ?? req?.headers?.['x-requestid'];
+    if (typeof req?.id === 'string' && req.id.trim()) return req.id.trim();
     if (typeof headerId === 'string' && headerId.trim()) return headerId.trim();
-    if (
-      Array.isArray(headerId) &&
-      typeof headerId[0] === 'string' &&
-      headerId[0].trim()
-    )
-      return headerId[0].trim();
+    if (Array.isArray(headerId) && typeof headerId[0] === 'string' && headerId[0].trim()) return headerId[0].trim();
     return undefined;
   }
 
   @Post('signup')
-  async signup(@Body() dto: SignupDto, @Req() req: AuthRequest) {
+  async signup(@Body() dto: SignupDto, @Req() req: any) {
     const email = dto.email.trim().toLowerCase();
     const requestId = this.requestId(req);
     this.logger.log(
@@ -64,10 +44,7 @@ export class AuthController {
           requestId,
         }),
       );
-      const status =
-        res.code === 'EMAIL_ALREADY_EXISTS'
-          ? HttpStatus.CONFLICT
-          : HttpStatus.BAD_REQUEST;
+      const status = res.code === 'EMAIL_ALREADY_EXISTS' ? HttpStatus.CONFLICT : HttpStatus.BAD_REQUEST;
       throw new HttpException(fail(res.code, res.message), status);
     }
 
@@ -83,7 +60,7 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(@Body() dto: SignupDto, @Req() req: AuthRequest) {
+  async register(@Body() dto: SignupDto, @Req() req: any) {
     return this.signup(dto, req);
   }
 
@@ -117,8 +94,8 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: AuthRequest) {
-    const { ownerUserId: userId } = getAuthContext(req);
+  async me(@Req() req: any) {
+    const userId = req.user?.sub as string;
     const user = await this.users.safeById(userId);
     if (!user) return fail('USER_NOT_FOUND', 'User not found');
 

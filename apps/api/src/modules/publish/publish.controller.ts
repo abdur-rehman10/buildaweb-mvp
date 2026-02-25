@@ -1,5 +1,3 @@
-import type { AuthRequest } from '../../types/auth-request';
-import { getAuthContext } from '../../common/auth-context';
 import {
   Body,
   Controller,
@@ -28,11 +26,9 @@ export class PublishController {
   ) {}
 
   @Post()
-  async publishProject(
-    @Param('projectId') projectId: string,
-    @Req() req: AuthRequest,
-  ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+  async publishProject(@Param('projectId') projectId: string, @Req() req: any) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const project = await this.projects.getByIdScoped({
       tenantId,
@@ -80,9 +76,10 @@ export class PublishController {
   @Get('latest')
   async getLatestPublish(
     @Param('projectId') projectId: string,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const project = await this.projects.getByIdScoped({
       tenantId,
@@ -139,9 +136,10 @@ export class PublishController {
   async getPublishStatus(
     @Param('projectId') projectId: string,
     @Param('publishId') publishId: string,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const project = await this.projects.getByIdScoped({
       tenantId,
@@ -192,7 +190,7 @@ export class PublishController {
   async setLatestPublish(
     @Param('projectId') projectId: string,
     @Body() dto: SetLatestPublishDto,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
     if (
       typeof dto.publishId !== 'string' ||
@@ -204,7 +202,8 @@ export class PublishController {
       );
     }
 
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
     const publishId = dto.publishId.trim();
 
     const project = await this.projects.getByIdScoped({
