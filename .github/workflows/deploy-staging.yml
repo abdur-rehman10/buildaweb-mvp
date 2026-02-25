@@ -12,7 +12,6 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
-  AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_ARN_STAGING || vars.AWS_ROLE_TO_ASSUME }}
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'buildaweb-prod' }}
   ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API || 'buildaweb-api-stg-svc' }}
   ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB || 'buildaweb-web-stg-svc' }}
@@ -35,19 +34,31 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
+
+      # 1) Fail FAST if secret is missing/empty
       - name: Assert role ARN secret is present
         run: |
-            test -n "${{ secrets.AWS_ROLE_ARN_STAGING }}"
-      - name: Show AWS region var
+          test -n "${{ secrets.AWS_ROLE_ARN_STAGING }}"
+
+      - name: Show resolved config
         run: |
-            echo "AWS_REGION=${{ vars.AWS_REGION }}"
-          
+          echo "AWS_REGION=$AWS_REGION"
+          echo "ECS_CLUSTER=$ECS_CLUSTER"
+          echo "ECS_SERVICE_API=$ECS_SERVICE_API"
+          echo "ECS_SERVICE_WEB=$ECS_SERVICE_WEB"
+          echo "API_ECR_REPO=$API_ECR_REPO"
+          echo "WEB_ECR_REPO=$WEB_ECR_REPO"
+          echo "STAGING_BASE_URL=$STAGING_BASE_URL"
+
+      # 2) Configure AWS creds (OIDC) - give it an ID so we can check outcome
       - name: Configure AWS credentials (OIDC)
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # 3) Confirm creds actually exist (this must succeed before any aws ecs/ecr calls)
       - name: Verify AWS identity
         run: aws sts get-caller-identity
 
@@ -195,8 +206,9 @@ jobs:
           curl -fsS "${STAGING_BASE_URL}/"
           curl -fsS "${STAGING_BASE_URL}/api/v1/health"
 
-      - name: Failure summary
-        if: failure()
+      # Only run AWS CLI debugging if AWS creds step succeeded
+      - name: Failure summary (ECS events)
+        if: failure() && steps.awscreds.outcome == 'success'
         run: |
           echo "Recent ECS events for API service (${ECS_SERVICE_API}):"
           aws ecs describe-services \
@@ -212,9 +224,8 @@ jobs:
             --query 'services[0].events[:20].[createdAt,message]' \
             --output table || true
 
-      - name: Assert role secret is present
+      # If creds never worked, print a clear message instead of confusing AWS CLI errors
+      - name: Failure summary (AWS creds not available)
+        if: failure() && steps.awscreds.outcome != 'success'
         run: |
-         test -n "${{ secrets.AWS_ROLE_ARN_STAGING }}"
-
-      - name: Who am I in AWS?
-        run: aws sts get-caller-identity
+          echo "AWS credentials were NOT configured successfully. Fix the configure-aws-credentials step first."
