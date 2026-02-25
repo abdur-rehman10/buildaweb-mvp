@@ -2,7 +2,8 @@ name: Deploy Staging
 
 on:
   push:
-    branches: [develop]
+    branches:
+      - develop
   workflow_dispatch:
 
 concurrency:
@@ -16,6 +17,8 @@ permissions:
 jobs:
   deploy:
     name: Deploy Staging / ECS
+    environment:
+      name: staging
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -26,15 +29,21 @@ jobs:
       ECR_REPO_API: ${{ vars.ECR_REPO_API }}
       ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
       ALB_DNS: ${{ vars.ALB_DNS }}
-      IMAGE_TAG: ${{ github.sha }}
+      IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Validate required staging variables
+      - name: Validate required staging config
         run: |
           set -euo pipefail
+
+          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "::error::Missing required repository secret: AWS_ROLE_ARN"
+            exit 1
+          fi
+
           missing=0
           for key in AWS_REGION ECS_CLUSTER ECS_SERVICE_API ECS_SERVICE_WEB ECR_REPO_API ECR_REPO_WEB; do
             if [ -z "${!key:-}" ]; then
@@ -42,42 +51,52 @@ jobs:
               missing=1
             fi
           done
+
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
 
       - name: Configure AWS credentials (OIDC)
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
       - name: Login to Amazon ECR
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set image metadata
+        id: image
+        run: |
+          set -euo pipefail
+          echo "api_image=${{ steps.ecr.outputs.registry }}/${ECR_REPO_API}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "web_image=${{ steps.ecr.outputs.registry }}/${ECR_REPO_WEB}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build & push API image
+      - name: Build and push API image
         uses: docker/build-push-action@v6
         with:
           context: apps/api
           file: apps/api/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_API }}:${{ env.IMAGE_TAG }}
+          tags: ${{ steps.image.outputs.api_image }}
 
-      - name: Build & push WEB image
+      - name: Build and push WEB image
         uses: docker/build-push-action@v6
         with:
           context: apps/web
           file: apps/web/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_WEB }}:${{ env.IMAGE_TAG }}
+          tags: ${{ steps.image.outputs.web_image }}
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
@@ -90,9 +109,8 @@ jobs:
           deploy_service() {
             local service_name="$1"
             local container_name="$2"
-            local image_repo="$3"
+            local image_uri="$3"
 
-            local image_uri="${{ steps.ecr.outputs.registry }}/${image_repo}:${IMAGE_TAG}"
             echo "Deploying $service_name with image $image_uri"
 
             local current_td_arn
@@ -114,11 +132,29 @@ jobs:
               --output json > taskdef-current.json
 
             jq --arg IMAGE "$image_uri" --arg CONTAINER "$container_name" '
-              del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+              {
+                family,
+                taskRoleArn,
+                executionRoleArn,
+                networkMode,
+                containerDefinitions,
+                volumes,
+                placementConstraints,
+                requiresCompatibilities,
+                cpu,
+                memory,
+                runtimePlatform,
+                proxyConfiguration,
+                inferenceAccelerators,
+                ephemeralStorage,
+                pidMode,
+                ipcMode
+              }
               | .containerDefinitions = (
                   .containerDefinitions
                   | map(if .name == $CONTAINER then .image = $IMAGE else . end)
                 )
+              | with_entries(select(.value != null))
             ' taskdef-current.json > taskdef-next.json
 
             local new_td_arn
@@ -138,7 +174,7 @@ jobs:
               aws ecs describe-services \
                 --cluster "$ECS_CLUSTER" \
                 --services "$service_name" \
-                --query 'services[0].events[0:10]' \
+                --query 'services[0].events[0:20].[createdAt,message]' \
                 --output table || true
               exit 1
             fi
@@ -150,19 +186,49 @@ jobs:
             fi
           }
 
-          deploy_service "$ECS_SERVICE_API" "api" "$ECR_REPO_API"
-          deploy_service "$ECS_SERVICE_WEB" "web" "$ECR_REPO_WEB"
+          deploy_service "$ECS_SERVICE_API" "api" "${{ steps.image.outputs.api_image }}"
+          deploy_service "$ECS_SERVICE_WEB" "web" "${{ steps.image.outputs.web_image }}"
+
+      - name: Smoke tests
+        if: env.ALB_DNS != ''
+        run: |
+          set -euo pipefail
+          curl -fsS "https://${ALB_DNS}/" >/dev/null
+          curl -fsS "https://${ALB_DNS}/api/v1/health" >/dev/null
 
       - name: Staging deployment summary
+        if: always()
         run: |
           set -euo pipefail
           echo "Cluster: $ECS_CLUSTER"
           echo "API service: $ECS_SERVICE_API"
           echo "WEB service: $ECS_SERVICE_WEB"
-          echo "API task definition: ${{ steps.deploy.outputs.api_taskdef }}"
-          echo "WEB task definition: ${{ steps.deploy.outputs.web_taskdef }}"
+          echo "API task definition: ${{ steps.deploy.outputs.api_taskdef || 'n/a' }}"
+          echo "WEB task definition: ${{ steps.deploy.outputs.web_taskdef || 'n/a' }}"
           if [ -n "${ALB_DNS:-}" ]; then
             echo "ALB URL: https://${ALB_DNS}"
           else
             echo "ALB URL not configured (set repository variable ALB_DNS)"
           fi
+
+      - name: Failure summary (AWS creds not available)
+        if: failure() && steps.awscreds.outcome != 'success'
+        run: |
+          echo "AWS credentials were not configured successfully. Fix AWS_ROLE_ARN trust/policy or secret value."
+
+      - name: Failure summary (ECS events)
+        if: failure() && steps.awscreds.outcome == 'success'
+        run: |
+          echo "Recent ECS events for API service (${ECS_SERVICE_API}):"
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API" \
+            --query 'services[0].events[0:20].[createdAt,message]' \
+            --output table || true
+
+          echo "Recent ECS events for WEB service (${ECS_SERVICE_WEB}):"
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB" \
+            --query 'services[0].events[0:20].[createdAt,message]' \
+            --output table || true
