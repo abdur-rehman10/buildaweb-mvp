@@ -35,12 +35,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y jq
-
+      - name: Assert role ARN secret is present
+        run: |
+            test -n "${{ secrets.AWS_ROLE_ARN_STAGING }}"
+      - name: Show AWS region var
+        run: |
+            echo "AWS_REGION=${{ vars.AWS_REGION }}"
+          
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         id: ecr
