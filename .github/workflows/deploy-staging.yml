@@ -1,12 +1,283 @@
-name: Deploy Staging
+name: Deploy / Staging ECS
 
 on:
   push:
     branches:
       - develop
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  placeholder:
+  deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API }}
+      ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB }}
+      ECR_REPO_API: ${{ vars.ECR_REPO_API }}
+      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
+      ALB_DNS: ${{ vars.ALB_DNS }}
+      IMAGE_TAG_SHA: ${{ github.sha }}
+      IMAGE_TAG_STAGING: staging-latest
+
     steps:
-      - run: echo "Staging deployment will be configured after ECS staging setup."
+      - name: Validate required repository secrets and variables
+        run: |
+          set -euo pipefail
+
+          missing=0
+
+          require() {
+            local key="$1"
+            local value="$2"
+            local kind="$3"
+            if [ -z "$value" ]; then
+              echo "::error::Missing required ${kind}: ${key}"
+              missing=1
+            fi
+          }
+
+          require "AWS_ROLE_ARN" "${AWS_ROLE_ARN}" "secret"
+          require "AWS_REGION" "${AWS_REGION}" "variable"
+          require "ECS_CLUSTER" "${ECS_CLUSTER}" "variable"
+          require "ECS_SERVICE_API" "${ECS_SERVICE_API}" "variable"
+          require "ECS_SERVICE_WEB" "${ECS_SERVICE_WEB}" "variable"
+          require "ECR_REPO_API" "${ECR_REPO_API}" "variable"
+          require "ECR_REPO_WEB" "${ECR_REPO_WEB}" "variable"
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::Deployment halted due to missing required GitHub configuration."
+            exit 1
+          fi
+
+          if [ -z "${ALB_DNS}" ]; then
+            echo "::notice::Optional variable ALB_DNS is not set; URL output will be skipped."
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build and push API image (SHA + staging-latest)
+        id: build-api
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          set -euo pipefail
+          API_IMAGE_SHA="${REGISTRY}/${ECR_REPO_API}:${IMAGE_TAG_SHA}"
+          API_IMAGE_STAGING="${REGISTRY}/${ECR_REPO_API}:${IMAGE_TAG_STAGING}"
+
+          docker build -f apps/api/Dockerfile -t "$API_IMAGE_SHA" -t "$API_IMAGE_STAGING" .
+          docker push "$API_IMAGE_SHA"
+          docker push "$API_IMAGE_STAGING"
+
+          echo "api_image_sha=${API_IMAGE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "api_image_staging=${API_IMAGE_STAGING}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push WEB image (SHA + staging-latest)
+        id: build-web
+        env:
+          REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          set -euo pipefail
+          WEB_IMAGE_SHA="${REGISTRY}/${ECR_REPO_WEB}:${IMAGE_TAG_SHA}"
+          WEB_IMAGE_STAGING="${REGISTRY}/${ECR_REPO_WEB}:${IMAGE_TAG_STAGING}"
+
+          docker build -f apps/web/Dockerfile -t "$WEB_IMAGE_SHA" -t "$WEB_IMAGE_STAGING" .
+          docker push "$WEB_IMAGE_SHA"
+          docker push "$WEB_IMAGE_STAGING"
+
+          echo "web_image_sha=${WEB_IMAGE_SHA}" >> "$GITHUB_OUTPUT"
+          echo "web_image_staging=${WEB_IMAGE_STAGING}" >> "$GITHUB_OUTPUT"
+
+      - name: Register and deploy API task definition from current service
+        id: deploy-api
+        env:
+          NEW_IMAGE: ${{ steps.build-api.outputs.api_image_sha }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_API_TD_ARN="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURRENT_API_TD_ARN" \
+            --query 'taskDefinition' \
+            --output json > api-td.json
+
+          jq --arg IMAGE "$NEW_IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions |= map(if .name == "api" then .image = $IMAGE else . end)
+          ' api-td.json > api-td-updated.json
+
+          NEW_API_TD_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://api-td-updated.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_API" \
+            --task-definition "$NEW_API_TD_ARN" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API"
+
+          echo "new_api_td_arn=$NEW_API_TD_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Register and deploy WEB task definition from current service
+        id: deploy-web
+        env:
+          NEW_IMAGE: ${{ steps.build-web.outputs.web_image_sha }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_WEB_TD_ARN="$(aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB" \
+            --query 'services[0].taskDefinition' \
+            --output text)"
+
+          aws ecs describe-task-definition \
+            --task-definition "$CURRENT_WEB_TD_ARN" \
+            --query 'taskDefinition' \
+            --output json > web-td.json
+
+          jq --arg IMAGE "$NEW_IMAGE" '
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy
+            )
+            | .containerDefinitions |= map(if .name == "web" then .image = $IMAGE else . end)
+          ' web-td.json > web-td-updated.json
+
+          NEW_WEB_TD_ARN="$(aws ecs register-task-definition \
+            --cli-input-json file://web-td-updated.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)"
+
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER" \
+            --service "$ECS_SERVICE_WEB" \
+            --task-definition "$NEW_WEB_TD_ARN" \
+            --force-new-deployment
+
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB"
+
+          echo "new_web_td_arn=$NEW_WEB_TD_ARN" >> "$GITHUB_OUTPUT"
+
+      - name: Deployment diagnostics on failure
+        if: failure()
+        run: |
+          set +e
+
+          echo "==== ECS service events (API) ===="
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_API" \
+            --query 'services[0].events[0:15].[createdAt,message]' \
+            --output table || true
+
+          echo "==== ECS service events (WEB) ===="
+          aws ecs describe-services \
+            --cluster "$ECS_CLUSTER" \
+            --services "$ECS_SERVICE_WEB" \
+            --query 'services[0].events[0:15].[createdAt,message]' \
+            --output table || true
+
+          API_STOPPED_TASK="$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_SERVICE_API" \
+            --desired-status STOPPED \
+            --max-items 1 \
+            --query 'taskArns[0]' \
+            --output text 2>/dev/null)"
+
+          if [ -n "$API_STOPPED_TASK" ] && [ "$API_STOPPED_TASK" != "None" ]; then
+            echo "==== Latest stopped API task reason ===="
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks "$API_STOPPED_TASK" \
+              --query 'tasks[0].{stoppedReason:stoppedReason,containers:containers[*].{name:name,lastStatus:lastStatus,reason:reason,exitCode:exitCode}}' \
+              --output json || true
+          fi
+
+          WEB_STOPPED_TASK="$(aws ecs list-tasks \
+            --cluster "$ECS_CLUSTER" \
+            --service-name "$ECS_SERVICE_WEB" \
+            --desired-status STOPPED \
+            --max-items 1 \
+            --query 'taskArns[0]' \
+            --output text 2>/dev/null)"
+
+          if [ -n "$WEB_STOPPED_TASK" ] && [ "$WEB_STOPPED_TASK" != "None" ]; then
+            echo "==== Latest stopped WEB task reason ===="
+            aws ecs describe-tasks \
+              --cluster "$ECS_CLUSTER" \
+              --tasks "$WEB_STOPPED_TASK" \
+              --query 'tasks[0].{stoppedReason:stoppedReason,containers:containers[*].{name:name,lastStatus:lastStatus,reason:reason,exitCode:exitCode}}' \
+              --output json || true
+          fi
+
+      - name: Deployment summary
+        if: always()
+        run: |
+          {
+            echo "## Staging Deployment Summary"
+            echo ""
+            echo "- Cluster: \\`${ECS_CLUSTER}\\`"
+            echo "- API service: \\`${ECS_SERVICE_API}\\`"
+            echo "- WEB service: \\`${ECS_SERVICE_WEB}\\`"
+            echo "- API task definition: \\`${{ steps.deploy-api.outputs.new_api_td_arn || 'not-updated' }}\\`"
+            echo "- WEB task definition: \\`${{ steps.deploy-web.outputs.new_web_td_arn || 'not-updated' }}\\`"
+            echo "- API image tags:"
+            echo "  - \\`${{ steps.build-api.outputs.api_image_sha || 'not-built' }}\\`"
+            echo "  - \\`${{ steps.build-api.outputs.api_image_staging || 'not-built' }}\\`"
+            echo "- WEB image tags:"
+            echo "  - \\`${{ steps.build-web.outputs.web_image_sha || 'not-built' }}\\`"
+            echo "  - \\`${{ steps.build-web.outputs.web_image_staging || 'not-built' }}\\`"
+            if [ -n "${ALB_DNS}" ]; then
+              echo "- ALB URL: https://${ALB_DNS}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

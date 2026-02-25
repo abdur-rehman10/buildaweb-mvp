@@ -1,8 +1,8 @@
 name: Deploy / AWS ECS
 
 on:
-  push:
-    branches: [main]
+  # Manual fallback only. Canonical automatic production deployment is deploy-ecs.yml.
+  workflow_dispatch:
 
 permissions:
   id-token: write
