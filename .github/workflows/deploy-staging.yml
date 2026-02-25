@@ -1,9 +1,14 @@
-name: Deploy Staging
+name: Deploy Staging to ECS
 
 on:
   push:
     branches:
       - develop
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 permissions:
   id-token: write
@@ -14,10 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
-      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-      ECR_REPO_API: ${{ vars.ECR_REPO_API }}
-      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
-      STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+      ECS_CLUSTER: buildaweb-prod
+      ECS_SERVICE_API: buildaweb-api-stg-svc
+      ECS_SERVICE_WEB: buildaweb-web-stg-svc
+      API_ECR_REPO: buildaweb-api
+      WEB_ECR_REPO: buildaweb-web
+      STAGING_BASE_URL: https://staging.buildaweb.ai
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
 
     steps:
