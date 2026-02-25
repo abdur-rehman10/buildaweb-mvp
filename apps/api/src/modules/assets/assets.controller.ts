@@ -1,5 +1,3 @@
-import type { AuthRequest } from '../../types/auth-request';
-import { getAuthContext } from '../../common/auth-context';
 import {
   Body,
   Controller,
@@ -41,32 +39,20 @@ export class AssetsController {
   }
 
   @Get()
-  async list(@Param('projectId') projectId: string, @Req() req: AuthRequest) {
+  async list(@Param('projectId') projectId: string, @Req() req: any) {
     if (!this.isValidObjectId(projectId)) {
-      throw new HttpException(
-        fail('INVALID_PROJECT_ID', 'Invalid project id'),
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException(fail('INVALID_PROJECT_ID', 'Invalid project id'), HttpStatus.BAD_REQUEST);
     }
 
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({
-      tenantId,
-      ownerUserId,
-      projectId,
-    });
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
     if (!project) {
-      throw new HttpException(
-        fail('NOT_FOUND', 'Not found'),
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
-    const assets = await this.assets.listByProjectScoped({
-      tenantId,
-      projectId,
-    });
+    const assets = await this.assets.listByProjectScoped({ tenantId, projectId });
     return ok({ assets });
   }
 
@@ -75,41 +61,26 @@ export class AssetsController {
   async upload(
     @Param('projectId') projectId: string,
     @UploadedFile() file: UploadedImageFile | undefined,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({
-      tenantId,
-      ownerUserId,
-      projectId,
-    });
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
     if (!project) {
-      throw new HttpException(
-        fail('NOT_FOUND', 'Not found'),
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
     if (!file) {
-      throw new HttpException(
-        fail('FILE_REQUIRED', 'File is required'),
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException(fail('FILE_REQUIRED', 'File is required'), HttpStatus.BAD_REQUEST);
     }
 
     if (!file.mimetype?.startsWith('image/')) {
-      throw new HttpException(
-        fail('INVALID_FILE_TYPE', 'Only image uploads are allowed'),
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException(fail('INVALID_FILE_TYPE', 'Only image uploads are allowed'), HttpStatus.BAD_REQUEST);
     }
 
     if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      throw new HttpException(
-        fail('FILE_TOO_LARGE', 'Max file size is 5MB'),
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException(fail('FILE_TOO_LARGE', 'Max file size is 5MB'), HttpStatus.BAD_REQUEST);
     }
 
     try {
@@ -121,10 +92,7 @@ export class AssetsController {
 
       return ok(uploaded);
     } catch {
-      throw new HttpException(
-        fail('UPLOAD_FAILED', 'Failed to upload asset'),
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException(fail('UPLOAD_FAILED', 'Failed to upload asset'), HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
@@ -132,20 +100,14 @@ export class AssetsController {
   async resolve(
     @Param('projectId') projectId: string,
     @Body() dto: ResolveAssetsDto,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
-    const project = await this.projects.getByIdScoped({
-      tenantId,
-      ownerUserId,
-      projectId,
-    });
+    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
     if (!project) {
-      throw new HttpException(
-        fail('NOT_FOUND', 'Not found'),
-        HttpStatus.NOT_FOUND,
-      );
+      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
     }
 
     const assets = await this.assets.getByIdsScoped({

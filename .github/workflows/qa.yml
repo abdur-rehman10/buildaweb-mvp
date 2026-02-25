@@ -2,18 +2,12 @@ name: QA
 
 on:
   pull_request:
-    branches:
-      - develop
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - ready_for_review
+    branches: [develop, main]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 concurrency:
-  group: qa-${{ github.event.pull_request.number || github.ref }}
+  group: pr-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,10 +15,13 @@ jobs:
     name: QA / API
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/api
+    env:
+      CI: true
+      TZ: UTC
     steps:
       - uses: actions/checkout@v5
 
@@ -34,14 +31,14 @@ jobs:
           version: 10.30.0
           run_install: false
 
-      - name: Setup Node (cache pnpm)
+      - name: Setup Node.js 20 LTS (cache pnpm)
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
           cache: pnpm
           cache-dependency-path: apps/api/pnpm-lock.yaml
 
-      - name: Install deps
+      - name: Install deps (locked)
         run: pnpm install --frozen-lockfile
 
       - name: Lint
@@ -56,23 +53,25 @@ jobs:
       - name: Build
         run: pnpm run --if-present build
 
-      - name: Upload API build artifacts
+      - name: Upload API build artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qa-api-build
-          path: |
-            apps/api/dist
+          path: apps/api/dist
           if-no-files-found: ignore
 
   web:
     name: QA / WEB
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: apps/web
+    env:
+      CI: true
+      TZ: UTC
     steps:
       - uses: actions/checkout@v5
 
@@ -82,14 +81,14 @@ jobs:
           version: 10.30.0
           run_install: false
 
-      - name: Setup Node (cache pnpm)
+      - name: Setup Node.js 20 LTS (cache pnpm)
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
 
-      - name: Install deps
+      - name: Install deps (locked)
         run: pnpm install --frozen-lockfile
 
       - name: Lint
@@ -104,7 +103,7 @@ jobs:
       - name: Build
         run: pnpm run --if-present build
 
-      - name: Upload WEB build artifacts
+      - name: Upload WEB build artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:

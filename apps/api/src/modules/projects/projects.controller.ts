@@ -1,5 +1,3 @@
-import type { AuthRequest } from '../../types/auth-request';
-import { getAuthContext } from '../../common/auth-context';
 import {
   Body,
   Controller,
@@ -37,16 +35,10 @@ export class ProjectsController {
     return Types.ObjectId.isValid(value);
   }
 
-  private toIdString(value: unknown): string | null {
-    if (value == null) return null;
-    if (typeof value === 'string') return value;
-    if (value instanceof Types.ObjectId) return value.toHexString();
-    return null;
-  }
-
   @Post()
-  async createProject(@Body() dto: CreateProjectDto, @Req() req: AuthRequest) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+  async createProject(@Body() dto: CreateProjectDto, @Req() req: any) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     let project;
     try {
@@ -66,17 +58,17 @@ export class ProjectsController {
       throw error;
     }
 
-    const projectId = this.toIdString((project as { _id?: unknown })._id) ?? '';
-    return ok({ project_id: projectId });
+    return ok({ project_id: String(project._id) });
   }
 
   @Post(':projectId/generate')
   async generateProject(
     @Param('projectId') projectId: string,
     @Body() dto: GenerateProjectDto,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
     const prompt = dto.prompt.trim();
 
     if (!prompt) {
@@ -138,8 +130,9 @@ export class ProjectsController {
   }
 
   @Get()
-  async listProjects(@Req() req: AuthRequest) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+  async listProjects(@Req() req: any) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const projects = await this.projects.listByOwnerWithDraftStatus({
       tenantId,
@@ -152,7 +145,9 @@ export class ProjectsController {
         name: entry.project.name,
         status: entry.project.status,
         defaultLocale: entry.project.defaultLocale,
-        homePageId: this.toIdString(entry.project.homePageId),
+        homePageId: entry.project.homePageId
+          ? String(entry.project.homePageId)
+          : null,
         latestPublishId: entry.project.latestPublishId
           ? String(entry.project.latestPublishId)
           : null,
@@ -170,11 +165,9 @@ export class ProjectsController {
   }
 
   @Get(':projectId')
-  async getProject(
-    @Param('projectId') projectId: string,
-    @Req() req: AuthRequest,
-  ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+  async getProject(@Param('projectId') projectId: string, @Req() req: any) {
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const projectResult = await this.projects.getByIdScopedWithDraftStatus({
       tenantId,
@@ -195,7 +188,7 @@ export class ProjectsController {
         name: project.name,
         status: project.status,
         defaultLocale: project.defaultLocale,
-        homePageId: this.toIdString(project.homePageId),
+        homePageId: project.homePageId ? String(project.homePageId) : null,
         latestPublishId: project.latestPublishId
           ? String(project.latestPublishId)
           : null,
@@ -215,9 +208,10 @@ export class ProjectsController {
   @Get(':projectId/settings')
   async getProjectSettings(
     @Param('projectId') projectId: string,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const settings = await this.projects.getSettings({
       tenantId,
@@ -238,9 +232,10 @@ export class ProjectsController {
   async updateProjectSettings(
     @Param('projectId') projectId: string,
     @Body() dto: UpdateProjectSettingsDto,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const settings = await this.projects.updateSettings({
       tenantId,
@@ -266,7 +261,7 @@ export class ProjectsController {
   async setProjectHomePage(
     @Param('projectId') projectId: string,
     @Body() dto: SetHomePageDto,
-    @Req() req: AuthRequest,
+    @Req() req: any,
   ) {
     if (!this.isValidObjectId(projectId)) {
       throw new HttpException(
@@ -275,7 +270,8 @@ export class ProjectsController {
       );
     }
 
-    const { ownerUserId, tenantId } = getAuthContext(req);
+    const ownerUserId = req.user?.sub as string;
+    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
 
     const project = await this.projects.getByIdScoped({
       tenantId,
