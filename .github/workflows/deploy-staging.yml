@@ -19,30 +19,39 @@ jobs:
     name: Deploy Staging / ECS
     environment:
       name: staging
+      url: https://staging.buildaweb.ai
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     env:
+      # Repo Variables (recommended to set these in GitHub → Settings → Secrets and variables → Actions → Variables)
       AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
-      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-      ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API }}
-      ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB }}
-      ECR_REPO_API: ${{ vars.ECR_REPO_API || vars.API_ECR_REPO }}
-      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB || vars.WEB_ECR_REPO }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'buildaweb-prod' }}
+      ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API || 'buildaweb-api-stg-svc' }}
+      ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB || 'buildaweb-web-stg-svc' }}
+      ECR_REPO_API: ${{ vars.ECR_REPO_API || vars.API_ECR_REPO || 'buildaweb-api' }}
+      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB || vars.WEB_ECR_REPO || 'buildaweb-web' }}
+
+      # Optional repo variables
       ALB_DNS: ${{ vars.ALB_DNS }}
-      STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
-      AWS_ROLE_ARN_EFFECTIVE: ${{ secrets.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN_STAGING }}
+      STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL || 'https://staging.buildaweb.ai' }}
+
+      # Secret (OIDC role)
+      AWS_ROLE_ARN_EFFECTIVE: ${{ secrets.AWS_ROLE_ARN_STAGING || secrets.AWS_ROLE_ARN }}
+
+      # Tag images per run
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Validate required staging config
         run: |
           set -euo pipefail
 
           if [ -z "${AWS_ROLE_ARN_EFFECTIVE:-}" ]; then
-            echo "::error::Missing required repository secret: AWS_ROLE_ARN (or AWS_ROLE_ARN_STAGING)"
+            echo "::error::Missing required repository secret: AWS_ROLE_ARN_STAGING (or AWS_ROLE_ARN)"
             exit 1
           fi
 
@@ -56,6 +65,18 @@ jobs:
 
           if [ "$missing" -ne 0 ]; then
             exit 1
+          fi
+
+          echo "Resolved config:"
+          echo "AWS_REGION=$AWS_REGION"
+          echo "ECS_CLUSTER=$ECS_CLUSTER"
+          echo "ECS_SERVICE_API=$ECS_SERVICE_API"
+          echo "ECS_SERVICE_WEB=$ECS_SERVICE_WEB"
+          echo "ECR_REPO_API=$ECR_REPO_API"
+          echo "ECR_REPO_WEB=$ECR_REPO_WEB"
+          echo "STAGING_BASE_URL=$STAGING_BASE_URL"
+          if [ -n "${ALB_DNS:-}" ]; then
+            echo "ALB_DNS=$ALB_DNS"
           fi
 
       - name: Configure AWS credentials (OIDC)
@@ -72,14 +93,19 @@ jobs:
         id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set image metadata
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Set image URIs
         id: image
         run: |
           set -euo pipefail
           echo "api_image=${{ steps.ecr.outputs.registry }}/${ECR_REPO_API}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
           echo "web_image=${{ steps.ecr.outputs.registry }}/${ECR_REPO_WEB}:${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "API_IMAGE=${{ steps.ecr.outputs.registry }}/${ECR_REPO_API}:${IMAGE_TAG}"
+          echo "WEB_IMAGE=${{ steps.ecr.outputs.registry }}/${ECR_REPO_WEB}:${IMAGE_TAG}"
 
-      - name: Setup Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push API image
@@ -87,8 +113,8 @@ jobs:
         with:
           context: apps/api
           file: apps/api/Dockerfile
-          platforms: linux/amd64
           push: true
+          platforms: linux/amd64
           tags: ${{ steps.image.outputs.api_image }}
 
       - name: Build and push WEB image
@@ -96,12 +122,9 @@ jobs:
         with:
           context: apps/web
           file: apps/web/Dockerfile
-          platforms: linux/amd64
           push: true
+          platforms: linux/amd64
           tags: ${{ steps.image.outputs.web_image }}
-
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Deploy API and WEB ECS services
         id: deploy
@@ -113,7 +136,7 @@ jobs:
             local container_name="$2"
             local image_uri="$3"
 
-            echo "Deploying $service_name with image $image_uri"
+            echo "Deploying $service_name (container: $container_name) -> $image_uri"
 
             local current_td_arn
             current_td_arn="$(aws ecs describe-services \
@@ -123,7 +146,7 @@ jobs:
               --output text)"
 
             if [ "$current_td_arn" = "None" ] || [ -z "$current_td_arn" ]; then
-              echo "::error::Could not find task definition for service $service_name"
+              echo "::error::Could not find current task definition for service: $service_name"
               aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service_name"
               exit 1
             fi
@@ -192,13 +215,13 @@ jobs:
           deploy_service "$ECS_SERVICE_WEB" "web" "${{ steps.image.outputs.web_image }}"
 
       - name: Smoke tests
-        if: env.ALB_DNS != '' || env.STAGING_BASE_URL != ''
         run: |
           set -euo pipefail
           BASE_URL="${STAGING_BASE_URL:-}"
           if [ -z "$BASE_URL" ] && [ -n "${ALB_DNS:-}" ]; then
             BASE_URL="https://${ALB_DNS}"
           fi
+          echo "Smoke testing: ${BASE_URL%/}"
           curl -fsS "${BASE_URL%/}/" >/dev/null
           curl -fsS "${BASE_URL%/}/api/v1/health" >/dev/null
 
@@ -209,21 +232,22 @@ jobs:
           echo "Cluster: $ECS_CLUSTER"
           echo "API service: $ECS_SERVICE_API"
           echo "WEB service: $ECS_SERVICE_WEB"
+          echo "API image: ${{ steps.image.outputs.api_image }}"
+          echo "WEB image: ${{ steps.image.outputs.web_image }}"
           echo "API task definition: ${{ steps.deploy.outputs.api_taskdef || 'n/a' }}"
           echo "WEB task definition: ${{ steps.deploy.outputs.web_taskdef || 'n/a' }}"
           if [ -n "${ALB_DNS:-}" ]; then
             echo "ALB URL: https://${ALB_DNS}"
           else
-            echo "ALB URL not configured (set repository variable ALB_DNS)"
+            echo "ALB URL not configured (set repo variable ALB_DNS if you want it printed)"
           fi
-          if [ -n "${STAGING_BASE_URL:-}" ]; then
-            echo "Staging base URL: ${STAGING_BASE_URL}"
-          fi
+          echo "Staging base URL: ${STAGING_BASE_URL}"
 
       - name: Failure summary (AWS creds not available)
         if: failure() && steps.awscreds.outcome != 'success'
         run: |
-          echo "AWS credentials were not configured successfully. Fix AWS_ROLE_ARN / AWS_ROLE_ARN_STAGING trust-policy or secret value."
+          echo "AWS credentials were not configured successfully."
+          echo "Fix AWS_ROLE_ARN_STAGING (or AWS_ROLE_ARN) value + IAM trust policy for GitHub OIDC."
 
       - name: Failure summary (ECS events)
         if: failure() && steps.awscreds.outcome == 'success'

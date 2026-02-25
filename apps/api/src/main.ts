@@ -81,7 +81,7 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 
   const port = process.env.PORT ? Number(process.env.PORT) : 4000;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   // eslint-disable-next-line no-console
   console.log(`API running on http://localhost:${port}/api/v1`);
 }
