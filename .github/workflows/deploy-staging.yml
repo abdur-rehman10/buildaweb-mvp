@@ -22,13 +22,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
       ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API }}
       ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB }}
-      ECR_REPO_API: ${{ vars.ECR_REPO_API }}
-      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
+      ECR_REPO_API: ${{ vars.ECR_REPO_API || vars.API_ECR_REPO }}
+      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB || vars.WEB_ECR_REPO }}
       ALB_DNS: ${{ vars.ALB_DNS }}
+      STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+      AWS_ROLE_ARN_EFFECTIVE: ${{ secrets.AWS_ROLE_ARN || secrets.AWS_ROLE_ARN_STAGING }}
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
 
     steps:
@@ -39,8 +41,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
-            echo "::error::Missing required repository secret: AWS_ROLE_ARN"
+          if [ -z "${AWS_ROLE_ARN_EFFECTIVE:-}" ]; then
+            echo "::error::Missing required repository secret: AWS_ROLE_ARN (or AWS_ROLE_ARN_STAGING)"
             exit 1
           fi
 
@@ -60,7 +62,7 @@ jobs:
         id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_ARN_EFFECTIVE }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify AWS identity
@@ -190,11 +192,15 @@ jobs:
           deploy_service "$ECS_SERVICE_WEB" "web" "${{ steps.image.outputs.web_image }}"
 
       - name: Smoke tests
-        if: env.ALB_DNS != ''
+        if: env.ALB_DNS != '' || env.STAGING_BASE_URL != ''
         run: |
           set -euo pipefail
-          curl -fsS "https://${ALB_DNS}/" >/dev/null
-          curl -fsS "https://${ALB_DNS}/api/v1/health" >/dev/null
+          BASE_URL="${STAGING_BASE_URL:-}"
+          if [ -z "$BASE_URL" ] && [ -n "${ALB_DNS:-}" ]; then
+            BASE_URL="https://${ALB_DNS}"
+          fi
+          curl -fsS "${BASE_URL%/}/" >/dev/null
+          curl -fsS "${BASE_URL%/}/api/v1/health" >/dev/null
 
       - name: Staging deployment summary
         if: always()
@@ -210,11 +216,14 @@ jobs:
           else
             echo "ALB URL not configured (set repository variable ALB_DNS)"
           fi
+          if [ -n "${STAGING_BASE_URL:-}" ]; then
+            echo "Staging base URL: ${STAGING_BASE_URL}"
+          fi
 
       - name: Failure summary (AWS creds not available)
         if: failure() && steps.awscreds.outcome != 'success'
         run: |
-          echo "AWS credentials were not configured successfully. Fix AWS_ROLE_ARN trust/policy or secret value."
+          echo "AWS credentials were not configured successfully. Fix AWS_ROLE_ARN / AWS_ROLE_ARN_STAGING trust-policy or secret value."
 
       - name: Failure summary (ECS events)
         if: failure() && steps.awscreds.outcome == 'success'
