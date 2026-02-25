@@ -1,20 +1,30 @@
 import { Injectable } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { PassportStrategy } from '@nestjs/passport';
+import type { Request } from 'express';
+import { ExtractJwt, Strategy } from 'passport-jwt';
 
 export type JwtPayload = { sub: string; tenantId: string };
+
+type JwtExtractor = (req: Request) => string | null;
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {
     const secret = config.get<string>('JWT_SECRET');
     if (!secret) {
-      throw new Error('Missing JWT_SECRET. Set it in apps/api/.env or environment variables.');
+      throw new Error(
+        'Missing JWT_SECRET. Set it in apps/api/.env or environment variables.',
+      );
     }
 
+    const extractorFactory = ExtractJwt as unknown as {
+      fromAuthHeaderAsBearerToken: () => JwtExtractor;
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: extractorFactory.fromAuthHeaderAsBearerToken(),
       secretOrKey: secret,
     });
   }
