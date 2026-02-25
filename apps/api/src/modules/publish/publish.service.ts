@@ -24,6 +24,18 @@ export class PublishPreflightError extends Error {
     this.details = details;
   }
 }
+function stringifyUnknownId(value: unknown): string {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object' && 'toHexString' in value) {
+    const maybe = value as { toHexString?: () => string };
+    if (typeof maybe.toHexString === 'function') {
+      return maybe.toHexString();
+    }
+  }
+
+  return '';
+}
 
 @Injectable()
 export class PublishService {
@@ -210,7 +222,8 @@ export class PublishService {
 
       if (
         !conflict ||
-        String((conflict as { _id?: unknown })._id ?? '') === params.projectId
+        stringifyUnknownId((conflict as { _id?: unknown })._id) ===
+          params.projectId
       ) {
         return candidate;
       }
@@ -241,7 +254,8 @@ export class PublishService {
         .exec();
       if (
         !conflict ||
-        String((conflict as { _id?: unknown })._id ?? '') === params.projectId
+        stringifyUnknownId((conflict as { _id?: unknown })._id) ===
+          params.projectId
       )
         return current;
     }
