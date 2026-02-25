@@ -12,7 +12,7 @@ permissions:
 
 env:
   AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
-  AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_ARN || vars.AWS_ROLE_TO_ASSUME }}
+  AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_ARN_STAGING || vars.AWS_ROLE_TO_ASSUME }}
   ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'buildaweb-prod' }}
   ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API || 'buildaweb-api-stg-svc' }}
   ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB || 'buildaweb-web-stg-svc' }}
@@ -22,6 +22,7 @@ env:
 
 jobs:
   deploy:
+    environment: staging
     runs-on: ubuntu-latest
 
     steps:
@@ -199,3 +200,10 @@ jobs:
             --services "$ECS_SERVICE_WEB" \
             --query 'services[0].events[:20].[createdAt,message]' \
             --output table || true
+
+      - name: Assert role secret is present
+        run: |
+         test -n "${{ secrets.AWS_ROLE_ARN_STAGING }}"
+
+      - name: Who am I in AWS?
+        run: aws sts get-caller-identity
