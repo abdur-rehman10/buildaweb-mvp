@@ -2,11 +2,167 @@ name: Deploy Staging
 
 on:
   push:
-    branches:
-      - develop
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging-develop
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  placeholder:
+  deploy:
+    name: Deploy Staging / ECS
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+      ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API }}
+      ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB }}
+      ECR_REPO_API: ${{ vars.ECR_REPO_API }}
+      ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB }}
+      ALB_DNS: ${{ vars.ALB_DNS }}
+      IMAGE_TAG: ${{ github.sha }}
+
     steps:
-      - run: echo "Staging deployment will be configured after ECS staging setup."
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Validate required staging variables
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in AWS_REGION ECS_CLUSTER ECS_SERVICE_API ECS_SERVICE_WEB ECR_REPO_API ECR_REPO_WEB; do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::Missing required repository variable: $key"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_API }}:${{ env.IMAGE_TAG }}
+
+      - name: Build & push WEB image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/web
+          file: apps/web/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPO_WEB }}:${{ env.IMAGE_TAG }}
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Deploy API and WEB ECS services
+        id: deploy
+        run: |
+          set -euo pipefail
+
+          deploy_service() {
+            local service_name="$1"
+            local container_name="$2"
+            local image_repo="$3"
+
+            local image_uri="${{ steps.ecr.outputs.registry }}/${image_repo}:${IMAGE_TAG}"
+            echo "Deploying $service_name with image $image_uri"
+
+            local current_td_arn
+            current_td_arn="$(aws ecs describe-services \
+              --cluster "$ECS_CLUSTER" \
+              --services "$service_name" \
+              --query 'services[0].taskDefinition' \
+              --output text)"
+
+            if [ "$current_td_arn" = "None" ] || [ -z "$current_td_arn" ]; then
+              echo "::error::Could not find task definition for service $service_name"
+              aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$service_name"
+              exit 1
+            fi
+
+            aws ecs describe-task-definition \
+              --task-definition "$current_td_arn" \
+              --query 'taskDefinition' \
+              --output json > taskdef-current.json
+
+            jq --arg IMAGE "$image_uri" --arg CONTAINER "$container_name" '
+              del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities, .registeredAt, .registeredBy)
+              | .containerDefinitions = (
+                  .containerDefinitions
+                  | map(if .name == $CONTAINER then .image = $IMAGE else . end)
+                )
+            ' taskdef-current.json > taskdef-next.json
+
+            local new_td_arn
+            new_td_arn="$(aws ecs register-task-definition \
+              --cli-input-json file://taskdef-next.json \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text)"
+
+            aws ecs update-service \
+              --cluster "$ECS_CLUSTER" \
+              --service "$service_name" \
+              --task-definition "$new_td_arn" \
+              --force-new-deployment > /dev/null
+
+            if ! aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$service_name"; then
+              echo "::error::Service $service_name failed to reach stable state"
+              aws ecs describe-services \
+                --cluster "$ECS_CLUSTER" \
+                --services "$service_name" \
+                --query 'services[0].events[0:10]' \
+                --output table || true
+              exit 1
+            fi
+
+            if [ "$container_name" = "api" ]; then
+              echo "api_taskdef=$new_td_arn" >> "$GITHUB_OUTPUT"
+            else
+              echo "web_taskdef=$new_td_arn" >> "$GITHUB_OUTPUT"
+            fi
+          }
+
+          deploy_service "$ECS_SERVICE_API" "api" "$ECR_REPO_API"
+          deploy_service "$ECS_SERVICE_WEB" "web" "$ECR_REPO_WEB"
+
+      - name: Staging deployment summary
+        run: |
+          set -euo pipefail
+          echo "Cluster: $ECS_CLUSTER"
+          echo "API service: $ECS_SERVICE_API"
+          echo "WEB service: $ECS_SERVICE_WEB"
+          echo "API task definition: ${{ steps.deploy.outputs.api_taskdef }}"
+          echo "WEB task definition: ${{ steps.deploy.outputs.web_taskdef }}"
+          if [ -n "${ALB_DNS:-}" ]; then
+            echo "ALB URL: https://${ALB_DNS}"
+          else
+            echo "ALB URL not configured (set repository variable ALB_DNS)"
+          fi
