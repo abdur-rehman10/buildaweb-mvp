@@ -11,6 +11,7 @@ MANDATORY:
 6. Assume work is being done on a feature branch.
 7. Keep changes minimal and incremental.
 8. Respect NestJS, MongoDB, and REST conventions already in the codebase.
+9. Work for `apps/api` strict lint cleanup is allowed only under PLAN.md Phase 3 and must not disable lint rules.
 
 “Do not add refresh tokens”
 “Do not add roles”
@@ -34,4 +35,3 @@ If something is unclear or missing, STOP and ask a question instead of guessing.
    - { "ok": true, "data": {} }
    - { "ok": false, "error": { "code": "", "message": "" } }
  MVP: no refresh tokens, no roles, no social login, no editor/AI/billing unless in PLAN.
-

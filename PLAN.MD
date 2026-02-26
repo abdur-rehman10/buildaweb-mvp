@@ -2,11 +2,34 @@
 
 ## Branch
 
-chore/lint-scope-ai
+chore/lint-cleanup-api
 
 ## Goal
 
 Add a scoped lint workflow for AI generator files so current PRs can pass quality checks while legacy repo-wide lint debt is tracked for a dedicated cleanup phase.
+
+## Phase 3 — API strict lint cleanup (apps/api)
+
+- Status: TODO
+- Why now:
+  - CI PR checks are currently failing on strict API lint violations, so a dedicated cleanup phase is required.
+- In Scope:
+  - Fix `req.user` typing using Express augmentation or a typed request pattern.
+  - Define `JwtPayload` and request principal types.
+  - Fix Mongoose `ObjectId` stringification (`no-base-to-string`).
+  - Fix `no-floating-promises` (e.g., `bootstrap().catch`) and `require-await`.
+  - Fix strict typing in tests without disabling ESLint rules.
+- Out of Scope:
+  - Disabling ESLint rules.
+  - Adding new auth features (refresh tokens, roles, social login).
+  - Changing API response envelope.
+  - Large refactors unrelated to lint.
+- Definition of Done:
+  - `pnpm -w lint --filter api` passes with zero errors.
+  - `pnpm -w typecheck --filter api` passes.
+  - `pnpm -w test --filter api` passes.
+- Notes:
+  - Changes should be incremental and grouped into small commits like `lint(api): ...`.
 
 ## In Scope
 
@@ -104,4 +127,4 @@ Add a scoped lint workflow for AI generator files so current PRs can pass qualit
   - Confirmed AI generator files are lint-clean under scoped lint and covered by tests.
 - Lint debt note:
   - Repo-wide `pnpm --dir apps/api lint` still reports legacy violations outside this scope.
-  - A dedicated future milestone is required for full repository lint cleanup.
+  - Phase 3 (API strict lint cleanup) is now the dedicated milestone referenced here.
