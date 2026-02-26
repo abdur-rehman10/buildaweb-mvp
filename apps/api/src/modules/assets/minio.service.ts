@@ -13,9 +13,12 @@ export class MinioService {
   constructor(private readonly config: ConfigService) {
     const endPoint = this.config.get<string>('MINIO_ENDPOINT') ?? 'localhost';
     const port = Number(this.config.get<string>('MINIO_PORT') ?? 9000);
-    const useSSL = (this.config.get<string>('MINIO_USE_SSL') ?? 'false').toLowerCase() === 'true';
+    const useSSL =
+      (this.config.get<string>('MINIO_USE_SSL') ?? 'false').toLowerCase() ===
+      'true';
     const accessKey = this.config.get<string>('MINIO_ACCESS_KEY') ?? 'minio';
-    const secretKey = this.config.get<string>('MINIO_SECRET_KEY') ?? 'minio12345';
+    const secretKey =
+      this.config.get<string>('MINIO_SECRET_KEY') ?? 'minio12345';
 
     this.bucketName = this.config.get<string>('MINIO_BUCKET') ?? 'buildaweb';
     this.publicBaseUrl = this.resolvePublicBaseUrl({
@@ -46,31 +49,46 @@ export class MinioService {
 
   private normalizePublicBaseUrl(raw: string) {
     const parsed = new URL(this.withHttpProtocol(raw));
-    const normalizedPath = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '');
+    const normalizedPath =
+      parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '');
     return `${parsed.origin}${normalizedPath}`;
   }
 
-  private resolvePublicBaseUrl(params: { endPoint: string; port: number; useSSL: boolean }) {
-    const mediaPublicBaseUrl = this.trimOrEmpty(this.config.get<string>('MEDIA_PUBLIC_BASE_URL'));
+  private resolvePublicBaseUrl(params: {
+    endPoint: string;
+    port: number;
+    useSSL: boolean;
+  }) {
+    const mediaPublicBaseUrl = this.trimOrEmpty(
+      this.config.get<string>('MEDIA_PUBLIC_BASE_URL'),
+    );
     if (mediaPublicBaseUrl) {
       return this.normalizePublicBaseUrl(mediaPublicBaseUrl);
     }
 
-    const isProduction = this.trimOrEmpty(this.config.get<string>('NODE_ENV')).toLowerCase() === 'production';
+    const isProduction =
+      this.trimOrEmpty(this.config.get<string>('NODE_ENV')).toLowerCase() ===
+      'production';
     if (isProduction) {
-      const publicAppUrl = this.trimOrEmpty(this.config.get<string>('PUBLIC_APP_URL'));
+      const publicAppUrl = this.trimOrEmpty(
+        this.config.get<string>('PUBLIC_APP_URL'),
+      );
       if (publicAppUrl) {
         const appUrl = new URL(this.withHttpProtocol(publicAppUrl));
         return `${appUrl.origin}/media`;
       }
     }
 
-    const explicitMinioUrl = this.trimOrEmpty(this.config.get<string>('MINIO_PUBLIC_URL'));
+    const explicitMinioUrl = this.trimOrEmpty(
+      this.config.get<string>('MINIO_PUBLIC_URL'),
+    );
     if (explicitMinioUrl) {
       return this.normalizePublicBaseUrl(explicitMinioUrl);
     }
 
-    const explicitMinioBaseUrl = this.trimOrEmpty(this.config.get<string>('MINIO_PUBLIC_BASE_URL'));
+    const explicitMinioBaseUrl = this.trimOrEmpty(
+      this.config.get<string>('MINIO_PUBLIC_BASE_URL'),
+    );
     if (explicitMinioBaseUrl) {
       return this.normalizePublicBaseUrl(explicitMinioBaseUrl);
     }
@@ -112,16 +130,29 @@ export class MinioService {
     return this.bucketReadyPromise;
   }
 
-  async upload(params: { objectPath: string; buffer: Buffer; mimeType: string; sizeBytes: number }) {
+  async upload(params: {
+    objectPath: string;
+    buffer: Buffer;
+    mimeType: string;
+    sizeBytes: number;
+  }) {
     await this.ensureBucketReady();
 
-    await this.client.putObject(this.bucketName, params.objectPath, params.buffer, params.sizeBytes, {
-      'Content-Type': params.mimeType,
-    });
+    await this.client.putObject(
+      this.bucketName,
+      params.objectPath,
+      params.buffer,
+      params.sizeBytes,
+      {
+        'Content-Type': params.mimeType,
+      },
+    );
 
     const base = this.publicBaseUrl.replace(/\/$/, '');
     const objectPath = this.encodedPath(params.objectPath);
-    const bucketPath = base.endsWith(`/${this.bucketName}`) ? base : `${base}/${this.bucketName}`;
+    const bucketPath = base.endsWith(`/${this.bucketName}`)
+      ? base
+      : `${base}/${this.bucketName}`;
     return `${bucketPath}/${objectPath}`;
   }
 

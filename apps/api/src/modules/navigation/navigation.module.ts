@@ -8,7 +8,9 @@ import { NavigationService } from './navigation.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Navigation.name, schema: NavigationSchema }]),
+    MongooseModule.forFeature([
+      { name: Navigation.name, schema: NavigationSchema },
+    ]),
     ProjectsModule,
     PagesModule,
   ],

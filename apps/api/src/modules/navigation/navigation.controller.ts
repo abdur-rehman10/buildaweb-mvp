@@ -1,9 +1,24 @@
-import { Body, Controller, Get, HttpException, HttpStatus, Param, Put, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { fail, ok } from '../../common/api-response';
+import { getAuthContext } from '../../common/auth-context';
+import type { AuthRequest } from '../../types/auth-request';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
 import { UpdateNavigationDto } from './dto/update-navigation.dto';
-import { InvalidPageReferenceException, NavigationService } from './navigation.service';
+import {
+  InvalidPageReferenceException,
+  NavigationService,
+} from './navigation.service';
 
 @Controller('projects/:projectId/navigation')
 @UseGuards(JwtAuthGuard)
@@ -14,13 +29,22 @@ export class NavigationController {
   ) {}
 
   @Get()
-  async getNavigation(@Param('projectId') projectId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async getNavigation(
+    @Param('projectId') projectId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const nav = await this.navigation.getOrCreateByProject({
@@ -33,13 +57,23 @@ export class NavigationController {
   }
 
   @Put()
-  async putNavigation(@Param('projectId') projectId: string, @Body() dto: UpdateNavigationDto, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async putNavigation(
+    @Param('projectId') projectId: string,
+    @Body() dto: UpdateNavigationDto,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
@@ -55,7 +89,10 @@ export class NavigationController {
     } catch (error) {
       if (error instanceof InvalidPageReferenceException) {
         throw new HttpException(
-          fail('INVALID_PAGE_REFERENCE', 'One or more pageIds do not belong to this project'),
+          fail(
+            'INVALID_PAGE_REFERENCE',
+            'One or more pageIds do not belong to this project',
+          ),
           HttpStatus.BAD_REQUEST,
         );
       }

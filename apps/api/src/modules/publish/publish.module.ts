@@ -25,7 +25,12 @@ import { PublishService } from './publish.service';
     PagesModule,
     AssetsModule,
   ],
-  controllers: [PublishController, PublishesController, ProjectPublicationController, PublicPublishedController],
+  controllers: [
+    PublishController,
+    PublishesController,
+    ProjectPublicationController,
+    PublicPublishedController,
+  ],
   providers: [PublishService],
   exports: [PublishService],
 })

@@ -89,13 +89,24 @@ describe('AuthService password reset flow', () => {
       accessToken: 'test-access-token',
     });
 
-    expect(users.create).toHaveBeenCalledWith({
-      tenantId: 'default',
-      email: 'new@example.com',
-      passwordHash: expect.any(String),
-      name: 'New User',
-    });
-    expect(users.create.mock.calls[0][0].passwordHash).not.toBe('Password123');
+    const createMock = users.create as jest.Mock<
+      unknown,
+      [Record<string, unknown>]
+    >;
+    expect(users.create).toHaveBeenCalledTimes(1);
+    const firstCreateArg = createMock.mock.calls[0]?.[0] as
+      | {
+          tenantId?: unknown;
+          email?: unknown;
+          name?: unknown;
+          passwordHash?: unknown;
+        }
+      | undefined;
+    expect(firstCreateArg?.tenantId).toBe('default');
+    expect(firstCreateArg?.email).toBe('new@example.com');
+    expect(firstCreateArg?.name).toBe('New User');
+    expect(typeof firstCreateArg?.passwordHash).toBe('string');
+    expect(firstCreateArg?.passwordHash).not.toBe('Password123');
   });
 
   it('returns duplicate email error when signup hits unique index race', async () => {
@@ -117,7 +128,9 @@ describe('AuthService password reset flow', () => {
   it('returns ok for unknown email without creating token (no enumeration)', async () => {
     users.findByEmail.mockResolvedValue(null);
 
-    const result = await service.forgotPassword({ email: 'missing@example.com' });
+    const result = await service.forgotPassword({
+      email: 'missing@example.com',
+    });
 
     expect(result).toEqual({ ok: true });
     expect(resetTokenModel.create).not.toHaveBeenCalled();
@@ -138,7 +151,13 @@ describe('AuthService password reset flow', () => {
     expect(result.ok).toBe(true);
     expect('debugResetToken' in result && result.debugResetToken).toBeTruthy();
     expect(resetTokenModel.create).toHaveBeenCalledTimes(1);
-    const payload = resetTokenModel.create.mock.calls[0][0];
+    const tokenCreateMock = resetTokenModel.create as jest.Mock<
+      unknown,
+      [Record<string, unknown>]
+    >;
+    const payload = tokenCreateMock.mock.calls[0]?.[0] as
+      | { tokenHash?: unknown; usedAt?: unknown }
+      | undefined;
     expect(payload.tokenHash).not.toBe(result.debugResetToken);
     expect(payload.usedAt).toBeNull();
   });
@@ -170,7 +189,10 @@ describe('AuthService password reset flow', () => {
       exec: jest.fn().mockResolvedValue(null),
     });
 
-    const result = await service.resetPassword({ token: 'bad-token', newPassword: 'Password123' });
+    const result = await service.resetPassword({
+      token: 'bad-token',
+      newPassword: 'Password123',
+    });
 
     expect(result).toEqual({
       ok: false,
@@ -189,13 +211,23 @@ describe('AuthService password reset flow', () => {
         save,
       }),
     });
-    users.updatePasswordHashById.mockResolvedValue({ acknowledged: true, matchedCount: 1 });
+    users.updatePasswordHashById.mockResolvedValue({
+      acknowledged: true,
+      matchedCount: 1,
+    });
 
-    const result = await service.resetPassword({ token: 'valid-token', newPassword: 'Password123' });
+    const result = await service.resetPassword({
+      token: 'valid-token',
+      newPassword: 'Password123',
+    });
 
     expect(result).toEqual({ ok: true });
     expect(users.updatePasswordHashById).toHaveBeenCalledTimes(1);
-    const [, passwordHash] = users.updatePasswordHashById.mock.calls[0];
+    const updatePasswordMock = users.updatePasswordHashById as jest.Mock<
+      unknown,
+      [string, string]
+    >;
+    const passwordHash = updatePasswordMock.mock.calls[0]?.[1];
     expect(typeof passwordHash).toBe('string');
     expect(passwordHash).not.toBe('Password123');
     expect(save).toHaveBeenCalledTimes(1);

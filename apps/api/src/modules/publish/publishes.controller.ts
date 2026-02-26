@@ -1,8 +1,19 @@
-import { Controller, Get, HttpException, HttpStatus, Param, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
 import { PublishService } from './publish.service';
+import type { AuthRequest } from '../../types/auth-request';
+import { getAuthContext } from '../../common/auth-context';
 
 @Controller('projects/:projectId/publishes')
 @UseGuards(JwtAuthGuard)
@@ -22,13 +33,23 @@ export class PublishesController {
   }
 
   @Get()
-  async listPublishes(@Param('projectId') projectId: string, @Query('limit') limitRaw: string | undefined, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async listPublishes(
+    @Param('projectId') projectId: string,
+    @Query('limit') limitRaw: string | undefined,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const limit = this.parseLimit(limitRaw);

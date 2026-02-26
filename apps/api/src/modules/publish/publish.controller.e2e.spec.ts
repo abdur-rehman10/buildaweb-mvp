@@ -7,6 +7,8 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import type { Server } from 'http';
+import type { AuthRequest } from '../../types/auth-request';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
 import { PublishController } from './publish.controller';
@@ -60,7 +62,7 @@ describe('PublishController contract (request)', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          const req = context.switchToHttp().getRequest();
+          const req = context.switchToHttp().getRequest<AuthRequest>();
           const authHeader = req.headers?.authorization;
           if (
             typeof authHeader !== 'string' ||
@@ -70,7 +72,11 @@ describe('PublishController contract (request)', () => {
           }
 
           const token = authHeader.slice('Bearer '.length).trim();
-          req.user = jwt.verify(token);
+          const decoded: unknown = jwt.verify(token);
+          if (!decoded || typeof decoded !== 'object') {
+            throw new UnauthorizedException();
+          }
+          req.user = decoded as AuthRequest['user'];
           return true;
         },
       })
@@ -82,6 +88,7 @@ describe('PublishController contract (request)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
     );
     await app.init();
+    server = app.getHttpServer() as Server;
   });
 
   afterEach(async () => {
@@ -91,23 +98,25 @@ describe('PublishController contract (request)', () => {
   it('returns publish slug and /p/ url contract', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
 
-    const response = await request(app.getHttpServer())
+    const response = await request(server as never)
       .post('/api/v1/projects/project-1/publish')
       .set('Authorization', `Bearer ${token}`)
       .send({});
 
     expect(response.status).toBe(201);
-    expect(response.body).toEqual({
-      ok: true,
-      data: expect.objectContaining({
-        publishId: 'publish-1',
-        status: 'live',
-        slug: 'main-site',
-        url: 'http://13.50.101.211/p/main-site',
-      }),
-    });
-    expect(response.body.data.url).toContain('/p/');
-    expect(response.body.data.url).not.toContain('127.0.0.1');
-    expect(response.body.data.url).not.toContain('localhost');
+    const body = response.body as unknown;
+    if (!body || typeof body !== 'object') throw new Error('Invalid body');
+    const data = (body as { data?: unknown }).data as
+      | Record<string, unknown>
+      | undefined;
+    expect((body as { ok?: unknown }).ok).toBe(true);
+    expect(data?.publishId).toBe('publish-1');
+    expect(data?.status).toBe('live');
+    expect(data?.slug).toBe('main-site');
+    expect(data?.url).toBe('http://13.50.101.211/p/main-site');
+    const url = typeof data?.url === 'string' ? data.url : '';
+    expect(url).toContain('/p/');
+    expect(url).not.toContain('127.0.0.1');
+    expect(url).not.toContain('localhost');
   });
 });

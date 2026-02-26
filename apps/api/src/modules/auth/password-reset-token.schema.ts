@@ -20,6 +20,7 @@ export class PasswordResetToken {
   createdAt?: Date;
 }
 
-export const PasswordResetTokenSchema = SchemaFactory.createForClass(PasswordResetToken);
+export const PasswordResetTokenSchema =
+  SchemaFactory.createForClass(PasswordResetToken);
 
 PasswordResetTokenSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });

@@ -9,6 +9,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import type { Server } from 'http';
+import type { AuthRequest } from '../../types/auth-request';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
@@ -34,12 +36,12 @@ describe('ProjectsController single-project enforcement (request)', () => {
     createdProjectId = null;
 
     projectsService = {
-      create: jest.fn(async () => {
+      create: jest.fn(() => {
         if (createdProjectId) {
           throw new ForbiddenException('User already has a project');
         }
         createdProjectId = 'project-1';
-        return { _id: createdProjectId };
+        return Promise.resolve({ _id: createdProjectId });
       }),
       listByOwnerWithDraftStatus: jest.fn(),
       getByIdScopedWithDraftStatus: jest.fn(),
@@ -68,7 +70,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({
         canActivate: (context: ExecutionContext) => {
-          const req = context.switchToHttp().getRequest();
+          const req = context.switchToHttp().getRequest<AuthRequest>();
           const authHeader = req.headers?.authorization;
           if (
             typeof authHeader !== 'string' ||
@@ -78,7 +80,11 @@ describe('ProjectsController single-project enforcement (request)', () => {
           }
 
           const token = authHeader.slice('Bearer '.length).trim();
-          req.user = jwt.verify(token);
+          const decoded: unknown = jwt.verify(token);
+          if (!decoded || typeof decoded !== 'object') {
+            throw new UnauthorizedException();
+          }
+          req.user = decoded as AuthRequest['user'];
           return true;
         },
       })
@@ -90,6 +96,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
     );
     await app.init();
+    server = app.getHttpServer() as Server;
   });
 
   afterEach(async () => {
@@ -99,7 +106,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
   it('allows first project creation and blocks second project creation with 403', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
 
-    const firstCreateResponse = await request(app.getHttpServer())
+    const firstCreateResponse = await request(server as never)
       .post('/api/v1/projects')
       .set('Authorization', `Bearer ${token}`)
       .send({
@@ -115,7 +122,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
       },
     });
 
-    const secondCreateResponse = await request(app.getHttpServer())
+    const secondCreateResponse = await request(server as never)
       .post('/api/v1/projects')
       .set('Authorization', `Bearer ${token}`)
       .send({
@@ -136,7 +143,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
   it('generates site content and returns previewUrl', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
 
-    const response = await request(app.getHttpServer())
+    const response = await request(server as never)
       .post('/api/v1/projects/project-1/generate')
       .set('Authorization', `Bearer ${token}`)
       .send({ prompt: 'Create a SaaS landing site' });

@@ -216,18 +216,15 @@ describe('ProjectsController.getProject', () => {
       user: { sub: 'user-1', tenantId: 'default' },
     });
 
-    expect(result).toEqual({
-      ok: true,
-      data: {
-        project: expect.objectContaining({
-          id: '507f1f77bcf86cd799439100',
-          homePageId: '507f1f77bcf86cd799439011',
-          latestPublishId: '507f1f77bcf86cd799439200',
-          publishedAt,
-          hasUnpublishedChanges: false,
-        }),
-      },
-    });
+    const project = (result.data as { project?: unknown }).project as
+      | Record<string, unknown>
+      | undefined;
+    expect(result.ok).toBe(true);
+    expect(project?.id).toBe('507f1f77bcf86cd799439100');
+    expect(project?.homePageId).toBe('507f1f77bcf86cd799439011');
+    expect(project?.latestPublishId).toBe('507f1f77bcf86cd799439200');
+    expect(project?.publishedAt).toBe(publishedAt);
+    expect(project?.hasUnpublishedChanges).toBe(false);
   });
 
   it('returns null latest publish fields when not published', async () => {
@@ -250,17 +247,14 @@ describe('ProjectsController.getProject', () => {
       user: { sub: 'user-1', tenantId: 'default' },
     });
 
-    expect(result).toEqual({
-      ok: true,
-      data: {
-        project: expect.objectContaining({
-          homePageId: null,
-          latestPublishId: null,
-          publishedAt: null,
-          hasUnpublishedChanges: true,
-        }),
-      },
-    });
+    const project = (result.data as { project?: unknown }).project as
+      | Record<string, unknown>
+      | undefined;
+    expect(result.ok).toBe(true);
+    expect(project?.homePageId).toBeNull();
+    expect(project?.latestPublishId).toBeNull();
+    expect(project?.publishedAt).toBeNull();
+    expect(project?.hasUnpublishedChanges).toBe(true);
   });
 });
 

@@ -12,18 +12,23 @@ type NavigationCta = { label: string; href: string };
 @Injectable()
 export class NavigationService {
   constructor(
-    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Navigation.name)
+    private readonly navigationModel: Model<NavigationDocument>,
     private readonly pages: PagesService,
   ) {}
 
-  private normalizeItems(items: Array<{ label: string; pageId: string }>): NavigationItem[] {
+  private normalizeItems(
+    items: Array<{ label: string; pageId: string }>,
+  ): NavigationItem[] {
     return items.map((item) => ({
       label: item.label.trim(),
       pageId: item.pageId,
     }));
   }
 
-  private normalizeCta(cta?: { label: string; href: string } | null): NavigationCta | undefined {
+  private normalizeCta(
+    cta?: { label: string; href: string } | null,
+  ): NavigationCta | undefined {
     if (!cta) return undefined;
 
     return {
@@ -46,13 +51,23 @@ export class NavigationService {
     const invalid = params.items.find((item) => !validPageIds.has(item.pageId));
 
     if (invalid) {
-      throw new InvalidPageReferenceException('One or more pageIds do not belong to this project');
+      throw new InvalidPageReferenceException(
+        'One or more pageIds do not belong to this project',
+      );
     }
   }
 
-  private toResponse(nav: NavigationDocument | null): { items: NavigationItem[]; cta?: NavigationCta } {
-    const items = Array.isArray(nav?.itemsJson) ? (nav?.itemsJson as NavigationItem[]) : [];
-    const cta = nav?.ctaJson && typeof nav.ctaJson === 'object' ? (nav.ctaJson as NavigationCta) : undefined;
+  private toResponse(nav: NavigationDocument | null): {
+    items: NavigationItem[];
+    cta?: NavigationCta;
+  } {
+    const items = Array.isArray(nav?.itemsJson)
+      ? (nav?.itemsJson as NavigationItem[])
+      : [];
+    const cta =
+      nav?.ctaJson && typeof nav.ctaJson === 'object'
+        ? (nav.ctaJson as NavigationCta)
+        : undefined;
 
     return {
       items,
@@ -60,7 +75,11 @@ export class NavigationService {
     };
   }
 
-  async getOrCreateByProject(params: { tenantId: string; projectId: string; ownerUserId: string }) {
+  async getOrCreateByProject(params: {
+    tenantId: string;
+    projectId: string;
+    ownerUserId: string;
+  }) {
     let nav = await this.navigationModel.findOne({
       tenantId: params.tenantId,
       projectId: params.projectId,
@@ -68,8 +87,13 @@ export class NavigationService {
     });
 
     if (!nav) {
-      const pages = await this.pages.listPages({ tenantId: params.tenantId, projectId: params.projectId });
-      const sortedPages = [...pages].sort((a, b) => Number(b.isHome) - Number(a.isHome));
+      const pages = await this.pages.listPages({
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      });
+      const sortedPages = [...pages].sort(
+        (a, b) => Number(b.isHome) - Number(a.isHome),
+      );
 
       const items: NavigationItem[] = sortedPages.map((page) => ({
         label: page.title,

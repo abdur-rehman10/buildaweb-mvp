@@ -15,6 +15,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Types } from 'mongoose';
 import { ok, fail } from '../../common/api-response';
+import { toIdString } from '../../common/to-id-string';
 import { AiGenerationError, AiInvalidJsonError } from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
@@ -22,6 +23,8 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { GenerateProjectDto } from './dto/generate-project.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
+import type { AuthRequest } from '../../types/auth-request';
+import { getAuthContext } from '../../common/auth-context';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -36,11 +39,10 @@ export class ProjectsController {
   }
 
   @Post()
-  async createProject(@Body() dto: CreateProjectDto, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async createProject(@Body() dto: CreateProjectDto, @Req() req: AuthRequest) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    let project;
+    let project: { _id: unknown };
     try {
       project = await this.projects.create({
         tenantId,
@@ -58,17 +60,16 @@ export class ProjectsController {
       throw error;
     }
 
-    return ok({ project_id: String(project._id) });
+    return ok({ project_id: toIdString(project._id) });
   }
 
   @Post(':projectId/generate')
   async generateProject(
     @Param('projectId') projectId: string,
     @Body() dto: GenerateProjectDto,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
     const prompt = dto.prompt.trim();
 
     if (!prompt) {
@@ -130,9 +131,8 @@ export class ProjectsController {
   }
 
   @Get()
-  async listProjects(@Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async listProjects(@Req() req: AuthRequest) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const projects = await this.projects.listByOwnerWithDraftStatus({
       tenantId,
@@ -146,7 +146,7 @@ export class ProjectsController {
         status: entry.project.status,
         defaultLocale: entry.project.defaultLocale,
         homePageId: entry.project.homePageId
-          ? String(entry.project.homePageId)
+          ? toIdString(entry.project.homePageId)
           : null,
         latestPublishId: entry.project.latestPublishId
           ? String(entry.project.latestPublishId)
@@ -165,9 +165,11 @@ export class ProjectsController {
   }
 
   @Get(':projectId')
-  async getProject(@Param('projectId') projectId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async getProject(
+    @Param('projectId') projectId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const projectResult = await this.projects.getByIdScopedWithDraftStatus({
       tenantId,
@@ -188,7 +190,7 @@ export class ProjectsController {
         name: project.name,
         status: project.status,
         defaultLocale: project.defaultLocale,
-        homePageId: project.homePageId ? String(project.homePageId) : null,
+        homePageId: project.homePageId ? toIdString(project.homePageId) : null,
         latestPublishId: project.latestPublishId
           ? String(project.latestPublishId)
           : null,
@@ -208,10 +210,9 @@ export class ProjectsController {
   @Get(':projectId/settings')
   async getProjectSettings(
     @Param('projectId') projectId: string,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const settings = await this.projects.getSettings({
       tenantId,
@@ -232,10 +233,9 @@ export class ProjectsController {
   async updateProjectSettings(
     @Param('projectId') projectId: string,
     @Body() dto: UpdateProjectSettingsDto,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const settings = await this.projects.updateSettings({
       tenantId,
@@ -261,7 +261,7 @@ export class ProjectsController {
   async setProjectHomePage(
     @Param('projectId') projectId: string,
     @Body() dto: SetHomePageDto,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
     if (!this.isValidObjectId(projectId)) {
       throw new HttpException(
@@ -270,8 +270,7 @@ export class ProjectsController {
       );
     }
 
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const project = await this.projects.getByIdScoped({
       tenantId,

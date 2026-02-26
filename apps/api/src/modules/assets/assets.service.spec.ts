@@ -48,7 +48,8 @@ describe('AssetsService.listByProjectScoped', () => {
         {
           _id: '507f1f77bcf86cd799439021',
           fileName: 'hero.jpg',
-          storagePath: 'tenants/default/projects/507f1f77bcf86cd799439011/assets/hero.jpg',
+          storagePath:
+            'tenants/default/projects/507f1f77bcf86cd799439011/assets/hero.jpg',
           mimeType: 'image/jpeg',
           sizeBytes: 12345,
           publicUrl: 'http://localhost:9000/bucket/hero.jpg',

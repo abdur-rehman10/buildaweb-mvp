@@ -20,7 +20,9 @@ import { PublishModule } from './modules/publish/publish.module';
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGO_URI') || 'mongodb://localhost:27017/buildaweb',
+        uri:
+          config.get<string>('MONGO_URI') ||
+          'mongodb://localhost:27017/buildaweb',
       }),
     }),
     UsersModule,

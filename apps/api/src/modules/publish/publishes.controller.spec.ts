@@ -31,7 +31,9 @@ describe('PublishesController.listPublishes', () => {
     projects.getByIdScoped.mockResolvedValue({ _id: projectId });
     publish.listByProjectScoped.mockResolvedValue([]);
 
-    const res = await controller.listPublishes(projectId, undefined, { user: { sub: ownerUserId, tenantId } });
+    const res = await controller.listPublishes(projectId, undefined, {
+      user: { sub: ownerUserId, tenantId },
+    });
 
     expect(publish.listByProjectScoped).toHaveBeenCalledWith({
       tenantId,
@@ -66,7 +68,9 @@ describe('PublishesController.listPublishes', () => {
       },
     ]);
 
-    const res = await controller.listPublishes(projectId, '10', { user: { sub: ownerUserId, tenantId } });
+    const res = await controller.listPublishes(projectId, '10', {
+      user: { sub: ownerUserId, tenantId },
+    });
 
     expect(res).toEqual({
       ok: true,
@@ -93,7 +97,9 @@ describe('PublishesController.listPublishes', () => {
     projects.getByIdScoped.mockResolvedValue({ _id: projectId });
     publish.listByProjectScoped.mockResolvedValue([]);
 
-    await controller.listPublishes(projectId, '3', { user: { sub: ownerUserId, tenantId } });
+    await controller.listPublishes(projectId, '3', {
+      user: { sub: ownerUserId, tenantId },
+    });
 
     expect(publish.listByProjectScoped).toHaveBeenCalledWith({
       tenantId,
@@ -107,7 +113,9 @@ describe('PublishesController.listPublishes', () => {
     projects.getByIdScoped.mockResolvedValue(null);
 
     await expect(
-      controller.listPublishes(projectId, undefined, { user: { sub: ownerUserId, tenantId } }),
+      controller.listPublishes(projectId, undefined, {
+        user: { sub: ownerUserId, tenantId },
+      }),
     ).rejects.toMatchObject({
       status: 404,
       response: {

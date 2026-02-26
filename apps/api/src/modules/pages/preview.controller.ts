@@ -21,6 +21,7 @@ import {
 import { ProjectsService } from '../projects/projects.service';
 import { PagesService } from './pages.service';
 import { PreviewRendererService } from './preview-renderer.service';
+import type { AuthRequest } from '../../types/auth-request';
 
 @Controller('projects/:projectId/preview')
 @UseGuards(JwtAuthGuard)
@@ -330,7 +331,7 @@ export class PreviewController {
   @Get()
   async previewHome(
     @Param('projectId') projectId: string,
-    @Req() req: Request,
+    @Req() req: AuthRequest,
   ) {
     return this.renderPreview({
       projectId,
@@ -344,7 +345,7 @@ export class PreviewController {
   async previewBySlugWithIndex(
     @Param('projectId') projectId: string,
     @Param('slug') slug: string,
-    @Req() req: Request,
+    @Req() req: AuthRequest,
   ) {
     return this.renderPreview({
       projectId,
@@ -358,7 +359,7 @@ export class PreviewController {
   async previewPage(
     @Param('projectId') projectId: string,
     @Param('pageRef') pageRef: string,
-    @Req() req: Request,
+    @Req() req: AuthRequest,
   ) {
     return this.renderPreview({
       projectId,

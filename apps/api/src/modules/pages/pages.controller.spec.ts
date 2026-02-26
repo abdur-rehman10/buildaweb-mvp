@@ -72,7 +72,9 @@ describe('PagesController.updatePage', () => {
   });
 
   it('maps version mismatch to 409 VERSION_CONFLICT', async () => {
-    pages.updatePageJson.mockRejectedValue(new ConflictException('Page version mismatch'));
+    pages.updatePageJson.mockRejectedValue(
+      new ConflictException('Page version mismatch'),
+    );
 
     await expect(
       controller.updatePage(
@@ -142,7 +144,9 @@ describe('PagesController.deletePage', () => {
   });
 
   it('maps version mismatch to 409 VERSION_CONFLICT', async () => {
-    pages.deletePage.mockRejectedValue(new ConflictException('Page version mismatch'));
+    pages.deletePage.mockRejectedValue(
+      new ConflictException('Page version mismatch'),
+    );
 
     await expect(
       controller.deletePage(
@@ -203,7 +207,9 @@ describe('PagesController page responses include seoJson', () => {
       },
     ]);
 
-    const res = await controller.listPages(projectId, { user: { sub: ownerUserId, tenantId } });
+    const res = await controller.listPages(projectId, {
+      user: { sub: ownerUserId, tenantId },
+    });
 
     expect(res).toEqual({
       ok: true,
@@ -236,15 +242,17 @@ describe('PagesController page responses include seoJson', () => {
       updatedAt: new Date('2026-02-09T01:00:00.000Z'),
     });
 
-    const res = await controller.getPage(projectId, pageId, { user: { sub: ownerUserId, tenantId } });
+    const res = await controller.getPage(projectId, pageId, {
+      user: { sub: ownerUserId, tenantId },
+    });
 
-    expect(res).toEqual({
-      ok: true,
-      data: {
-        page: expect.objectContaining({
-          seoJson: { title: 'SEO Home', description: 'Home desc' },
-        }),
-      },
+    expect(res.ok).toBe(true);
+    const page = (res.data as { page?: unknown }).page as
+      | { seoJson?: unknown }
+      | undefined;
+    expect(page?.seoJson).toEqual({
+      title: 'SEO Home',
+      description: 'Home desc',
     });
   });
 

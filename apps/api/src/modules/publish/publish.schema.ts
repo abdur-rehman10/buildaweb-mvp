@@ -16,7 +16,11 @@ export class Publish {
   @Prop({ required: true })
   ownerUserId!: string;
 
-  @Prop({ required: true, enum: ['publishing', 'live', 'failed'], default: 'publishing' })
+  @Prop({
+    required: true,
+    enum: ['publishing', 'live', 'failed'],
+    default: 'publishing',
+  })
   status!: 'publishing' | 'live' | 'failed';
 
   @Prop({ required: true })
@@ -34,4 +38,9 @@ export class Publish {
 
 export const PublishSchema = SchemaFactory.createForClass(Publish);
 
-PublishSchema.index({ tenantId: 1, projectId: 1, ownerUserId: 1, createdAt: -1 });
+PublishSchema.index({
+  tenantId: 1,
+  projectId: 1,
+  ownerUserId: 1,
+  createdAt: -1,
+});

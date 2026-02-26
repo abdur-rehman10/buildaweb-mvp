@@ -22,7 +22,14 @@ describe('PreviewRendererService pretty URLs', () => {
             blocks: [
               {
                 id: 'block-1',
-                nodes: [{ id: 'node-1', type: 'button', label: 'Team', href: '/team' }],
+                nodes: [
+                  {
+                    id: 'node-1',
+                    type: 'button',
+                    label: 'Team',
+                    href: '/team',
+                  },
+                ],
               },
             ],
           },
@@ -70,7 +77,9 @@ describe('PreviewRendererService pretty URLs', () => {
     });
 
     expect(preview.headTags).toContain('<title>SEO Title</title>');
-    expect(preview.headTags).toContain('<meta name="description" content="SEO Description" />');
+    expect(preview.headTags).toContain(
+      '<meta name="description" content="SEO Description" />',
+    );
     expect(preview.headTags).not.toContain('property="og:');
   });
 
@@ -96,14 +105,17 @@ describe('PreviewRendererService pretty URLs', () => {
       pageTitle: 'Page Title',
       siteName: 'Project Site',
       faviconUrl: 'http://localhost:9000/buildaweb/assets/favicon.png',
-      defaultOgImageUrl: 'http://localhost:9000/buildaweb/assets/default-og.png',
+      defaultOgImageUrl:
+        'http://localhost:9000/buildaweb/assets/default-og.png',
       locale: 'fr',
       seoJson: {},
       editorJson: { sections: [] },
     });
 
     expect(preview.headTags).toContain('<title>Project Site</title>');
-    expect(preview.headTags).toContain('<link rel="icon" href="http://localhost:9000/buildaweb/assets/favicon.png" />');
+    expect(preview.headTags).toContain(
+      '<link rel="icon" href="http://localhost:9000/buildaweb/assets/favicon.png" />',
+    );
     expect(preview.headTags).toContain(
       '<meta property="og:image" content="http://localhost:9000/buildaweb/assets/default-og.png" />',
     );

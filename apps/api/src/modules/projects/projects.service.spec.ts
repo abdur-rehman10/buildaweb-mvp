@@ -480,12 +480,9 @@ describe('ProjectsService.draftStatus', () => {
       tenantId: 'default',
       ownerUserId: 'user-1',
     });
-    expect(result).toEqual([
-      {
-        project: expect.objectContaining({ _id: '507f1f77bcf86cd799439100' }),
-        hasUnpublishedChanges: true,
-      },
-    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.hasUnpublishedChanges).toBe(true);
+    expect(result[0]?.project._id).toBe('507f1f77bcf86cd799439100');
   });
 
   it('marks project up to date when current draft matches latest publish snapshot', async () => {
@@ -556,11 +553,8 @@ describe('ProjectsService.draftStatus', () => {
       tenantId: 'default',
       ownerUserId: 'user-1',
     });
-    expect(result).toEqual([
-      {
-        project: expect.objectContaining({ _id: projectId }),
-        hasUnpublishedChanges: false,
-      },
-    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.hasUnpublishedChanges).toBe(false);
+    expect(result[0]?.project._id).toBe(projectId);
   });
 });

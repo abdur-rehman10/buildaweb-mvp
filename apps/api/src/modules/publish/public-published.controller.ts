@@ -1,4 +1,11 @@
-import { Controller, Get, HttpException, HttpStatus, Param, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpException,
+  HttpStatus,
+  Param,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { fail, ok } from '../../common/api-response';
 import { PublishService } from './publish.service';
@@ -9,19 +16,29 @@ export class PublicPublishedController {
 
   @Get('published/:slug')
   async getPublishedMetadata(@Param('slug') slug: string) {
-    const project = await this.publish.getProjectByPublishedSlug({ slug, onlyPublished: false });
+    const project = await this.publish.getProjectByPublishedSlug({
+      slug,
+      onlyPublished: false,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const publishedSlug = typeof project.publishedSlug === 'string' ? project.publishedSlug : slug;
+    const publishedSlug =
+      typeof project.publishedSlug === 'string' ? project.publishedSlug : slug;
     return ok({
       publishedSlug,
       isPublished: project.isPublished === true,
       publishedAt: project.publishedAt ?? null,
       publishedVersion: project.publishedVersion ?? null,
       updatedAt: project.updatedAt ?? null,
-      url: project.isPublished === true ? `/p/${encodeURIComponent(publishedSlug)}/` : null,
+      url:
+        project.isPublished === true
+          ? `/p/${encodeURIComponent(publishedSlug)}/`
+          : null,
     });
   }
 
@@ -41,9 +58,14 @@ export class PublicPublishedController {
   }
 
   private async servePublishedAsset(slug: string, path: string, res: Response) {
-    const published = await this.publish.loadPublishedObjectBySlug({ slug, requestPath: path });
+    const published = await this.publish.loadPublishedObjectBySlug({
+      slug,
+      requestPath: path,
+    });
     if (!published) {
-      res.status(HttpStatus.NOT_FOUND).setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res
+        .status(HttpStatus.NOT_FOUND)
+        .setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.end('Not found');
       return;
     }
@@ -54,7 +76,9 @@ export class PublicPublishedController {
 
     published.stream.on('error', () => {
       if (!res.headersSent) {
-        res.status(HttpStatus.INTERNAL_SERVER_ERROR).end('Failed to load published site');
+        res
+          .status(HttpStatus.INTERNAL_SERVER_ERROR)
+          .end('Failed to load published site');
       } else {
         res.end();
       }
