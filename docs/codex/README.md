@@ -18,3 +18,4 @@ Then, before modifying any directory, check for and read a local `RULES.md` file
   - API: `docs/codex/areas/api.md`
   - Web: `docs/codex/areas/web.md`
   - Infra/CI: `docs/codex/areas/infra.md`
+codex push test 2026-02-26
