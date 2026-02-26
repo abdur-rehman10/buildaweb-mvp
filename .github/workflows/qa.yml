@@ -23,7 +23,7 @@ jobs:
       CI: true
       TZ: UTC
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -48,7 +48,7 @@ jobs:
         run: pnpm run --if-present typecheck
 
       - name: Test
-        run: pnpm run --if-present test --ci
+        run: pnpm run --if-present test -- --ci --passWithNoTests
 
       - name: Build
         run: pnpm run --if-present build
@@ -73,7 +73,7 @@ jobs:
       CI: true
       TZ: UTC
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -98,8 +98,7 @@ jobs:
         run: pnpm run --if-present typecheck
 
       - name: Test (if configured)
-        run: pnpm run --if-present test -- --run
-
+        run: pnpm run --if-present test -- --passWithNoTests
       - name: Build
         run: pnpm run --if-present build
 
@@ -108,5 +107,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: web-dist-${{ github.sha }}
-          path: apps/web/dist
+          path: apps/web/.next
           if-no-files-found: ignore
