@@ -6,6 +6,12 @@ Build a web is an AI Website Builder.
 - Deployment plan: [infra/deploy/PLAN.md](infra/deploy/PLAN.md)
 - AWS ECS setup runbook: [docs/deployment/aws-ecs.md](docs/deployment/aws-ecs.md)
 
+## Contributor Workflow
+
+- Open pull requests **into `develop`** (not `main`).
+- Prefer **squash merges** to keep history clean.
+- Ensure QA checks are green before merging.
+
 ## Local Pretty URL Proxy
 
 For local published-site browsing with pretty URLs, use the Nginx reverse proxy:
