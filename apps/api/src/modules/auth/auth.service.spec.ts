@@ -69,6 +69,7 @@ describe('AuthService password reset flow', () => {
       email: 'new@example.com',
       name: 'New User',
       tenantId: 'default',
+      passwordHash: 'hashed-password',
     });
 
     const result = await service.signup({
@@ -123,7 +124,13 @@ describe('AuthService password reset flow', () => {
   });
 
   it('returns debug token in development for existing user and stores only hash', async () => {
-    users.findByEmail.mockResolvedValue({ _id: '507f1f77bcf86cd799439011' });
+    users.findByEmail.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439011',
+      email: 'user@example.com',
+      tenantId: 'default',
+      passwordHash: 'hashed-password',
+      name: 'User',
+    });
     resetTokenModel.create.mockResolvedValue(undefined);
 
     const result = await service.forgotPassword({ email: 'user@example.com' });
@@ -144,7 +151,13 @@ describe('AuthService password reset flow', () => {
       if (key === 'BCRYPT_SALT_ROUNDS') return '4';
       return undefined;
     });
-    users.findByEmail.mockResolvedValue({ _id: '507f1f77bcf86cd799439011' });
+    users.findByEmail.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439011',
+      email: 'user@example.com',
+      tenantId: 'default',
+      passwordHash: 'hashed-password',
+      name: 'User',
+    });
     resetTokenModel.create.mockResolvedValue(undefined);
 
     const result = await service.forgotPassword({ email: 'user@example.com' });
