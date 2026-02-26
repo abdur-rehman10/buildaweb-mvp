@@ -1,14 +1,41 @@
-## Summary
+<!--
+Title guidance: include related PLAN step/task ID when applicable.
+Example: feat(api): add X (PLAN Step 4)
+-->
 
-<!-- What changed and why? -->
+## A) Summary (what/why)
 
-## Validation
+<!-- What changed, and why is this needed? -->
 
-- [ ] Relevant tests/checks were run locally or in CI.
-- [ ] If staging-related, smoke tests are ready and verified (`/`, `/api/v1/health`, auth HEAD routes).
-- [ ] No infrastructure changes were introduced for a staging-failure code fix.
+## B) Scope
 
-## Risk and rollback
+### Included
+- 
 
-- [ ] Risk is low and scoped to the intended fix.
-- [ ] Rollback path is clear.
+### Not included
+- 
+
+## C) How to test (commands)
+
+```bash
+# Add exact commands used for verification (lint/test/build)
+```
+
+## D) Checklist
+
+- [ ] I read CODEX_PROMPT.md, AGENTS.md, PLAN.md
+- [ ] Changes are within PLAN.md scope
+- [ ] No direct commits to main
+- [ ] QA is green (lint/test/build)
+- [ ] Docs updated if needed (with triggers listed):
+  - [ ] new module/subsystem
+  - [ ] new env vars
+  - [ ] CI/CD changes
+  - [ ] API contract changes
+  - [ ] new conventions/patterns
+- [ ] PLAN.md updated if task status changed (mark step DONE / update notes)
+
+## E) Risk & rollback notes
+
+- Risk:
+- Rollback:
