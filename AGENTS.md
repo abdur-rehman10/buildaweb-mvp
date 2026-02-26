@@ -41,3 +41,8 @@ Goal: a non-designer can create, edit, and publish a professional website in und
 - Projects and pages must be user-scoped
 - Page save must enforce optimistic concurrency via `version` (`409` on mismatch)
 - Store `editor_json` and `seo_json` as JSON fields (no rendering here)
+
+## Engineering Quality
+- ESLint strict rules are intentional.
+- Fix by adding types, narrowing `unknown`, and using correct async/promise handling.
+- Do not disable rules; do not add `eslint-disable` except with explicit justification and only if unavoidable.
