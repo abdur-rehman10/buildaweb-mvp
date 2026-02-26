@@ -15,7 +15,14 @@ function isProduction() {
 }
 
 function parseOrigins(raw: string) {
-  return [...new Set(raw.split(',').map((origin) => origin.trim()).filter(Boolean))];
+  return [
+    ...new Set(
+      raw
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function validateRequiredEnvForProduction() {
@@ -33,11 +40,15 @@ function validateRequiredEnvForProduction() {
     'CORS_ORIGINS',
   ];
 
-  const missingKeys = requiredKeys.filter((key) => !(process.env[key] ?? '').trim());
+  const missingKeys = requiredKeys.filter(
+    (key) => !(process.env[key] ?? '').trim(),
+  );
   const errors: string[] = [];
 
   if (missingKeys.length > 0) {
-    errors.push(`Missing required env vars for production: ${missingKeys.join(', ')}`);
+    errors.push(
+      `Missing required env vars for production: ${missingKeys.join(', ')}`,
+    );
   }
 
   const corsOrigins = parseOrigins(process.env.CORS_ORIGINS ?? '');
@@ -45,11 +56,19 @@ function validateRequiredEnvForProduction() {
     errors.push('CORS_ORIGINS cannot include "*" in production.');
   }
 
-  const hasMediaPublicBaseUrl = (process.env.MEDIA_PUBLIC_BASE_URL ?? '').trim().length > 0;
-  const hasMinioPublicUrl = (process.env.MINIO_PUBLIC_URL ?? '').trim().length > 0;
-  const hasMinioPublicBaseUrl = (process.env.MINIO_PUBLIC_BASE_URL ?? '').trim().length > 0;
+  const hasMediaPublicBaseUrl =
+    (process.env.MEDIA_PUBLIC_BASE_URL ?? '').trim().length > 0;
+  const hasMinioPublicUrl =
+    (process.env.MINIO_PUBLIC_URL ?? '').trim().length > 0;
+  const hasMinioPublicBaseUrl =
+    (process.env.MINIO_PUBLIC_BASE_URL ?? '').trim().length > 0;
   const hasPublicAppUrl = (process.env.PUBLIC_APP_URL ?? '').trim().length > 0;
-  if (!hasMediaPublicBaseUrl && !hasMinioPublicUrl && !hasMinioPublicBaseUrl && !hasPublicAppUrl) {
+  if (
+    !hasMediaPublicBaseUrl &&
+    !hasMinioPublicUrl &&
+    !hasMinioPublicBaseUrl &&
+    !hasPublicAppUrl
+  ) {
     errors.push(
       'Set one of MEDIA_PUBLIC_BASE_URL, MINIO_PUBLIC_URL, MINIO_PUBLIC_BASE_URL, or PUBLIC_APP_URL in production for browser-accessible asset URLs.',
     );
@@ -78,12 +97,17 @@ async function bootstrap() {
 
   // REST base prefix
   app.setGlobalPrefix('api/v1');
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
+  );
 
   const port = process.env.PORT ? Number(process.env.PORT) : 4000;
   await app.listen(port, '0.0.0.0');
-  // eslint-disable-next-line no-console
+
   console.log(`API running on http://localhost:${port}/api/v1`);
 }
 
-bootstrap();
+bootstrap().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});
