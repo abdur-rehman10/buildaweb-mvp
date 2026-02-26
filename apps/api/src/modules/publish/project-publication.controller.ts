@@ -1,8 +1,18 @@
-import { Controller, HttpException, HttpStatus, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  HttpException,
+  HttpStatus,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
 import { PublishService } from './publish.service';
+import type { Request } from 'express';
+import { getAuthContext } from '../../common/auth-context';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -13,18 +23,34 @@ export class ProjectPublicationController {
   ) {}
 
   @Post(':projectId/unpublish')
-  async unpublishProject(@Param('projectId') projectId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async unpublishProject(
+    @Param('projectId') projectId: string,
+    @Req() req: Request,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const updated = await this.publish.unpublishProject({ tenantId, ownerUserId, projectId });
+    const updated = await this.publish.unpublishProject({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!updated) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return ok({

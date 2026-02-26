@@ -1,16 +1,18 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { ConfigService } from '@nestjs/config';
-
-export type JwtPayload = { sub: string; tenantId: string };
+import type { AppUserPrincipal } from '../../auth/types/app-user-principal';
+import type { JwtPayload } from '../../auth/types/jwt-payload';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {
     const secret = config.get<string>('JWT_SECRET');
     if (!secret) {
-      throw new Error('Missing JWT_SECRET. Set it in apps/api/.env or environment variables.');
+      throw new Error(
+        'Missing JWT_SECRET. Set it in apps/api/.env or environment variables.',
+      );
     }
 
     super({
@@ -19,8 +21,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  validate(payload: JwtPayload) {
-    // attaches to req.user
-    return payload;
+  validate(payload: JwtPayload): AppUserPrincipal {
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      roles: payload.roles,
+      tenantId: payload.tenantId,
+    };
   }
 }

@@ -22,6 +22,8 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { GenerateProjectDto } from './dto/generate-project.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
 import { UpdateProjectSettingsDto } from './dto/update-project-settings.dto';
+import type { Request } from 'express';
+import { getAuthContext } from '../../common/auth-context';
 
 @Controller('projects')
 @UseGuards(JwtAuthGuard)
@@ -36,9 +38,8 @@ export class ProjectsController {
   }
 
   @Post()
-  async createProject(@Body() dto: CreateProjectDto, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async createProject(@Body() dto: CreateProjectDto, @Req() req: Request) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     let project;
     try {
@@ -65,10 +66,9 @@ export class ProjectsController {
   async generateProject(
     @Param('projectId') projectId: string,
     @Body() dto: GenerateProjectDto,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
     const prompt = dto.prompt.trim();
 
     if (!prompt) {
@@ -130,9 +130,8 @@ export class ProjectsController {
   }
 
   @Get()
-  async listProjects(@Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async listProjects(@Req() req: Request) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const projects = await this.projects.listByOwnerWithDraftStatus({
       tenantId,
@@ -165,9 +164,8 @@ export class ProjectsController {
   }
 
   @Get(':projectId')
-  async getProject(@Param('projectId') projectId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async getProject(@Param('projectId') projectId: string, @Req() req: Request) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const projectResult = await this.projects.getByIdScopedWithDraftStatus({
       tenantId,
@@ -208,10 +206,9 @@ export class ProjectsController {
   @Get(':projectId/settings')
   async getProjectSettings(
     @Param('projectId') projectId: string,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const settings = await this.projects.getSettings({
       tenantId,
@@ -232,10 +229,9 @@ export class ProjectsController {
   async updateProjectSettings(
     @Param('projectId') projectId: string,
     @Body() dto: UpdateProjectSettingsDto,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const settings = await this.projects.updateSettings({
       tenantId,
@@ -261,7 +257,7 @@ export class ProjectsController {
   async setProjectHomePage(
     @Param('projectId') projectId: string,
     @Body() dto: SetHomePageDto,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
     if (!this.isValidObjectId(projectId)) {
       throw new HttpException(
@@ -270,8 +266,7 @@ export class ProjectsController {
       );
     }
 
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
     const project = await this.projects.getByIdScoped({
       tenantId,

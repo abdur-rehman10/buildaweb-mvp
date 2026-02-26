@@ -12,7 +12,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request } from 'express';
 import { Types } from 'mongoose';
+import { getAuthContext } from '../../common/auth-context';
 import { fail, ok } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
@@ -39,20 +41,32 @@ export class AssetsController {
   }
 
   @Get()
-  async list(@Param('projectId') projectId: string, @Req() req: any) {
+  async list(@Param('projectId') projectId: string, @Req() req: Request) {
     if (!this.isValidObjectId(projectId)) {
-      throw new HttpException(fail('INVALID_PROJECT_ID', 'Invalid project id'), HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        fail('INVALID_PROJECT_ID', 'Invalid project id'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const assets = await this.assets.listByProjectScoped({ tenantId, projectId });
+    const assets = await this.assets.listByProjectScoped({
+      tenantId,
+      projectId,
+    });
     return ok({ assets });
   }
 
@@ -61,26 +75,41 @@ export class AssetsController {
   async upload(
     @Param('projectId') projectId: string,
     @UploadedFile() file: UploadedImageFile | undefined,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     if (!file) {
-      throw new HttpException(fail('FILE_REQUIRED', 'File is required'), HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        fail('FILE_REQUIRED', 'File is required'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     if (!file.mimetype?.startsWith('image/')) {
-      throw new HttpException(fail('INVALID_FILE_TYPE', 'Only image uploads are allowed'), HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        fail('INVALID_FILE_TYPE', 'Only image uploads are allowed'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     if (file.size > MAX_UPLOAD_SIZE_BYTES) {
-      throw new HttpException(fail('FILE_TOO_LARGE', 'Max file size is 5MB'), HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        fail('FILE_TOO_LARGE', 'Max file size is 5MB'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     try {
@@ -92,7 +121,10 @@ export class AssetsController {
 
       return ok(uploaded);
     } catch {
-      throw new HttpException(fail('UPLOAD_FAILED', 'Failed to upload asset'), HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        fail('UPLOAD_FAILED', 'Failed to upload asset'),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -100,14 +132,20 @@ export class AssetsController {
   async resolve(
     @Param('projectId') projectId: string,
     @Body() dto: ResolveAssetsDto,
-    @Req() req: any,
+    @Req() req: Request,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const assets = await this.assets.getByIdsScoped({
