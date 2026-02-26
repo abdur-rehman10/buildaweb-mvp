@@ -39,7 +39,9 @@ export class AssetsService {
       return map[mimeType];
     }
 
-    const originalExt = extname(originalName ?? '').replace('.', '').toLowerCase();
+    const originalExt = extname(originalName ?? '')
+      .replace('.', '')
+      .toLowerCase();
     return originalExt || 'bin';
   }
 
@@ -48,7 +50,10 @@ export class AssetsService {
     projectId: string;
     file: UploadImageFile;
   }) {
-    const ext = this.extensionFromMimeType(params.file.mimetype, params.file.originalname);
+    const ext = this.extensionFromMimeType(
+      params.file.mimetype,
+      params.file.originalname,
+    );
     const objectId = randomUUID();
     const storagePath = `tenants/${params.tenantId}/projects/${params.projectId}/assets/${objectId}.${ext}`;
 
@@ -88,7 +93,8 @@ export class AssetsService {
 
     return assets.map((asset) => ({
       id: String(asset._id),
-      fileName: (asset.fileName || '').trim() || basename(asset.storagePath || ''),
+      fileName:
+        (asset.fileName || '').trim() || basename(asset.storagePath || ''),
       mimeType: asset.mimeType ?? null,
       size: asset.sizeBytes,
       publicUrl: asset.publicUrl,
@@ -96,7 +102,11 @@ export class AssetsService {
     }));
   }
 
-  async getByIdScoped(params: { tenantId: string; projectId: string; assetId: string }) {
+  async getByIdScoped(params: {
+    tenantId: string;
+    projectId: string;
+    assetId: string;
+  }) {
     const asset = await this.assetModel
       .findOne({
         _id: params.assetId,
@@ -112,7 +122,11 @@ export class AssetsService {
     return asset;
   }
 
-  async getByIdsScoped(params: { tenantId: string; projectId: string; assetIds: string[] }) {
+  async getByIdsScoped(params: {
+    tenantId: string;
+    projectId: string;
+    assetIds: string[];
+  }) {
     if (params.assetIds.length === 0) {
       return [];
     }

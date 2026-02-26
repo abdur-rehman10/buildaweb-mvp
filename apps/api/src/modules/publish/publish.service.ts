@@ -13,6 +13,7 @@ import { PreviewRendererService } from '../pages/preview-renderer.service';
 import { Project, ProjectDocument } from '../projects/project.schema';
 import { Publish, PublishDocument } from './publish.schema';
 import { buildPublishDraftSnapshot } from './publish-snapshot.util';
+import { toIdString } from '../../common/to-id-string';
 
 export class PublishPreflightError extends Error {
   readonly code = 'PUBLISH_PREFLIGHT_FAILED';
@@ -210,7 +211,7 @@ export class PublishService {
 
       if (
         !conflict ||
-        String((conflict as { _id?: unknown })._id ?? '') === params.projectId
+        toIdString((conflict as { _id?: unknown })._id) === params.projectId
       ) {
         return candidate;
       }
@@ -241,7 +242,7 @@ export class PublishService {
         .exec();
       if (
         !conflict ||
-        String((conflict as { _id?: unknown })._id ?? '') === params.projectId
+        toIdString((conflict as { _id?: unknown })._id) === params.projectId
       )
         return current;
     }

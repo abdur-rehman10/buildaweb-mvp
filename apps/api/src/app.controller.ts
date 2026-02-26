@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
-import { Connection } from 'mongoose';
+import { Connection, ConnectionStates } from 'mongoose';
 
 @Controller()
 export class AppController {
@@ -12,10 +12,10 @@ export class AppController {
   }
 
   @Get('db/ping')
-  async dbPing() {
-    const state = this.connection.readyState; // 1 = connected
+  dbPing() {
+    const state = this.connection.readyState;
     return {
-      ok: state === 1,
+      ok: state === ConnectionStates.connected,
       mongoReadyState: state,
       db: this.connection.name,
       ts: new Date().toISOString(),

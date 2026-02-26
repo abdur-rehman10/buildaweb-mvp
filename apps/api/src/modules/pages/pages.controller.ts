@@ -19,10 +19,16 @@ import { Types } from 'mongoose';
 import { ok, fail } from '../../common/api-response';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from '../projects/projects.service';
-import { LastPageForbiddenException, PageSlugConflictException, PagesService } from './pages.service';
+import {
+  LastPageForbiddenException,
+  PageSlugConflictException,
+  PagesService,
+} from './pages.service';
 import { CreatePageDto } from './dto/create-page.dto';
 import { UpdatePageDto } from './dto/update-page.dto';
 import { UpdatePageMetaDto } from './dto/update-page-meta.dto';
+import type { AuthRequest } from '../../types/auth-request';
+import { getAuthContext } from '../../common/auth-context';
 
 @Controller('projects/:projectId/pages')
 @UseGuards(JwtAuthGuard)
@@ -40,19 +46,32 @@ export class PagesController {
     if (typeof value === 'undefined') return undefined;
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed < 1) {
-      throw new HttpException(fail('INVALID_VERSION', 'Invalid version'), HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        fail('INVALID_VERSION', 'Invalid version'),
+        HttpStatus.BAD_REQUEST,
+      );
     }
     return parsed;
   }
 
   @Post()
-  async createPage(@Param('projectId') projectId: string, @Body() dto: CreatePageDto, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async createPage(
+    @Param('projectId') projectId: string,
+    @Body() dto: CreatePageDto,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
@@ -66,8 +85,14 @@ export class PagesController {
 
       return ok({ page_id: String(page._id) });
     } catch (error) {
-      if (error instanceof PageSlugConflictException || error instanceof ConflictException) {
-        throw new HttpException(fail('SLUG_ALREADY_EXISTS', 'Slug already exists'), HttpStatus.CONFLICT);
+      if (
+        error instanceof PageSlugConflictException ||
+        error instanceof ConflictException
+      ) {
+        throw new HttpException(
+          fail('SLUG_ALREADY_EXISTS', 'Slug already exists'),
+          HttpStatus.CONFLICT,
+        );
       }
 
       throw error;
@@ -75,13 +100,22 @@ export class PagesController {
   }
 
   @Get()
-  async listPages(@Param('projectId') projectId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async listPages(
+    @Param('projectId') projectId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const pages = await this.pages.listPages({ tenantId, projectId });
@@ -89,18 +123,31 @@ export class PagesController {
   }
 
   @Get(':pageId')
-  async getPage(@Param('projectId') projectId: string, @Param('pageId') pageId: string, @Req() req: any) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+  async getPage(
+    @Param('projectId') projectId: string,
+    @Param('pageId') pageId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const page = await this.pages.getPage({ tenantId, projectId, pageId });
     if (!page) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     return ok({ page });
@@ -111,14 +158,20 @@ export class PagesController {
     @Param('projectId') projectId: string,
     @Param('pageId') pageId: string,
     @Body() dto: UpdatePageMetaDto,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
@@ -133,12 +186,21 @@ export class PagesController {
 
       return ok({ page });
     } catch (error) {
-      if (error instanceof PageSlugConflictException || error instanceof ConflictException) {
-        throw new HttpException(fail('SLUG_ALREADY_EXISTS', 'Slug already exists'), HttpStatus.CONFLICT);
+      if (
+        error instanceof PageSlugConflictException ||
+        error instanceof ConflictException
+      ) {
+        throw new HttpException(
+          fail('SLUG_ALREADY_EXISTS', 'Slug already exists'),
+          HttpStatus.CONFLICT,
+        );
       }
 
       if (error instanceof NotFoundException) {
-        throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          fail('NOT_FOUND', 'Not found'),
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       throw error;
@@ -149,18 +211,27 @@ export class PagesController {
   async duplicatePage(
     @Param('projectId') projectId: string,
     @Param('pageId') pageId: string,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
     if (!this.isValidObjectId(projectId) || !this.isValidObjectId(pageId)) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
@@ -181,12 +252,21 @@ export class PagesController {
         },
       });
     } catch (error) {
-      if (error instanceof PageSlugConflictException || error instanceof ConflictException) {
-        throw new HttpException(fail('SLUG_ALREADY_EXISTS', 'Slug already exists'), HttpStatus.CONFLICT);
+      if (
+        error instanceof PageSlugConflictException ||
+        error instanceof ConflictException
+      ) {
+        throw new HttpException(
+          fail('SLUG_ALREADY_EXISTS', 'Slug already exists'),
+          HttpStatus.CONFLICT,
+        );
       }
 
       if (error instanceof NotFoundException) {
-        throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          fail('NOT_FOUND', 'Not found'),
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       throw error;
@@ -198,18 +278,27 @@ export class PagesController {
     @Param('projectId') projectId: string,
     @Param('pageId') pageId: string,
     @Body() dto: UpdatePageDto,
-    @Req() req: any,
+    @Req() req: AuthRequest,
   ) {
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
-      const pagePayload: { editorJson: Record<string, unknown>; seoJson?: Record<string, unknown> | null } = {
+      const pagePayload: {
+        editorJson: Record<string, unknown>;
+        seoJson?: Record<string, unknown> | null;
+      } = {
         editorJson: dto.page,
       };
       if (Object.prototype.hasOwnProperty.call(dto, 'seoJson')) {
@@ -234,7 +323,10 @@ export class PagesController {
       }
 
       if (error instanceof NotFoundException) {
-        throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          fail('NOT_FOUND', 'Not found'),
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       throw error;
@@ -245,24 +337,38 @@ export class PagesController {
   async deletePage(
     @Param('projectId') projectId: string,
     @Param('pageId') pageId: string,
-    @Req() req: any,
+    @Req() req: AuthRequest,
     @Query('version') version?: string,
   ) {
     if (!this.isValidObjectId(projectId) || !this.isValidObjectId(pageId)) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     const parsedVersion = this.parseOptionalVersion(version);
-    const ownerUserId = req.user?.sub as string;
-    const tenantId = (req.user?.tenantId as string | undefined) ?? 'default';
+    const { ownerUserId, tenantId } = getAuthContext(req);
 
-    const project = await this.projects.getByIdScoped({ tenantId, ownerUserId, projectId });
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
     if (!project) {
-      throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
     }
 
     try {
-      await this.pages.deletePage({ tenantId, projectId, pageId, version: parsedVersion });
+      await this.pages.deletePage({
+        tenantId,
+        projectId,
+        pageId,
+        version: parsedVersion,
+      });
       return ok({ deleted: true });
     } catch (error) {
       if (error instanceof ConflictException) {
@@ -280,7 +386,10 @@ export class PagesController {
       }
 
       if (error instanceof NotFoundException) {
-        throw new HttpException(fail('NOT_FOUND', 'Not found'), HttpStatus.NOT_FOUND);
+        throw new HttpException(
+          fail('NOT_FOUND', 'Not found'),
+          HttpStatus.NOT_FOUND,
+        );
       }
 
       throw error;

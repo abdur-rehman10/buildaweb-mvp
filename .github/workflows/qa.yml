@@ -48,7 +48,7 @@ jobs:
         run: pnpm run --if-present typecheck
 
       - name: Test
-        run: pnpm run --if-present test -- --ci
+        run: pnpm run --if-present test --ci
 
       - name: Build
         run: pnpm run --if-present build

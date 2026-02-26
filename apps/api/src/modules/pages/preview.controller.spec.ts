@@ -34,29 +34,37 @@ describe('PreviewController pretty URLs', () => {
     pages = {
       listPages: jest.fn().mockResolvedValue([
         { id: 'page-home', title: 'Home', slug: '/', isHome: true, version: 1 },
-        { id: 'page-about', title: 'About', slug: 'about', isHome: false, version: 1 },
+        {
+          id: 'page-about',
+          title: 'About',
+          slug: 'about',
+          isHome: false,
+          version: 1,
+        },
       ]),
-      getPage: jest.fn().mockImplementation(({ pageId }: { pageId: string }) => {
-        if (pageId === 'page-about') {
-          return Promise.resolve({
-            _id: 'page-about',
-            slug: 'about',
-            isHome: false,
-            editorJson: {
-              sections: [
-                {
-                  blocks: [
-                    {
-                      nodes: [{ type: 'text', content: 'About page' }],
-                    },
-                  ],
-                },
-              ],
-            },
-          });
-        }
-        return Promise.resolve(null);
-      }),
+      getPage: jest
+        .fn()
+        .mockImplementation(({ pageId }: { pageId: string }) => {
+          if (pageId === 'page-about') {
+            return Promise.resolve({
+              _id: 'page-about',
+              slug: 'about',
+              isHome: false,
+              editorJson: {
+                sections: [
+                  {
+                    blocks: [
+                      {
+                        nodes: [{ type: 'text', content: 'About page' }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            });
+          }
+          return Promise.resolve(null);
+        }),
     };
 
     assets = {
@@ -110,7 +118,11 @@ describe('PreviewController pretty URLs', () => {
     const req = { user: { sub: ownerUserId, tenantId } };
 
     const withoutIndex = await controller.previewPage(projectId, 'about', req);
-    const withIndex = await controller.previewBySlugWithIndex(projectId, 'about', req);
+    const withIndex = await controller.previewBySlugWithIndex(
+      projectId,
+      'about',
+      req,
+    );
 
     expect(withIndex).toEqual(withoutIndex);
     expect(previewRenderer.render).toHaveBeenCalledWith(

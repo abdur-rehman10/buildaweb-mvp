@@ -87,24 +87,30 @@ describe('PagesService', () => {
         version: 4,
       };
 
-      pageModel.findOne.mockImplementation((filter: Record<string, unknown>) => {
-        if (filter._id === 'page-1') {
-          return {
-            exec: jest.fn().mockResolvedValue(sourcePage),
-          };
-        }
+      pageModel.findOne.mockImplementation(
+        (filter: Record<string, unknown>) => {
+          if (filter._id === 'page-1') {
+            return {
+              exec: jest.fn().mockResolvedValue(sourcePage),
+            };
+          }
 
-        if (filter.slug === 'home-copy') {
-          return createSelectQueryMock(null);
-        }
+          if (filter.slug === 'home-copy') {
+            return createSelectQueryMock(null);
+          }
 
-        throw new Error(`Unexpected findOne filter: ${JSON.stringify(filter)}`);
-      });
+          throw new Error(
+            `Unexpected findOne filter: ${JSON.stringify(filter)}`,
+          );
+        },
+      );
 
-      pageModel.create.mockImplementation(async (payload: Record<string, unknown>) => ({
-        _id: 'page-2',
-        ...payload,
-      }));
+      pageModel.create.mockImplementation((payload: Record<string, unknown>) =>
+        Promise.resolve({
+          _id: 'page-2',
+          ...payload,
+        }),
+      );
 
       const duplicated = await service.duplicatePage({
         tenantId: 'default',
@@ -115,7 +121,11 @@ describe('PagesService', () => {
       expect(duplicated.slug).toBe('home-copy');
       expect(pageModel.create).toHaveBeenCalledTimes(1);
 
-      const createPayload = pageModel.create.mock.calls[0][0] as Record<string, unknown>;
+      const createMock = pageModel.create as jest.Mock<
+        unknown,
+        [Record<string, unknown>]
+      >;
+      const createPayload = createMock.mock.calls[0]?.[0] ?? {};
       expect(createPayload.title).toBe(sourcePage.title);
       expect(createPayload.isHome).toBe(false);
       expect(createPayload.version).toBe(1);
@@ -136,32 +146,38 @@ describe('PagesService', () => {
         seoJson: {},
       };
 
-      pageModel.findOne.mockImplementation((filter: Record<string, unknown>) => {
-        if (filter._id === 'page-1') {
-          return {
-            exec: jest.fn().mockResolvedValue(sourcePage),
-          };
-        }
+      pageModel.findOne.mockImplementation(
+        (filter: Record<string, unknown>) => {
+          if (filter._id === 'page-1') {
+            return {
+              exec: jest.fn().mockResolvedValue(sourcePage),
+            };
+          }
 
-        if (filter.slug === 'home-copy') {
-          return createSelectQueryMock({ _id: 'existing-1' });
-        }
+          if (filter.slug === 'home-copy') {
+            return createSelectQueryMock({ _id: 'existing-1' });
+          }
 
-        if (filter.slug === 'home-copy-2') {
-          return createSelectQueryMock({ _id: 'existing-2' });
-        }
+          if (filter.slug === 'home-copy-2') {
+            return createSelectQueryMock({ _id: 'existing-2' });
+          }
 
-        if (filter.slug === 'home-copy-3') {
-          return createSelectQueryMock(null);
-        }
+          if (filter.slug === 'home-copy-3') {
+            return createSelectQueryMock(null);
+          }
 
-        throw new Error(`Unexpected findOne filter: ${JSON.stringify(filter)}`);
-      });
+          throw new Error(
+            `Unexpected findOne filter: ${JSON.stringify(filter)}`,
+          );
+        },
+      );
 
-      pageModel.create.mockImplementation(async (payload: Record<string, unknown>) => ({
-        _id: 'page-3',
-        ...payload,
-      }));
+      pageModel.create.mockImplementation((payload: Record<string, unknown>) =>
+        Promise.resolve({
+          _id: 'page-3',
+          ...payload,
+        }),
+      );
 
       const duplicated = await service.duplicatePage({
         tenantId: 'default',
@@ -329,26 +345,44 @@ describe('PagesService', () => {
         _id: 'page-2',
       };
 
-      pageModel.findOne.mockImplementation((filter: Record<string, unknown>) => {
-        if (filter._id === 'page-1') {
-          return {
-            exec: jest.fn().mockResolvedValue(existingPage),
-          };
-        }
+      pageModel.findOne.mockImplementation(
+        (filter: Record<string, unknown>) => {
+          if (filter._id === 'page-1') {
+            return {
+              exec: jest.fn().mockResolvedValue(existingPage),
+            };
+          }
 
-        if (!filter._id && filter.tenantId === 'default' && filter.projectId === 'project-1') {
-          return createFindOneWithSortMock(earliestRemainingPage);
-        }
+          if (
+            !filter._id &&
+            filter.tenantId === 'default' &&
+            filter.projectId === 'project-1'
+          ) {
+            return createFindOneWithSortMock(earliestRemainingPage);
+          }
 
-        throw new Error(`Unexpected findOne filter: ${JSON.stringify(filter)}`);
-      });
+          throw new Error(
+            `Unexpected findOne filter: ${JSON.stringify(filter)}`,
+          );
+        },
+      );
 
       pageModel.countDocuments.mockResolvedValue(2);
-      pageModel.deleteOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ deletedCount: 1 }) });
-      pageModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
-      pageModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
-      navigationModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
-      projectModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
+      pageModel.deleteOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ deletedCount: 1 }),
+      });
+      pageModel.updateMany.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
+      pageModel.updateOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
+      navigationModel.updateMany.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
+      projectModel.updateOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
 
       await service.deletePage({
         tenantId: 'default',
@@ -442,25 +476,41 @@ describe('PagesService', () => {
         version: 2,
       };
 
-      pageModel.findOne.mockImplementation((filter: Record<string, unknown>) => {
-        if (filter._id === 'page-1') {
-          return {
-            exec: jest.fn().mockResolvedValue(existingPage),
-          };
-        }
+      pageModel.findOne.mockImplementation(
+        (filter: Record<string, unknown>) => {
+          if (filter._id === 'page-1') {
+            return {
+              exec: jest.fn().mockResolvedValue(existingPage),
+            };
+          }
 
-        if (!filter._id && filter.tenantId === 'default' && filter.projectId === 'project-1') {
-          return createFindOneWithSortMock(null);
-        }
+          if (
+            !filter._id &&
+            filter.tenantId === 'default' &&
+            filter.projectId === 'project-1'
+          ) {
+            return createFindOneWithSortMock(null);
+          }
 
-        throw new Error(`Unexpected findOne filter: ${JSON.stringify(filter)}`);
-      });
+          throw new Error(
+            `Unexpected findOne filter: ${JSON.stringify(filter)}`,
+          );
+        },
+      );
 
       pageModel.countDocuments.mockResolvedValue(2);
-      pageModel.deleteOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ deletedCount: 1 }) });
-      pageModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
-      navigationModel.updateMany.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
-      projectModel.updateOne.mockReturnValue({ exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }) });
+      pageModel.deleteOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ deletedCount: 1 }),
+      });
+      pageModel.updateMany.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
+      navigationModel.updateMany.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
+      projectModel.updateOne.mockReturnValue({
+        exec: jest.fn().mockResolvedValue({ modifiedCount: 1 }),
+      });
 
       await service.deletePage({
         tenantId: 'default',

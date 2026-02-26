@@ -61,6 +61,19 @@ describe('PublishService pretty URLs', () => {
     ownerUserId: 'user-1',
   };
 
+  const uploadCalls = (): Array<{ objectPath: string; buffer: Buffer }> => {
+    const calls = minio.upload.mock.calls as Array<[unknown]>;
+    return calls
+      .map((call) => call[0])
+      .filter(
+        (value): value is { objectPath: string; buffer: Buffer } =>
+          !!value &&
+          typeof value === 'object' &&
+          typeof (value as { objectPath?: unknown }).objectPath === 'string' &&
+          (value as { buffer?: unknown }).buffer instanceof Buffer,
+      );
+  };
+
   beforeEach(() => {
     const publishDoc = {
       _id: '507f1f77bcf86cd799439011',
@@ -247,12 +260,17 @@ describe('PublishService pretty URLs', () => {
       mockLeanExec({ itemsJson: [] }),
     );
 
-    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
-      code: 'PUBLISH_PREFLIGHT_FAILED',
-      details: expect.arrayContaining([
-        expect.stringContaining('Duplicate slug "about"'),
-      ]),
-    });
+    try {
+      await service.createAndPublish(baseParams);
+      throw new Error('Expected preflight error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const details = (error as { details?: unknown }).details;
+      expect(Array.isArray(details)).toBe(true);
+      expect(
+        (details as string[]).some((d) => d.includes('Duplicate slug "about"')),
+      ).toBe(true);
+    }
 
     expect(publishModel.create).not.toHaveBeenCalled();
     expect(minio.upload).not.toHaveBeenCalled();
@@ -274,12 +292,19 @@ describe('PublishService pretty URLs', () => {
       mockLeanExec({ itemsJson: [] }),
     );
 
-    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
-      code: 'PUBLISH_PREFLIGHT_FAILED',
-      details: expect.arrayContaining([
-        expect.stringContaining('Exactly one home page is required'),
-      ]),
-    });
+    try {
+      await service.createAndPublish(baseParams);
+      throw new Error('Expected preflight error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const details = (error as { details?: unknown }).details;
+      expect(Array.isArray(details)).toBe(true);
+      expect(
+        (details as string[]).some((d) =>
+          d.includes('Exactly one home page is required'),
+        ),
+      ).toBe(true);
+    }
 
     expect(publishModel.create).not.toHaveBeenCalled();
   });
@@ -291,12 +316,19 @@ describe('PublishService pretty URLs', () => {
       }),
     );
 
-    await expect(service.createAndPublish(baseParams)).rejects.toMatchObject({
-      code: 'PUBLISH_PREFLIGHT_FAILED',
-      details: expect.arrayContaining([
-        expect.stringContaining('Navigation item 1 references missing pageId'),
-      ]),
-    });
+    try {
+      await service.createAndPublish(baseParams);
+      throw new Error('Expected preflight error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const details = (error as { details?: unknown }).details;
+      expect(Array.isArray(details)).toBe(true);
+      expect(
+        (details as string[]).some((d) =>
+          d.includes('Navigation item 1 references missing pageId'),
+        ),
+      ).toBe(true);
+    }
 
     expect(publishModel.create).not.toHaveBeenCalled();
     expect(minio.upload).not.toHaveBeenCalled();
@@ -308,9 +340,7 @@ describe('PublishService pretty URLs', () => {
     expect(result.status).toBe('live');
     expect(result.url).toBe('http://13.50.101.211/p/main-site');
 
-    const uploads = minio.upload.mock.calls.map(
-      (call) => call[0] as { objectPath: string; buffer: Buffer },
-    );
+    const uploads = uploadCalls();
     const homeUpload = uploads.find((upload) =>
       upload.objectPath.endsWith('/index.html'),
     );
@@ -348,24 +378,26 @@ describe('PublishService pretty URLs', () => {
     expect(css).toContain('.baw-nav{display:flex;gap:12px;padding:12px 0}');
     expect(css).toContain('.baw-nav a{text-decoration:none}');
 
-    expect(projectModel.updateOne).toHaveBeenCalledWith(
-      {
-        _id: 'project-1',
-        tenantId: 'default',
-        ownerUserId: 'user-1',
-      },
-      {
-        $set: {
-          latestPublishId: '507f1f77bcf86cd799439011',
-          isPublished: true,
-          publishedSlug: 'main-site',
-          publishedBucketKey: 'published-sites/main-site/v1',
-          publishedVersion: 1,
-          publishedAt: expect.any(Date),
-          status: 'published',
-        },
-      },
+    expect(projectModel.updateOne).toHaveBeenCalledTimes(1);
+    const updateCall = projectModel.updateOne.mock.calls[0] as
+      | [Record<string, unknown>, { $set?: Record<string, unknown> }]
+      | undefined;
+    expect(updateCall?.[0]).toEqual({
+      _id: 'project-1',
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+    });
+    expect(updateCall?.[1]?.$set?.latestPublishId).toBe(
+      '507f1f77bcf86cd799439011',
     );
+    expect(updateCall?.[1]?.$set?.isPublished).toBe(true);
+    expect(updateCall?.[1]?.$set?.publishedSlug).toBe('main-site');
+    expect(updateCall?.[1]?.$set?.publishedBucketKey).toBe(
+      'published-sites/main-site/v1',
+    );
+    expect(updateCall?.[1]?.$set?.publishedVersion).toBe(1);
+    expect(updateCall?.[1]?.$set?.publishedAt).toBeInstanceOf(Date);
+    expect(updateCall?.[1]?.$set?.status).toBe('published');
   });
 
   it('uses media public base url for publish baseUrl and avoids localhost/127 when configured', async () => {
@@ -377,7 +409,11 @@ describe('PublishService pretty URLs', () => {
     });
 
     const result = await service.createAndPublish(baseParams);
-    const createPayload = publishModel.create.mock.calls[0]?.[0] as {
+    const createMock = publishModel.create as jest.Mock<
+      unknown,
+      [{ baseUrl: string }]
+    >;
+    const createPayload = createMock.mock.calls[0]?.[0] as {
       baseUrl: string;
     };
 
@@ -388,9 +424,7 @@ describe('PublishService pretty URLs', () => {
     expect(createPayload.baseUrl).not.toContain('127.0.0.1');
     expect(createPayload.baseUrl).not.toContain('localhost');
 
-    const uploads = minio.upload.mock.calls.map(
-      (call) => call[0] as { objectPath: string; buffer: Buffer },
-    );
+    const uploads = uploadCalls();
     const homeUpload = uploads.find((upload) =>
       upload.objectPath.endsWith('/index.html'),
     );
@@ -445,9 +479,7 @@ describe('PublishService pretty URLs', () => {
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map(
-      (call) => call[0] as { objectPath: string; buffer: Buffer },
-    );
+    const uploads = uploadCalls();
     const homeUpload = uploads.find((upload) =>
       upload.objectPath.endsWith('/index.html'),
     );
@@ -480,9 +512,7 @@ describe('PublishService pretty URLs', () => {
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map(
-      (call) => call[0] as { objectPath: string; buffer: Buffer },
-    );
+    const uploads = uploadCalls();
     const homeUpload = uploads.find((upload) =>
       upload.objectPath.endsWith('/index.html'),
     );
@@ -516,9 +546,7 @@ describe('PublishService pretty URLs', () => {
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map(
-      (call) => call[0] as { objectPath: string; buffer: Buffer },
-    );
+    const uploads = uploadCalls();
     const homeUpload = uploads.find((upload) =>
       upload.objectPath.endsWith('/index.html'),
     );
@@ -573,9 +601,7 @@ describe('PublishService pretty URLs', () => {
 
     await service.createAndPublish(baseParams);
 
-    const uploads = minio.upload.mock.calls.map(
-      (call) => call[0] as { objectPath: string; buffer: Buffer },
-    );
+    const uploads = uploadCalls();
     const homeUpload = uploads.find((upload) =>
       upload.objectPath.endsWith('/index.html'),
     );

@@ -1,7 +1,14 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Navigation, NavigationDocument } from '../navigation/navigation.schema';
+import {
+  Navigation,
+  NavigationDocument,
+} from '../navigation/navigation.schema';
 import { Project, ProjectDocument } from '../projects/project.schema';
 import { Page, PageDocument } from './page.schema';
 
@@ -12,8 +19,10 @@ export class LastPageForbiddenException extends ConflictException {}
 export class PagesService {
   constructor(
     @InjectModel(Page.name) private readonly pageModel: Model<PageDocument>,
-    @InjectModel(Navigation.name) private readonly navigationModel: Model<NavigationDocument>,
-    @InjectModel(Project.name) private readonly projectModel: Model<ProjectDocument>,
+    @InjectModel(Navigation.name)
+    private readonly navigationModel: Model<NavigationDocument>,
+    @InjectModel(Project.name)
+    private readonly projectModel: Model<ProjectDocument>,
   ) {}
 
   private normalizeSlug(slug: string) {
@@ -28,10 +37,19 @@ export class PagesService {
   }
 
   private isDuplicateKeyError(error: unknown) {
-    return !!(error && typeof error === 'object' && 'code' in error && (error as { code?: number }).code === 11000);
+    return !!(
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: number }).code === 11000
+    );
   }
 
-  private async slugExists(params: { tenantId: string; projectId: string; slug: string }) {
+  private async slugExists(params: {
+    tenantId: string;
+    projectId: string;
+    slug: string;
+  }) {
     const existing = await this.pageModel
       .findOne({
         tenantId: params.tenantId,
@@ -45,7 +63,11 @@ export class PagesService {
     return !!existing;
   }
 
-  private async generateDuplicateSlug(params: { tenantId: string; projectId: string; sourceSlug: string }) {
+  private async generateDuplicateSlug(params: {
+    tenantId: string;
+    projectId: string;
+    sourceSlug: string;
+  }) {
     const sourceSlug = this.normalizeSlug(params.sourceSlug);
     const baseSlug = `${sourceSlug}-copy`;
     let candidateSlug = baseSlug;
@@ -81,13 +103,23 @@ export class PagesService {
       filter._id = { $ne: params.excludePageId };
     }
 
-    const existing = await this.pageModel.findOne(filter).select('_id').lean().exec();
+    const existing = await this.pageModel
+      .findOne(filter)
+      .select('_id')
+      .lean()
+      .exec();
     if (existing) {
       throw new PageSlugConflictException('Slug already exists');
     }
   }
 
-  async createPage(params: { tenantId: string; projectId: string; title: string; slug: string; isHome?: boolean }) {
+  async createPage(params: {
+    tenantId: string;
+    projectId: string;
+    title: string;
+    slug: string;
+    isHome?: boolean;
+  }) {
     const slug = this.normalizeSlug(params.slug);
     await this.ensureSlugAvailable({
       tenantId: params.tenantId,
@@ -128,18 +160,30 @@ export class PagesService {
       slug: page.slug,
       isHome: page.isHome,
       seoJson:
-        typeof page.seoJson === 'object' && page.seoJson !== null && !Array.isArray(page.seoJson)
-          ? (page.seoJson as Record<string, unknown>)
+        typeof page.seoJson === 'object' &&
+        page.seoJson !== null &&
+        !Array.isArray(page.seoJson)
+          ? page.seoJson
           : {},
       updatedAt: page.updatedAt,
       version: page.version,
     }));
   }
 
-  async getPage(params: { tenantId: string; projectId: string; pageId: string }) {
+  async getPage(params: {
+    tenantId: string;
+    projectId: string;
+    pageId: string;
+  }) {
     return this.pageModel
-      .findOne({ _id: params.pageId, tenantId: params.tenantId, projectId: params.projectId })
-      .select('_id title slug isHome editorJson seoJson version updatedAt createdAt')
+      .findOne({
+        _id: params.pageId,
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      })
+      .select(
+        '_id title slug isHome editorJson seoJson version updatedAt createdAt',
+      )
       .exec();
   }
 
@@ -180,7 +224,11 @@ export class PagesService {
     }
 
     const existing = await this.pageModel
-      .findOne({ _id: params.pageId, tenantId: params.tenantId, projectId: params.projectId })
+      .findOne({
+        _id: params.pageId,
+        tenantId: params.tenantId,
+        projectId: params.projectId,
+      })
       .select('_id version')
       .lean()
       .exec();
@@ -304,7 +352,12 @@ export class PagesService {
     throw new PageSlugConflictException('Slug already exists');
   }
 
-  async deletePage(params: { tenantId: string; projectId: string; pageId: string; version?: number }) {
+  async deletePage(params: {
+    tenantId: string;
+    projectId: string;
+    pageId: string;
+    version?: number;
+  }) {
     const existing = await this.pageModel
       .findOne({
         _id: params.pageId,
@@ -317,7 +370,10 @@ export class PagesService {
       throw new NotFoundException('Page not found');
     }
 
-    if (typeof params.version === 'number' && existing.version !== params.version) {
+    if (
+      typeof params.version === 'number' &&
+      existing.version !== params.version
+    ) {
       throw new ConflictException('Page version mismatch');
     }
 
@@ -330,7 +386,8 @@ export class PagesService {
       throw new LastPageForbiddenException('Cannot delete last remaining page');
     }
 
-    const deletedWasHome = existing.isHome || this.normalizeSlug(existing.slug) === '/';
+    const deletedWasHome =
+      existing.isHome || this.normalizeSlug(existing.slug) === '/';
 
     await this.pageModel
       .deleteOne({

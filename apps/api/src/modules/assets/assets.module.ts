@@ -7,7 +7,10 @@ import { AssetsService } from './assets.service';
 import { MinioService } from './minio.service';
 
 @Module({
-  imports: [MongooseModule.forFeature([{ name: Asset.name, schema: AssetSchema }]), ProjectsModule],
+  imports: [
+    MongooseModule.forFeature([{ name: Asset.name, schema: AssetSchema }]),
+    ProjectsModule,
+  ],
   controllers: [AssetsController],
   providers: [AssetsService, MinioService],
   exports: [AssetsService, MinioService],
