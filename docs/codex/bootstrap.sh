@@ -11,6 +11,20 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
+# Ensure origin uses HTTPS (Codex Cloud blocks SSH:22)
+if [ -n "${GIT_REMOTE_URL:-}" ]; then
+  git remote set-url origin "$GIT_REMOTE_URL" 2>/dev/null || true
+fi
+
+# Configure HTTPS credentials for git push
+if [ -n "${GIT_PAT:-}" ]; then
+  git config --global credential.helper store
+  printf "https://abdur-rehman10:%s@github.com\n" "$GIT_PAT" > ~/.git-credentials
+  chmod 600 ~/.git-credentials
+else
+  echo "[bootstrap] WARNING: GIT_PAT is not set. git push will likely fail."
+fi
+
 # 2) Ensure origin exists
 if ! git remote get-url origin >/dev/null 2>&1; then
   if [ -z "${GIT_REMOTE_URL:-}" ]; then
