@@ -265,3 +265,9 @@ jobs:
             --services "$ECS_SERVICE_WEB" \
             --query 'services[0].events[0:20].[createdAt,message]' \
             --output table || true
+
+      - name: Validate image URIs
+        run: |
+          set -euo pipefail
+          test -n "${{ steps.image.outputs.api_image }}"
+          test -n "${{ steps.image.outputs.web_image }}"      
