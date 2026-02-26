@@ -3,6 +3,15 @@ set -euo pipefail
 
 echo "[bootstrap] repo: $(pwd)"
 
+# Setup SSH for git push
+if [ -n "${CODEX_SSH_PRIVATE_KEY:-}" ]; then
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+  echo "$CODEX_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+  chmod 600 ~/.ssh/id_ed25519
+  ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+fi
+
 # 1) Must be a git repo
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "[bootstrap] ERROR: not inside a git repo."
