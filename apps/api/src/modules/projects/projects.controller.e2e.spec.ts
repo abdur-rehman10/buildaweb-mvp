@@ -84,7 +84,15 @@ describe('ProjectsController single-project enforcement (request)', () => {
           if (!decoded || typeof decoded !== 'object') {
             throw new UnauthorizedException();
           }
-          req.user = decoded as AuthRequest['user'];
+          const claims = decoded as Record<string, unknown>;
+          req.user = {
+            sub: typeof claims.sub === 'string' ? claims.sub : undefined,
+            id: typeof claims.id === 'string' ? claims.id : undefined,
+            tenantId:
+              typeof claims.tenantId === 'string' ? claims.tenantId : undefined,
+            email: typeof claims.email === 'string' ? claims.email : undefined,
+            name: typeof claims.name === 'string' ? claims.name : undefined,
+          };
           return true;
         },
       })

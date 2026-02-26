@@ -1,4 +1,7 @@
 export type AppUserPrincipal = {
-  sub: string;
+  sub?: string;
+  id?: string;
   tenantId?: string;
+  email?: string;
+  name?: string;
 };

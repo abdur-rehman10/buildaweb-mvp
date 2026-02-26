@@ -260,9 +260,17 @@ describe('PublishService pretty URLs', () => {
       mockLeanExec({ itemsJson: [] }),
     );
 
-    await expect(service.createAndPublish(baseParams)).rejects.toThrow(
-      'Duplicate slug "about"',
-    );
+    try {
+      await service.createAndPublish(baseParams);
+      throw new Error('Expected preflight error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const details = (error as { details?: unknown }).details;
+      expect(Array.isArray(details)).toBe(true);
+      expect(
+        (details as string[]).some((d) => d.includes('Duplicate slug "about"')),
+      ).toBe(true);
+    }
 
     expect(publishModel.create).not.toHaveBeenCalled();
     expect(minio.upload).not.toHaveBeenCalled();
@@ -284,9 +292,19 @@ describe('PublishService pretty URLs', () => {
       mockLeanExec({ itemsJson: [] }),
     );
 
-    await expect(service.createAndPublish(baseParams)).rejects.toThrow(
-      'Exactly one home page is required',
-    );
+    try {
+      await service.createAndPublish(baseParams);
+      throw new Error('Expected preflight error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const details = (error as { details?: unknown }).details;
+      expect(Array.isArray(details)).toBe(true);
+      expect(
+        (details as string[]).some((d) =>
+          d.includes('Exactly one home page is required'),
+        ),
+      ).toBe(true);
+    }
 
     expect(publishModel.create).not.toHaveBeenCalled();
   });
@@ -298,9 +316,19 @@ describe('PublishService pretty URLs', () => {
       }),
     );
 
-    await expect(service.createAndPublish(baseParams)).rejects.toThrow(
-      'Navigation item 1 references missing pageId',
-    );
+    try {
+      await service.createAndPublish(baseParams);
+      throw new Error('Expected preflight error');
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const details = (error as { details?: unknown }).details;
+      expect(Array.isArray(details)).toBe(true);
+      expect(
+        (details as string[]).some((d) =>
+          d.includes('Navigation item 1 references missing pageId'),
+        ),
+      ).toBe(true);
+    }
 
     expect(publishModel.create).not.toHaveBeenCalled();
     expect(minio.upload).not.toHaveBeenCalled();

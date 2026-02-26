@@ -23,9 +23,8 @@ export class AuthRateLimitMiddleware implements NestMiddleware {
     return Math.floor(parsed);
   }
 
-  private requestIp(req: Record<string, unknown>) {
-    const forwardedFor = req.headers as Record<string, unknown> | undefined;
-    const xff = forwardedFor?.['x-forwarded-for'];
+  private requestIp(req: Request) {
+    const xff = req.headers['x-forwarded-for'];
     if (typeof xff === 'string' && xff.trim()) {
       const first = xff.split(',')[0]?.trim();
       if (first) return first;
