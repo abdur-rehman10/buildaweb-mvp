@@ -154,3 +154,6 @@ create_download.pem
 docs/mvp-gap-audit.md
 docs/mvp-super-audit.json
 docs/mvp-super-audit.md
+
+# Codex/SSH keys (never commit)
+codex_cloud_id_ed25519*
