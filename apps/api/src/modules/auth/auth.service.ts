@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { JwtSignOptions } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -282,6 +283,8 @@ export class AuthService {
 
   private async signToken(payload: { sub: string; tenantId: string }) {
     const expiresIn = this.config.get<string>('JWT_EXPIRES_IN') ?? '1d';
-    return this.jwt.signAsync(payload, { expiresIn });
+    return this.jwt.signAsync(payload, {
+      expiresIn: expiresIn as JwtSignOptions['expiresIn'],
+    });
   }
 }
