@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { canonicalPageHash } from './canonical-page-hash';
 import { RENDERER_VERSION } from './renderer-version';
+import { repairPayload } from '../ai/repair-pipeline';
+import {
+  previewRenderMode,
+  validatePreviewEditorJson,
+} from './preview-render-validator';
 
 type JsonRecord = Record<string, unknown>;
 type RenderNavLink = { label: string; targetSlug: string };
@@ -11,7 +16,7 @@ const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 @Injectable()
 export class PreviewRendererService {
   private readonly baseCss = `
-.baw-page{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111827;background:#ffffff;max-width:1200px;margin:0 auto;padding:24px;line-height:1.5}
+.baw-page{--baw-color-primary:#111827;--baw-color-background:#ffffff;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--baw-color-primary);background:var(--baw-color-background);max-width:1200px;margin:0 auto;padding:24px;line-height:1.5}
 .baw-nav{display:flex;gap:12px;padding:12px 0}
 .baw-nav a{text-decoration:none}
 .baw-section{margin:0 0 24px}
@@ -217,7 +222,9 @@ export class PreviewRendererService {
         record.content,
         this.readString(record.text, ''),
       );
-      return `<${tag} class="baw-node-text">${this.escapeHtml(text)}</${tag}>`;
+      const id = this.readId(record);
+      const idAttr = id ? ` id="${this.escapeHtml(id)}"` : '';
+      return `<${tag} class="baw-node-text"${idAttr}>${this.escapeHtml(text)}</${tag}>`;
     }
 
     if (type === 'button') {
@@ -233,7 +240,9 @@ export class PreviewRendererService {
           : href.startsWith('/')
             ? this.resolveInternalHref(currentSlug, href, mode)
             : href;
-      return `<a class="baw-node-button" href="${this.escapeHtml(resolvedHref)}">${this.escapeHtml(label)}</a>`;
+      const id = this.readId(record);
+      const idAttr = id ? ` id="${this.escapeHtml(id)}"` : '';
+      return `<a class="baw-node-button"${idAttr} href="${this.escapeHtml(resolvedHref)}">${this.escapeHtml(label)}</a>`;
     }
 
     if (type === 'image') {
@@ -246,7 +255,9 @@ export class PreviewRendererService {
         : this.readString(record.src, this.readString(record.url, '')) ||
           IMAGE_PLACEHOLDER_SRC;
       const alt = this.readString(record.alt, 'Image');
-      return `<img class="baw-node-image" src="${this.escapeHtml(src)}" alt="${this.escapeHtml(alt)}" />`;
+      const id = this.readId(record);
+      const idAttr = id ? ` id="${this.escapeHtml(id)}"` : '';
+      return `<img class="baw-node-image"${idAttr} src="${this.escapeHtml(src)}" alt="${this.escapeHtml(alt)}" />`;
     }
 
     return `<!-- Unknown node type: ${this.escapeHtml(type || 'unknown')} -->`;
@@ -265,7 +276,9 @@ export class PreviewRendererService {
     const nodes = this.asArray(record.nodes)
       .map((node) => this.renderNode(node, assetUrlById, currentSlug, mode))
       .join('');
-    const attr = blockId ? ` data-block="${this.escapeHtml(blockId)}"` : '';
+    const attr = blockId
+      ? ` data-block="${this.escapeHtml(blockId)}" id="${this.escapeHtml(blockId)}"`
+      : '';
     return `<div class="baw-block"${attr}>${nodes}</div>`;
   }
 
@@ -284,7 +297,7 @@ export class PreviewRendererService {
       .map((block) => this.renderBlock(block, assetUrlById, currentSlug, mode))
       .join('');
     const attr = sectionId
-      ? ` data-section="${this.escapeHtml(sectionId)}"`
+      ? ` data-section="${this.escapeHtml(sectionId)}" id="${this.escapeHtml(sectionId)}"`
       : '';
     return `<section class="baw-section"${attr}>${blocks}</section>`;
   }
@@ -355,6 +368,96 @@ export class PreviewRendererService {
     return tags.join('\n');
   }
 
+  private toCssProp(name: string): string | null {
+    const allowed = new Set([
+      'color',
+      'backgroundColor',
+      'fontSize',
+      'fontWeight',
+      'textAlign',
+      'marginTop',
+      'marginBottom',
+      'paddingTop',
+      'paddingBottom',
+      'borderRadius',
+    ]);
+    if (!allowed.has(name)) return null;
+    return name.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+  }
+
+  private tokenVars(tokens: unknown): string[] {
+    const out: string[] = [];
+    const visit = (value: unknown, path: string[]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+      const rec = value as Record<string, unknown>;
+      for (const key of Object.keys(rec).sort((a, b) => a.localeCompare(b))) {
+        const next = rec[key];
+        const p = [...path, key.toLowerCase().replace(/[^a-z0-9_-]/g, '-')];
+        if (typeof next === 'string' || typeof next === 'number') {
+          out.push(`--baw-${p.join('-')}:${String(next)};`);
+        } else {
+          visit(next, p);
+        }
+      }
+    };
+    visit(tokens, []);
+    return out;
+  }
+
+  private collectStyleRules(editorJson: unknown): string[] {
+    const page = this.asRecord(editorJson) ?? {};
+    const sections = this.asArray(page.sections);
+    const rules: string[] = [];
+
+    const apply = (id: string, style: unknown) => {
+      const styleRec = this.asRecord(style);
+      if (!id || !styleRec) return;
+      const declarations = Object.keys(styleRec)
+        .sort((a, b) => a.localeCompare(b))
+        .map((key) => {
+          const prop = this.toCssProp(key);
+          if (!prop) return '';
+          const value = styleRec[key];
+          if (typeof value !== 'string' && typeof value !== 'number') return '';
+          return `${prop}:${String(value)};`;
+        })
+        .filter(Boolean)
+        .join('');
+      if (declarations) {
+        rules.push(`#${this.escapeHtml(id)}{${declarations}}`);
+      }
+    };
+
+    for (const section of sections) {
+      const sectionRecord = this.asRecord(section);
+      if (!sectionRecord) continue;
+      apply(this.readId(sectionRecord), sectionRecord.style);
+      const blocks = this.asArray(sectionRecord.blocks);
+      for (const block of blocks) {
+        const blockRecord = this.asRecord(block);
+        if (!blockRecord) continue;
+        apply(this.readId(blockRecord), blockRecord.style);
+        const nodes = this.asArray(blockRecord.nodes);
+        for (const node of nodes) {
+          const nodeRecord = this.asRecord(node);
+          if (!nodeRecord) continue;
+          apply(this.readId(nodeRecord), nodeRecord.style);
+        }
+      }
+    }
+
+    return rules;
+  }
+
+  private normalizeAndValidate(editorJson: unknown): unknown {
+    const mode = previewRenderMode(process.env.PREVIEW_RENDER_VALIDATION_MODE);
+    if (mode === 'repair') {
+      const repaired = repairPayload(editorJson, { fillMissingIds: false });
+      return validatePreviewEditorJson(repaired.repaired);
+    }
+    return validatePreviewEditorJson(editorJson);
+  }
+
   render(params: {
     pageId: string;
     editorJson: unknown;
@@ -369,7 +472,8 @@ export class PreviewRendererService {
     locale?: string;
     linkMode?: LinkRenderMode;
   }) {
-    const pageRecord = this.asRecord(params.editorJson) ?? {};
+    const validatedEditorJson = this.normalizeAndValidate(params.editorJson);
+    const pageRecord = this.asRecord(validatedEditorJson) ?? {};
     const assetUrlById = params.assetUrlById ?? {};
     const navLinks = params.navLinks ?? [];
     const currentSlug = this.normalizeSlug(params.currentSlug ?? '/');
@@ -393,7 +497,12 @@ export class PreviewRendererService {
       .join('');
 
     const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${navHtml}${sections}</div>`;
-    const css = this.baseCss;
+    const tokenVars = this.tokenVars(pageRecord.tokens);
+    const tokenCss = tokenVars.length ? `.baw-page{${tokenVars.join('')}}` : '';
+    const scopedRules = this.collectStyleRules(pageRecord).join('');
+    const css = [this.baseCss, tokenCss, scopedRules]
+      .filter(Boolean)
+      .join('\n');
     const hash = canonicalPageHash({
       tokensJson: {
         navLinks,

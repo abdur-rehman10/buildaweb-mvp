@@ -54,3 +54,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 
 - [x] B4-T01: Canonical hash function implemented with deterministic fixtures.
 - [x] B4-T02: Central renderer version constant wired for preview/hash flow.
+
+- [x] B5-T01: Preview renderer contract `{ html, css, hash }` enforced with pre-render normalize/validate strategy.
+- [x] B5-T02: CSS rules enforced with `--baw-*` tokens, ID-scoped selectors, and stability tests.
