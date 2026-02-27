@@ -51,3 +51,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 
 - [x] B3-T01: Repair pipeline stages implemented with focused unit tests.
 - [x] B3-T02: Strictness strategy (strict vs repair) added with safe strict default.
+
+- [x] B4-T01: Canonical hash function implemented with deterministic fixtures.
+- [x] B4-T02: Central renderer version constant wired for preview/hash flow.

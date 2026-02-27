@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { canonicalPageHash } from './canonical-page-hash';
+import { RENDERER_VERSION } from './renderer-version';
 
 type JsonRecord = Record<string, unknown>;
 type RenderNavLink = { label: string; targetSlug: string };
@@ -288,23 +289,6 @@ export class PreviewRendererService {
     return `<section class="baw-section"${attr}>${blocks}</section>`;
   }
 
-  private stableStringify(value: unknown): string {
-    const visit = (input: unknown): unknown => {
-      if (Array.isArray(input)) return input.map((item) => visit(item));
-      if (input && typeof input === 'object') {
-        const record = input as Record<string, unknown>;
-        const out: Record<string, unknown> = {};
-        for (const key of Object.keys(record).sort()) {
-          out[key] = visit(record[key]);
-        }
-        return out;
-      }
-      return input;
-    };
-
-    return JSON.stringify(visit(value));
-  }
-
   private renderNavigation(
     navLinks: RenderNavLink[],
     currentSlug: string,
@@ -410,19 +394,18 @@ export class PreviewRendererService {
 
     const html = `<div class="baw-page" data-page="${this.escapeHtml(params.pageId)}">${navHtml}${sections}</div>`;
     const css = this.baseCss;
-    const pageJsonString = this.stableStringify(pageRecord);
-    const navString = this.stableStringify(navLinks);
-    const hash = createHash('sha256')
-      .update(
-        pageJsonString +
-          navString +
-          currentSlug +
-          css +
-          headTags +
-          lang +
-          linkMode,
-      )
-      .digest('hex');
+    const hash = canonicalPageHash({
+      tokensJson: {
+        navLinks,
+        currentSlug,
+        css,
+        headTags,
+        lang,
+        linkMode,
+      },
+      pageJson: pageRecord,
+      rendererVersion: RENDERER_VERSION,
+    });
 
     return { html, css, hash, headTags, lang };
   }
