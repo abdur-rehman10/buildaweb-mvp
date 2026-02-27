@@ -168,6 +168,10 @@ export function Dashboard({ onSelectProject, onCreateProject, onLogout }: Dashbo
   if (isNewUser) {
     return (
       <div className="flex items-center justify-center p-6 min-h-[calc(100vh-4rem)]">
+        <div className="w-full max-w-2xl">
+          <div className="w-full text-center mb-8">
+            <h1 className="text-5xl font-extrabold">Welcome to Qwerty</h1>
+          </div>
         <Card className="max-w-2xl w-full p-12 text-center">
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-primary/10 mb-6">
             <Rocket className="h-10 w-10 text-primary" />
@@ -193,12 +197,17 @@ export function Dashboard({ onSelectProject, onCreateProject, onLogout }: Dashbo
             </Button>
           </div>
         </Card>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="p-6">
+      <section className="w-full text-center mb-8">
+        <h1 className="text-5xl font-extrabold">Welcome to Qwerty</h1>
+      </section>
+
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <Card className="p-6">
