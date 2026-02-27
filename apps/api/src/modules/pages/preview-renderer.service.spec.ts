@@ -121,4 +121,50 @@ describe('PreviewRendererService pretty URLs', () => {
     );
     expect(preview.lang).toBe('fr');
   });
+
+  it('always returns html/css/hash contract', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      editorJson: { sections: [] },
+    });
+
+    expect(typeof preview.html).toBe('string');
+    expect(typeof preview.css).toBe('string');
+    expect(typeof preview.hash).toBe('string');
+  });
+
+  it('emits --baw-* token vars and id-scoped CSS rules without inline styles', () => {
+    const preview = service.render({
+      pageId: 'page-home',
+      editorJson: {
+        tokens: { color: { primary: '#123456' } },
+        sections: [
+          {
+            id: 'sec_12345678',
+            style: { marginTop: 12 },
+            blocks: [
+              {
+                id: 'blk_12345678',
+                nodes: [
+                  {
+                    id: 'node_12345678',
+                    type: 'text',
+                    text: 'Hello',
+                    style: { color: '#222222' },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(preview.css).toContain('--baw-color-primary:#123456;');
+    expect(preview.css).toContain('#sec_12345678{margin-top:12;}');
+    expect(preview.css).toContain('#node_12345678{color:#222222;}');
+    expect(preview.html).toContain('id="sec_12345678"');
+    expect(preview.html).toContain('id="node_12345678"');
+    expect(preview.html).not.toContain('style=');
+  });
 });
