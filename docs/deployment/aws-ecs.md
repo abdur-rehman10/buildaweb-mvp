@@ -188,3 +188,27 @@ Container ports:
 - Terraform OIDC config: `infra/iac/oidc/`
 - Terraform ECR config: `infra/iac/ecr/`
 - Terraform logs config: `infra/iac/logs/`
+
+
+## Staging vs Production Routing (ALB Rule Priority)
+
+Environment separation currently uses a single ALB and single ECS cluster:
+- ALB: `alb-baw-prod`
+- ECS cluster: `buildaweb-prod`
+- Staging services: `buildaweb-api-stg-svc`, `buildaweb-web-stg-svc`
+- Production services: `buildaweb-api-svc`, `buildaweb-web-svc`
+- Staging target groups: `buildaweb-api-stg-tg`, `buildaweb-web-stg-tg`
+- Production target groups: `tg-buildaweb-api`, `tg-baw-web`
+
+**Critical rule:** ALB listener rules are evaluated by ascending priority (lowest number first). Staging host rules must have higher precedence than generic path rules, or `staging.buildaweb.ai` can route to production targets.
+
+Recommended rule order:
+1. `Host=staging.buildaweb.ai` AND `Path=/api/*` -> `buildaweb-api-stg-tg`
+2. `Host=staging.buildaweb.ai` AND `Path=/*` -> `buildaweb-web-stg-tg`
+3. `Host=buildaweb.ai` AND `Path=/api/*` -> `tg-buildaweb-api`
+4. `Host=buildaweb.ai` AND `Path=/*` -> `tg-baw-web`
+5. Default action -> `tg-baw-web`
+
+Verification step:
+- Compare `https://staging.buildaweb.ai/api/v1/health` vs `https://buildaweb.ai/api/v1/health`.
+- After a staging-only deployment, `git_sha` should differ between staging and production (and `build_time_utc` should also differ).

@@ -19,3 +19,13 @@
 - Health endpoint expectation: `GET /api/v1/health`.
 - Basic smoke check expectation: frontend root path `GET /`.
 - Keep checks fast, deterministic, and environment-safe.
+
+
+## ALB environment separation reminder
+- Keep staging/prod routing separated by listener rule priority on `alb-baw-prod`.
+- Apply host+path rules in this precedence order:
+  1) `staging.buildaweb.ai` + `/api/*` -> `buildaweb-api-stg-tg`
+  2) `staging.buildaweb.ai` + `/*` -> `buildaweb-web-stg-tg`
+  3) `buildaweb.ai` + `/api/*` -> `tg-buildaweb-api`
+  4) `buildaweb.ai` + `/*` -> `tg-baw-web`
+- Reference: `docs/deployment/aws-ecs.md` section **Staging vs Production Routing (ALB Rule Priority)**.
