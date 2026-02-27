@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -17,8 +18,8 @@ jobs:
     env:
       AWS_REGION: ${{ vars.AWS_REGION }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-      API_SERVICE: ${{ vars.PROD_API_SERVICE }}
-      WEB_SERVICE: ${{ vars.PROD_WEB_SERVICE }}
+      API_SERVICE: buildaweb-api-svc
+      WEB_SERVICE: buildaweb-web-svc
       API_ECR_REPO: ${{ vars.API_ECR_REPO }}
       WEB_ECR_REPO: ${{ vars.WEB_ECR_REPO }}
       DEPLOY_DOMAIN: ${{ vars.PROD_DOMAIN }}
@@ -31,7 +32,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: arn:aws:iam::809683733205:role/GitHubActionsDeployBuildaweb
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Login to Amazon ECR
