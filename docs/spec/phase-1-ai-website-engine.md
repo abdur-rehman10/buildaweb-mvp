@@ -50,7 +50,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 - [ ] R-015: Deterministic fixture harness validates stable html/css/hash snapshots for baseline R-cases.
 - [ ] R-016: Fixture matrix expansion remains deterministic and non-flaky in incremental batches.
 
-
 ## Batch progress
 - [x] B2-T01: Strict schema validator utility implemented with unit tests.
 - [x] B2-T02: AI generation pipeline aligned to strict validation rules with deterministic failure tests.
