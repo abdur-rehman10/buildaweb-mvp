@@ -18,4 +18,12 @@ Then, before modifying any directory, check for and read a local `RULES.md` file
   - API: `docs/codex/areas/api.md`
   - Web: `docs/codex/areas/web.md`
   - Infra/CI: `docs/codex/areas/infra.md`
-codex push test 2026-02-26
+## Session Start
+At the start of every Codex Cloud session, run:
+
+```bash
+bash docs/codex/bootstrap.sh
+```
+
+This verifies git/gh configuration and syncs `develop` before you create a feature branch.
+
