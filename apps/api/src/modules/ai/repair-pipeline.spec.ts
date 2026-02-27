@@ -42,6 +42,49 @@ describe('repair-pipeline', () => {
     expect(asObj.tokenRef).toBe('literal:color.primary');
   });
 
+  it('injects deterministic alt text for image nodes when missing', () => {
+    const { repaired, audit } = repairPayload({
+      type: 'image',
+      src: 'https://example.com/a.png',
+    });
+    const image = repaired as { alt?: string };
+
+    expect(image.alt).toBe('Image');
+    expect(audit.some((entry) => entry.action === 'inject-image-alt')).toBe(
+      true,
+    );
+  });
+
+  it('demotes extra h1 text nodes to h2 deterministically', () => {
+    const input = {
+      sections: [
+        {
+          blocks: [
+            {
+              nodes: [
+                { type: 'text', tag: 'h1', text: 'Heading A' },
+                { type: 'text', tag: 'h1', text: 'Heading B' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { repaired, audit } = repairPayload(input, { fillMissingIds: false });
+    const nodes = (
+      repaired as {
+        sections: Array<{ blocks: Array<{ nodes: Array<{ tag?: string }> }> }>;
+      }
+    ).sections[0].blocks[0].nodes;
+
+    expect(nodes[0].tag).toBe('h1');
+    expect(nodes[1].tag).toBe('h2');
+    expect(audit.some((entry) => entry.action === 'demote-extra-h1')).toBe(
+      true,
+    );
+  });
+
   it('reads strictness mode safely with strict default', () => {
     expect(readStrictnessMode(undefined)).toBe('strict');
     expect(readStrictnessMode('strict')).toBe('strict');

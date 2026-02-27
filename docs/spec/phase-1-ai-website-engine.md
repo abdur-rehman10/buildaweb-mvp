@@ -43,6 +43,8 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 - [ ] R-008: Renderer contract returns `{html, css, hash}` only.
 - [ ] R-009: Publish manifest validation and state transitions.
 - [ ] R-010: Repeat run determinism (same input => same outputs).
+- [ ] R-011: Image accessibility policy enforces non-empty alt text deterministically.
+- [ ] R-012: One-H1-per-page rule enforces deterministic demotion strategy.
 
 
 ## Batch progress
@@ -60,3 +62,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 
 - [x] B6-T01: Publish manifest schema implemented/validated with stable stored values.
 - [x] B6-T02: Publish state transitions logged for auditable state machine traceability.
+
+- [x] B7-T01: Image alt-text determinism enforced via strict validation and repair defaults.
+- [x] B7-T02: One-h1-per-page rule enforced with deterministic extra-h1 demotion.
