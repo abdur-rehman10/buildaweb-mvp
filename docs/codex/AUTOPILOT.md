@@ -31,6 +31,7 @@ Use this mode when the task list is large or pre-sequenced.
 - Always read `docs/codex/MINI_TASKS.md` at the start of a session.
 - If a TASKLIST contains `MINI:Txx` references, execute those mini-tasks exactly as written.
 - Mini-tasks follow the same workflow: branch -> commit -> push -> PR -> auto-merge -> next.
+- At the end of every TASKLIST batch (or after each high-impact task), run `MINI:T03`.
 
 ## Per-app verification expectation
 - If API was touched: run API lint/test/build commands.
@@ -45,4 +46,4 @@ Use this mode when the task list is large or pre-sequenced.
   - Mini-task library usage (`MINI:Txx` additions/changes) and referenced "How to run tasks" steps
 - Weekly maintenance: if changes are minor/doc-only cleanup, batch into a weekly "docs maintenance" PR.
 - Don’t update docs for refactors that do not change commands, workflow, deployment, or developer/Codex steps.
-- If this PR changes the steps someone must follow, update the relevant docs in this PR.
+- “If this PR changes the steps someone must follow, update the relevant docs in this PR.”

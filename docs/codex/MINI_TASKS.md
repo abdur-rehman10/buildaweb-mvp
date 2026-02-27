@@ -53,3 +53,25 @@ When a TASKLIST references `MINI:Txx`, execute that mini-task exactly as written
 - Working tree includes only intended changes.
 - No unexpected untracked files remain before commit/PR.
 - Staging is limited to task-scoped files.
+
+
+---
+
+## MINI:T03 — Docs Consistency Check
+
+### Purpose
+Ensure docs stay aligned with code/process changes and enforce the Docs Update Policy.
+
+### Checklist
+- Run `git diff --name-only origin/develop...HEAD` (or equivalent) and identify whether changes touch:
+  - `.github/workflows` or deployment scripts
+  - `apps/api` or `apps/web` commands/tooling
+  - `docs/codex/*` files
+- If changes touch workflow/CI/deploy/commands and docs were not updated, STOP and report:
+  - exact docs file suggestions that should be updated
+  - short guidance on which section should be added/edited
+- If docs are updated appropriately, report: `Docs consistent ✅`
+
+### Definition of Done
+- The consistency check is documented clearly.
+- `MINI:T03` can be referenced directly from TASKLIST items.
