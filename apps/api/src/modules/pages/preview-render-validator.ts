@@ -44,10 +44,93 @@ const previewEditorSchema = z
   })
   .strict();
 
+function resolveFontSize(node: z.infer<typeof nodeSchema>): number {
+  const direct = node.size;
+  if (typeof direct === 'number') return direct;
+  if (typeof direct === 'string') {
+    const lower = direct.toLowerCase();
+    if (
+      lower === 'h1' ||
+      lower === '3xl' ||
+      lower === '4xl' ||
+      lower === 'display'
+    ) {
+      return 48;
+    }
+    if (lower === 'h2' || lower === '2xl' || lower === 'xl') {
+      return 32;
+    }
+    const parsed = Number.parseFloat(lower);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  const styleFont = node.style?.fontSize;
+  if (typeof styleFont === 'number') return styleFont;
+  if (typeof styleFont === 'string') {
+    const parsed = Number.parseFloat(styleFont);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return 0;
+}
+
+function resolveTextTag(node: z.infer<typeof nodeSchema>): 'h1' | 'h2' | 'p' {
+  const explicitTag = node.tag?.trim().toLowerCase();
+  if (explicitTag === 'h1' || explicitTag === 'h2' || explicitTag === 'p') {
+    return explicitTag;
+  }
+
+  const size = resolveFontSize(node);
+  if (size >= 42) return 'h1';
+  if (size >= 30) return 'h2';
+  return 'p';
+}
+
 export function previewRenderMode(raw: string | undefined) {
   return readStrictnessMode(raw);
 }
 
 export function validatePreviewEditorJson(input: unknown) {
-  return previewEditorSchema.parse(input);
+  return previewEditorSchema
+    .superRefine((value, ctx) => {
+      let h1Count = 0;
+
+      value.sections.forEach((section, sectionIndex) => {
+        section.blocks.forEach((block, blockIndex) => {
+          block.nodes.forEach((node, nodeIndex) => {
+            if (node.type === 'image') {
+              const alt = node.alt?.trim() ?? '';
+              if (!alt) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  path: [
+                    'sections',
+                    sectionIndex,
+                    'blocks',
+                    blockIndex,
+                    'nodes',
+                    nodeIndex,
+                    'alt',
+                  ],
+                  message: 'Image nodes must include non-empty alt text',
+                });
+              }
+            }
+
+            if (node.type === 'text' && resolveTextTag(node) === 'h1') {
+              h1Count += 1;
+            }
+          });
+        });
+      });
+
+      if (h1Count > 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['sections'],
+          message: `Only one h1 is allowed per page, found ${h1Count}`,
+        });
+      }
+    })
+    .parse(input);
 }

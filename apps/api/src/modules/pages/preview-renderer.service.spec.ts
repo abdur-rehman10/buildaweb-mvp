@@ -122,6 +122,62 @@ describe('PreviewRendererService pretty URLs', () => {
     expect(preview.lang).toBe('fr');
   });
 
+  it('rejects missing image alt text in strict mode', () => {
+    const prev = process.env.PREVIEW_RENDER_VALIDATION_MODE;
+    process.env.PREVIEW_RENDER_VALIDATION_MODE = 'strict';
+
+    expect(() =>
+      service.render({
+        pageId: 'page-home',
+        editorJson: {
+          sections: [
+            {
+              blocks: [
+                {
+                  nodes: [
+                    { type: 'image', src: 'https://example.com/image.png' },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toThrow(/alt text/i);
+
+    process.env.PREVIEW_RENDER_VALIDATION_MODE = prev;
+  });
+
+  it('repairs missing alt text and demotes extra h1 in repair mode', () => {
+    const prev = process.env.PREVIEW_RENDER_VALIDATION_MODE;
+    process.env.PREVIEW_RENDER_VALIDATION_MODE = 'repair';
+
+    const preview = service.render({
+      pageId: 'page-home',
+      editorJson: {
+        sections: [
+          {
+            blocks: [
+              {
+                nodes: [
+                  { type: 'text', tag: 'h1', text: 'First' },
+                  { type: 'text', tag: 'h1', text: 'Second' },
+                  { type: 'image', src: 'https://example.com/image.png' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect((preview.html.match(/<h1\b/g) ?? []).length).toBe(1);
+    expect(preview.html).toContain('<h2 class="baw-node-text">Second</h2>');
+    expect(preview.html).toContain('alt="Image"');
+
+    process.env.PREVIEW_RENDER_VALIDATION_MODE = prev;
+  });
+
   it('always returns html/css/hash contract', () => {
     const preview = service.render({
       pageId: 'page-home',

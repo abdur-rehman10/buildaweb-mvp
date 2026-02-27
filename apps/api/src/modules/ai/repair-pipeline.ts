@@ -15,7 +15,9 @@ export interface RepairAuditEntry {
     | 'default-coercion'
     | 'drop-unsafe-field'
     | 'normalize-href'
-    | 'normalize-token-ref';
+    | 'normalize-token-ref'
+    | 'inject-image-alt'
+    | 'demote-extra-h1';
   detail: string;
 }
 
@@ -26,6 +28,10 @@ export interface RepairResult<T = unknown> {
 
 export interface RepairOptions {
   fillMissingIds?: boolean;
+}
+
+interface RepairTraversalState {
+  hasSeenH1: boolean;
 }
 
 function isObject(value: unknown): value is JsonObject {
@@ -51,15 +57,60 @@ function normalizeTokenRef(value: JsonValue): JsonValue {
   return `literal:${value}`;
 }
 
+function resolveFontSize(record: JsonObject): number {
+  const direct = record.size;
+  if (typeof direct === 'number') return direct;
+  if (typeof direct === 'string') {
+    const lower = direct.toLowerCase();
+    if (
+      lower === 'h1' ||
+      lower === '3xl' ||
+      lower === '4xl' ||
+      lower === 'display'
+    ) {
+      return 48;
+    }
+    if (lower === 'h2' || lower === '2xl' || lower === 'xl') {
+      return 32;
+    }
+    const parsed = Number.parseFloat(lower);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  const style = isObject(record.style) ? record.style : null;
+  const fontSize = style?.fontSize;
+  if (typeof fontSize === 'number') return fontSize;
+  if (typeof fontSize === 'string') {
+    const parsed = Number.parseFloat(fontSize);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return 0;
+}
+
+function resolveTextTag(record: JsonObject): 'h1' | 'h2' | 'p' {
+  const explicitTag =
+    typeof record.tag === 'string' ? record.tag.toLowerCase() : '';
+  if (explicitTag === 'h1' || explicitTag === 'h2' || explicitTag === 'p') {
+    return explicitTag;
+  }
+
+  const size = resolveFontSize(record);
+  if (size >= 42) return 'h1';
+  if (size >= 30) return 'h2';
+  return 'p';
+}
+
 function visit(
   value: JsonValue,
   path: string,
   audit: RepairAuditEntry[],
   options: Required<RepairOptions>,
+  state: RepairTraversalState,
 ): JsonValue {
   if (Array.isArray(value)) {
     const next = value.map((entry, index) =>
-      visit(entry, `${path}[${index}]`, audit, options),
+      visit(entry, `${path}[${index}]`, audit, options, state),
     );
     const sorted = [...next].sort((a, b) =>
       JSON.stringify(a).localeCompare(JSON.stringify(b)),
@@ -90,7 +141,7 @@ function visit(
       continue;
     }
 
-    let entry = visit(value[key], currentPath, audit, options);
+    let entry = visit(value[key], currentPath, audit, options, state);
 
     if (key === 'href' && typeof entry === 'string') {
       const normalized = normalizeHref(entry);
@@ -138,6 +189,34 @@ function visit(
     });
   }
 
+  if (
+    next.type === 'image' &&
+    (typeof next.alt !== 'string' || !next.alt.trim())
+  ) {
+    next.alt = 'Image';
+    audit.push({
+      path: path || 'root',
+      action: 'inject-image-alt',
+      detail: 'Injected deterministic default alt text "Image"',
+    });
+  }
+
+  if (next.type === 'text') {
+    const resolvedTag = resolveTextTag(next);
+    if (resolvedTag === 'h1') {
+      if (state.hasSeenH1) {
+        next.tag = 'h2';
+        audit.push({
+          path: path || 'root',
+          action: 'demote-extra-h1',
+          detail: 'Demoted additional h1 node to h2 for one-h1 determinism',
+        });
+      } else {
+        state.hasSeenH1 = true;
+      }
+    }
+  }
+
   return next;
 }
 
@@ -149,7 +228,9 @@ export function repairPayload<T = unknown>(
   const resolved: Required<RepairOptions> = {
     fillMissingIds: options?.fillMissingIds ?? true,
   };
-  const repaired = visit(input as JsonValue, '', audit, resolved) as T;
+  const repaired = visit(input as JsonValue, '', audit, resolved, {
+    hasSeenH1: false,
+  }) as T;
   return { repaired, audit };
 }
 
