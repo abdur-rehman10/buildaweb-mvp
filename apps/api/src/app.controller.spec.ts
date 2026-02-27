@@ -20,6 +20,8 @@ describe('AppController', () => {
       expect(result).toMatchObject({
         ok: true,
         service: 'buildaweb-api',
+        git_sha: 'unknown',
+        build_time_utc: 'unknown',
       });
       expect(result.ts).toEqual(expect.any(String));
     });

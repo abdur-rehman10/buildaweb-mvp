@@ -8,7 +8,13 @@ export class AppController {
 
   @Get('health')
   health() {
-    return { ok: true, service: 'buildaweb-api', ts: new Date().toISOString() };
+    return {
+      ok: true,
+      service: 'buildaweb-api',
+      ts: new Date().toISOString(),
+      git_sha: process.env.GIT_SHA ?? 'unknown',
+      build_time_utc: process.env.BUILD_TIME_UTC ?? 'unknown',
+    };
   }
 
   @Get('db/ping')

@@ -51,6 +51,10 @@ type FilterMode = 'all' | 'published' | 'draft' | 'archived';
 type SortMode = 'date' | 'name' | 'views' | 'status';
 
 export function Dashboard({ onSelectProject, onCreateProject, onLogout }: DashboardProps) {
+
+  const env = import.meta.env as Record<string, string | undefined>;
+  const buildGitSha = env.NEXT_PUBLIC_GIT_SHA ?? 'unknown';
+  const buildTimeUtc = env.NEXT_PUBLIC_BUILD_TIME_UTC ?? 'unknown';
   const [projects] = useState<Project[]>([
     {
       id: '1',
@@ -197,6 +201,7 @@ export function Dashboard({ onSelectProject, onCreateProject, onLogout }: Dashbo
             </Button>
           </div>
         </Card>
+          <p className="mt-4 text-center text-xs text-muted-foreground">Build: {buildGitSha} {buildTimeUtc}</p>
         </div>
       </div>
     );
@@ -592,6 +597,7 @@ export function Dashboard({ onSelectProject, onCreateProject, onLogout }: Dashbo
         onConfirm={handleDeleteConfirm}
         onClose={() => setDeleteConfirm({ isOpen: false, projectId: '', projectName: '' })}
       />
+      <p className="mt-6 text-center text-xs text-muted-foreground">Build: {buildGitSha} {buildTimeUtc}</p>
     </div>
   );
 }
