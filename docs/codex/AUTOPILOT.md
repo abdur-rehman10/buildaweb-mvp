@@ -14,6 +14,11 @@
 ## Long Task List Mode
 Use this mode when the task list is large or pre-sequenced.
 
+### Quickstart
+1. Paste the TASKLIST into the prompt so Codex can track dependencies and status fields.
+2. Execute the next `TODO` task whose dependencies are already `DONE` (lowest task number first).
+3. Create one focused PR per completed task before moving to the next task.
+
 - Execute tasks sequentially (`T01`, `T02`, ...).
 - Use dependency-aware selection from `docs/codex/TASKLIST.template.md`: choose the lowest-numbered task that is not completed, not blocked, and has all dependencies done.
 - Complete one task fully (code + checks + commit) before starting the next.
