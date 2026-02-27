@@ -27,8 +27,8 @@ jobs:
       # Repo Variables (recommended to set these in GitHub → Settings → Secrets and variables → Actions → Variables)
       AWS_REGION: ${{ vars.AWS_REGION || 'eu-north-1' }}
       ECS_CLUSTER: ${{ vars.ECS_CLUSTER || 'buildaweb-prod' }}
-      ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API || 'buildaweb-api-stg-svc' }}
-      ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB || 'buildaweb-web-stg-svc' }}
+      ECS_SERVICE_API: buildaweb-api-stg-svc
+      ECS_SERVICE_WEB: buildaweb-web-stg-svc
       ECR_REPO_API: ${{ vars.ECR_REPO_API || vars.API_ECR_REPO || 'buildaweb-api' }}
       ECR_REPO_WEB: ${{ vars.ECR_REPO_WEB || vars.WEB_ECR_REPO || 'buildaweb-web' }}
 
@@ -36,8 +36,8 @@ jobs:
       ALB_DNS: ${{ vars.ALB_DNS }}
       STAGING_BASE_URL: ${{ vars.STAGING_BASE_URL || 'https://staging.buildaweb.ai' }}
 
-      # Secret (OIDC role)
-      AWS_ROLE_ARN_EFFECTIVE: ${{ secrets.AWS_ROLE_ARN_STAGING || secrets.AWS_ROLE_ARN }}
+      # Staging OIDC role
+      AWS_ROLE_ARN_EFFECTIVE: arn:aws:iam::809683733205:role/github-actions-buildaweb-staging
 
       # Tag images per run
       IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
@@ -51,7 +51,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "${AWS_ROLE_ARN_EFFECTIVE:-}" ]; then
-            echo "::error::Missing required repository secret: AWS_ROLE_ARN_STAGING (or AWS_ROLE_ARN)"
+            echo "::error::Missing required staging role ARN in AWS_ROLE_ARN_EFFECTIVE"
             exit 1
           fi
 
@@ -274,7 +274,7 @@ jobs:
         if: failure() && steps.awscreds.outcome != 'success'
         run: |
           echo "AWS credentials were not configured successfully."
-          echo "Fix AWS_ROLE_ARN_STAGING (or AWS_ROLE_ARN) value + IAM trust policy for GitHub OIDC."
+          echo "Fix IAM trust policy for role github-actions-buildaweb-staging."
 
       - name: Failure summary (ECS events)
         if: failure() && steps.awscreds.outcome == 'success'
