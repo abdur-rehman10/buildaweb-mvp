@@ -6,11 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  AiGeneratedSection,
-  AiGeneratedSite,
-  AiService,
-} from '../ai/ai.service';
+import { AiGeneratedSite, AiService } from '../ai/ai.service';
 import {
   Navigation,
   NavigationDocument,
@@ -43,6 +39,51 @@ type ProjectWithDraftStatus = {
   };
   hasUnpublishedChanges: boolean;
 };
+
+type EditorHeroSection = {
+  type: 'hero';
+  headline: string;
+  subheadline: string;
+  cta: string;
+  imageUrl?: string;
+};
+
+type EditorFeaturesSection = {
+  type: 'features';
+  items: Array<{ title: string; description: string }>;
+};
+
+type EditorTestimonialsSection = {
+  type: 'testimonials';
+  items: Array<{ name: string; quote: string }>;
+};
+
+type EditorPricingSection = {
+  type: 'pricing';
+  headline: string;
+  plans: Array<{ name: string; price: string; features: string[] }>;
+};
+
+type EditorCtaSection = {
+  type: 'cta';
+  headline: string;
+  cta: string;
+  imageUrl?: string;
+};
+
+type EditorFooterSection = {
+  type: 'footer';
+  text: string;
+  links: Array<{ label: string; href: string }>;
+};
+
+type EditorSection =
+  | EditorHeroSection
+  | EditorFeaturesSection
+  | EditorTestimonialsSection
+  | EditorPricingSection
+  | EditorCtaSection
+  | EditorFooterSection;
 
 @Injectable()
 export class ProjectsService {
@@ -106,8 +147,12 @@ export class ProjectsService {
     return `block-${pageIndex + 1}-${sectionIndex + 1}-1`;
   }
 
+  private assertNeverSection(section: never): never {
+    throw new Error(`Unsupported section type: ${JSON.stringify(section)}`);
+  }
+
   private sectionToEditorNodes(params: {
-    section: AiGeneratedSection;
+    section: EditorSection;
     pageIndex: number;
     sectionIndex: number;
   }) {
@@ -180,31 +225,82 @@ export class ProjectsService {
       return nodes;
     }
 
-    nodes.push({
-      id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
-      type: 'text',
-      tag: 'h2',
-      content: section.headline,
-    });
-    nodes.push({
-      id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
-      type: 'button',
-      label: section.cta,
-      href: '#',
-    });
-    if (section.imageUrl) {
-      nodes.push({
-        id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
-        type: 'image',
-        src: section.imageUrl,
-        alt: section.headline,
-      });
+    switch (section.type) {
+      case 'pricing': {
+        const pricingSection = section;
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'h2',
+          content: pricingSection.headline,
+        });
+        pricingSection.plans.forEach((plan) => {
+          nodes.push({
+            id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+            type: 'text',
+            tag: 'h2',
+            content: `${plan.name} — ${plan.price}`,
+          });
+          plan.features.forEach((feature) => {
+            nodes.push({
+              id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+              type: 'text',
+              tag: 'p',
+              content: feature,
+            });
+          });
+        });
+        return nodes;
+      }
+      case 'cta': {
+        const ctaSection = section;
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'h2',
+          content: ctaSection.headline,
+        });
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'button',
+          label: ctaSection.cta,
+          href: '#',
+        });
+        if (ctaSection.imageUrl) {
+          nodes.push({
+            id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+            type: 'image',
+            src: ctaSection.imageUrl,
+            alt: ctaSection.headline,
+          });
+        }
+        return nodes;
+      }
+      case 'footer': {
+        const footerSection = section;
+        nodes.push({
+          id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+          type: 'text',
+          tag: 'p',
+          content: footerSection.text,
+        });
+        footerSection.links.forEach((link) => {
+          nodes.push({
+            id: this.toNodeId(pageIndex, sectionIndex, nodes.length),
+            type: 'button',
+            label: link.label,
+            href: link.href,
+          });
+        });
+        return nodes;
+      }
+      default:
+        return this.assertNeverSection(section);
     }
-    return nodes;
   }
 
   private toEditorJsonFromSections(params: {
-    sections: AiGeneratedSection[];
+    sections: EditorSection[];
     pageIndex: number;
   }) {
     const { sections, pageIndex } = params;
