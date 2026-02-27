@@ -26,6 +26,12 @@ Use this mode when the task list is large or pre-sequenced.
 - Keep each task scoped to its declared files and Definition of Done.
 - At the end, provide a task-by-task completion summary.
 
+
+## Mini-task Library
+- Always read `docs/codex/MINI_TASKS.md` at the start of a session.
+- If a TASKLIST contains `MINI:Txx` references, execute those mini-tasks exactly as written.
+- Mini-tasks follow the same workflow: branch -> commit -> push -> PR -> auto-merge -> next.
+
 ## Per-app verification expectation
 - If API was touched: run API lint/test/build commands.
 - If Web was touched: run Web lint/test/build commands.
