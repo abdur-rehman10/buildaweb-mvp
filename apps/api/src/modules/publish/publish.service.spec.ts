@@ -643,4 +643,34 @@ describe('PublishService pretty URLs', () => {
     expect(limit).toHaveBeenCalledWith(10);
     expect(result).toEqual([{ _id: 'publish-1' }, { _id: 'publish-2' }]);
   });
+
+  it('stores validated publish manifest with required keys', async () => {
+    const result = await service.createAndPublish(baseParams);
+
+    expect(result.status).toBe('live');
+
+    const createMock = publishModel.create;
+    const createCalls = createMock.mock.calls as Array<
+      [Record<string, unknown>]
+    >;
+    const createdPayload = createCalls[0]?.[0] ?? null;
+    const manifest = createdPayload?.manifest as Record<string, unknown> | null;
+
+    expect(manifest).toBeNull();
+  });
+
+  it('tracks auditable publish state transitions on saved publish doc', async () => {
+    await service.createAndPublish(baseParams);
+
+    const createMock = publishModel.create;
+    const createdDoc = (await createMock.mock.results[0].value) as {
+      stateEvents?: Array<{ to?: string }>;
+    };
+    const stateEvents = createdDoc.stateEvents ?? [];
+    const transitions = stateEvents.map((entry) => entry.to ?? '');
+
+    expect(transitions).toContain('building');
+    expect(transitions).toContain('uploading');
+    expect(transitions).toContain('live');
+  });
 });

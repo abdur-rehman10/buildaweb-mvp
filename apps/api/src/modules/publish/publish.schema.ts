@@ -18,10 +18,10 @@ export class Publish {
 
   @Prop({
     required: true,
-    enum: ['publishing', 'live', 'failed'],
-    default: 'publishing',
+    enum: ['pending', 'building', 'uploading', 'live', 'failed'],
+    default: 'pending',
   })
-  status!: 'publishing' | 'live' | 'failed';
+  status!: 'pending' | 'building' | 'uploading' | 'live' | 'failed';
 
   @Prop({ required: true })
   baseUrl!: string;
@@ -31,6 +31,12 @@ export class Publish {
 
   @Prop({ type: SchemaTypes.Mixed, default: null })
   draftSnapshot?: PublishDraftSnapshot | null;
+
+  @Prop({ type: SchemaTypes.Mixed, default: null })
+  manifest?: Record<string, unknown> | null;
+
+  @Prop({ type: [SchemaTypes.Mixed], default: [] })
+  stateEvents!: Array<Record<string, unknown>>;
 
   createdAt?: Date;
   updatedAt?: Date;
