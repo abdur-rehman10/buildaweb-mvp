@@ -36,3 +36,13 @@ Use this mode when the task list is large or pre-sequenced.
 - If API was touched: run API lint/test/build commands.
 - If Web was touched: run Web lint/test/build commands.
 - If workflows/infra were touched: validate YAML syntax and workflow references.
+
+## Docs Update Policy (Required)
+- Update docs in the same PR when changes affect:
+  - Codex workflow (branching, PR base `develop`, merge method, auto-merge, session start steps)
+  - CI/QA commands or working directories (`pnpm --dir ...`, lint/test/build changes)
+  - Deployment flow or environment config (new/changed env vars, secrets, staging/prod pipeline behavior)
+  - Mini-task library usage (`MINI:Txx` additions/changes) and referenced "How to run tasks" steps
+- Weekly maintenance: if changes are minor/doc-only cleanup, batch into a weekly "docs maintenance" PR.
+- Don’t update docs for refactors that do not change commands, workflow, deployment, or developer/Codex steps.
+- If this PR changes the steps someone must follow, update the relevant docs in this PR.
