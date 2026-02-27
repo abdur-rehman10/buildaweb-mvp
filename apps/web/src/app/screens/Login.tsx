@@ -153,6 +153,21 @@ export function Login({ onNavigateToSignUp, onNavigateToForgotPassword, onLogin 
               {isSubmitting ? 'Logging in...' : 'Log in'}
             </Button>
 
+            <Button
+              type="button"
+              fullWidth
+              size="lg"
+              variant="outline"
+              onClick={() =>
+                appToast.info('Google sign-in coming next (staging deploy test)', {
+                  eventKey: 'auth-google-coming-soon',
+                })
+              }
+              className="border-2"
+            >
+              Continue with Google
+            </Button>
+
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
