@@ -43,3 +43,8 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 - [ ] R-008: Renderer contract returns `{html, css, hash}` only.
 - [ ] R-009: Publish manifest validation and state transitions.
 - [ ] R-010: Repeat run determinism (same input => same outputs).
+
+
+## Batch progress
+- [x] B2-T01: Strict schema validator utility implemented with unit tests.
+- [x] B2-T02: AI generation pipeline aligned to strict validation rules with deterministic failure tests.

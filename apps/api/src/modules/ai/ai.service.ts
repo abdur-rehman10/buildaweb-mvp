@@ -1,46 +1,52 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
+import {
+  phase1EnumSchema,
+  phase1HeadlineSchema,
+  phase1ParagraphSchema,
+  phase1StrictObject,
+} from './phase1-strict-validator';
 import { PexelsService } from './pexels.service';
 
 type JsonRecord = Record<string, unknown>;
 
 const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
 
-const featureItemSchema = z.object({
-  title: z.string().trim().min(1),
-  description: z.string().trim().min(1),
+const featureItemSchema = phase1StrictObject({
+  title: phase1HeadlineSchema(),
+  description: phase1ParagraphSchema(),
 });
 
-const heroSectionSchema = z.object({
-  type: z.literal('hero'),
-  headline: z.string().trim().min(1),
-  subheadline: z.string().trim().min(1),
-  cta: z.string().trim().min(1),
-  imageQuery: z.string().trim().min(1).optional(),
+const heroSectionSchema = phase1StrictObject({
+  type: phase1EnumSchema(['hero']),
+  headline: phase1HeadlineSchema(),
+  subheadline: phase1ParagraphSchema(),
+  cta: phase1HeadlineSchema(),
+  imageQuery: phase1ParagraphSchema().optional(),
   imageUrl: z.string().trim().url().optional(),
 });
 
-const featuresSectionSchema = z.object({
-  type: z.literal('features'),
+const featuresSectionSchema = phase1StrictObject({
+  type: phase1EnumSchema(['features']),
   items: z.array(featureItemSchema).min(1),
 });
 
-const ctaSectionSchema = z.object({
-  type: z.literal('cta'),
-  headline: z.string().trim().min(1),
-  cta: z.string().trim().min(1),
-  imageQuery: z.string().trim().min(1).optional(),
+const ctaSectionSchema = phase1StrictObject({
+  type: phase1EnumSchema(['cta']),
+  headline: phase1HeadlineSchema(),
+  cta: phase1HeadlineSchema(),
+  imageQuery: phase1ParagraphSchema().optional(),
   imageUrl: z.string().trim().url().optional(),
 });
 
-const testimonialsSectionSchema = z.object({
-  type: z.literal('testimonials'),
+const testimonialsSectionSchema = phase1StrictObject({
+  type: phase1EnumSchema(['testimonials']),
   items: z
     .array(
-      z.object({
-        name: z.string().trim().min(1),
-        quote: z.string().trim().min(1),
+      phase1StrictObject({
+        name: phase1HeadlineSchema(),
+        quote: phase1ParagraphSchema(),
       }),
     )
     .min(1),
@@ -53,17 +59,17 @@ const sectionSchema = z.discriminatedUnion('type', [
   testimonialsSectionSchema,
 ]);
 
-const generatedPageSchema = z.object({
+const generatedPageSchema = phase1StrictObject({
   slug: z.string().trim().min(1),
-  title: z.string().trim().min(1),
+  title: phase1HeadlineSchema(),
   sections: z.array(sectionSchema).min(1),
 });
 
 const generatedSiteSchema = z
   .object({
-    project: z.object({
-      name: z.string().trim().min(1),
-      industry: z.string().trim().min(1),
+    project: phase1StrictObject({
+      name: phase1HeadlineSchema(),
+      industry: phase1ParagraphSchema(),
       primaryColor: z
         .string()
         .trim()
@@ -72,18 +78,19 @@ const generatedSiteSchema = z
         .string()
         .trim()
         .regex(/^#[0-9A-Fa-f]{6}$/),
-      fontPair: z.object({
-        heading: z.string().trim().min(1),
-        body: z.string().trim().min(1),
+      fontPair: phase1StrictObject({
+        heading: phase1HeadlineSchema(),
+        body: phase1HeadlineSchema(),
       }),
     }),
-    seo: z.object({
-      title: z.string().trim().min(1),
-      description: z.string().trim().min(1),
-      keywords: z.array(z.string().trim().min(1)).min(1),
+    seo: phase1StrictObject({
+      title: phase1HeadlineSchema(),
+      description: phase1ParagraphSchema(),
+      keywords: z.array(phase1HeadlineSchema()).min(1),
     }),
     pages: z.array(generatedPageSchema).min(1),
   })
+  .strict()
   .superRefine((value, ctx) => {
     const normalizedSlugs = new Set<string>();
     let homeCount = 0;
