@@ -48,3 +48,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 ## Batch progress
 - [x] B2-T01: Strict schema validator utility implemented with unit tests.
 - [x] B2-T02: AI generation pipeline aligned to strict validation rules with deterministic failure tests.
+
+- [x] B3-T01: Repair pipeline stages implemented with focused unit tests.
+- [x] B3-T02: Strictness strategy (strict vs repair) added with safe strict default.

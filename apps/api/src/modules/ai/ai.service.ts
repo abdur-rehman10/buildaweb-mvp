@@ -8,6 +8,7 @@ import {
   phase1StrictObject,
 } from './phase1-strict-validator';
 import { PexelsService } from './pexels.service';
+import { readStrictnessMode, repairPayload } from './repair-pipeline';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -410,6 +411,20 @@ export class AiService {
     };
   }
 
+  private validationMode() {
+    const configured = this.config.get<string>('AI_VALIDATION_MODE');
+    return readStrictnessMode(configured);
+  }
+
+  private applyValidationStrategy(input: unknown): AiGeneratedSite {
+    if (this.validationMode() === 'repair') {
+      const repaired = repairPayload(input, { fillMissingIds: false });
+      return this.validateGeneratedSite(repaired.repaired);
+    }
+
+    return this.validateGeneratedSite(input);
+  }
+
   private validateGeneratedSite(input: unknown): AiGeneratedSite {
     const parsed = generatedSiteSchema.safeParse(input);
     if (!parsed.success) {
@@ -481,7 +496,7 @@ export class AiService {
       try {
         const raw = await this.generateWithOpenAi(normalizedPrompt, apiKey);
         const parsed = this.parseJsonText(raw);
-        const validated = this.validateGeneratedSite(parsed);
+        const validated = this.applyValidationStrategy(parsed);
         return this.injectImages(validated);
       } catch (error) {
         if (error instanceof AiInvalidJsonError) {
