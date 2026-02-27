@@ -90,4 +90,56 @@ describe('AiService strict validation', () => {
       ).validateGeneratedSite(payload),
     ).toThrow(AiInvalidJsonError);
   });
+
+  it('uses repair mode before strict validation', () => {
+    const cfg = {
+      get: jest.fn().mockReturnValue('repair'),
+    } as unknown as ConfigService;
+    const svc = new AiService(cfg, pexels);
+
+    const payload = {
+      project: {
+        name: 'Site Name',
+        industry: 'Technology',
+        primaryColor: '#1F6FEB',
+        secondaryColor: '#10B981',
+        fontPair: { heading: 'Poppins', body: 'Inter' },
+      },
+      seo: {
+        title: 'Title',
+        description: 'Description',
+        keywords: ['one'],
+      },
+      pages: [
+        {
+          slug: 'home',
+          title: 'Home',
+          sections: [
+            {
+              type: 'hero',
+              headline: 'Headline',
+              subheadline: 'Paragraph',
+              cta: 'Start',
+            },
+            {
+              type: 'features',
+              items: [{ title: 'One', description: 'Desc' }],
+            },
+            {
+              type: 'testimonials',
+              items: [{ name: 'Jane', quote: 'Great!' }],
+            },
+            { type: 'cta', headline: 'Join now', cta: 'Sign up' },
+          ],
+        },
+      ],
+      rawHtml: '<script>bad()</script>',
+    };
+
+    expect(() =>
+      (
+        svc as unknown as { applyValidationStrategy: (i: unknown) => unknown }
+      ).applyValidationStrategy(payload),
+    ).not.toThrow();
+  });
 });
