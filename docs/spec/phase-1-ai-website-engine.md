@@ -47,6 +47,8 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 - [ ] R-012: One-H1-per-page rule enforces deterministic demotion strategy.
 - [ ] R-013: Canonical section template library validates to schema.v1 deterministically.
 - [ ] R-014: Token placeholders resolve to token or deterministic literal fallback.
+- [ ] R-015: Deterministic fixture harness validates stable html/css/hash snapshots for baseline R-cases.
+- [ ] R-016: Fixture matrix expansion remains deterministic and non-flaky in incremental batches.
 
 
 ## Batch progress
@@ -70,3 +72,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 
 - [x] B8-T01: Canonical section templates centralized and validated against schema.v1.
 - [x] B8-T02: Token placeholder resolution enforces deterministic token/literal behavior.
+
+- [x] B9-T01: Added deterministic fixture harness for initial six R-cases with stable expectations.
+- [x] B9-T02: Expanded fixture matrix by five additional deterministic R-cases.
