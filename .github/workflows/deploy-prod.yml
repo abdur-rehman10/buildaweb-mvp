@@ -62,6 +62,11 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
+      - name: Set build metadata
+        run: |
+          echo "GIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
+          echo "BUILD_TIME_UTC=$(date -u +%FT%TZ)" >> $GITHUB_ENV
+
       - name: Register API task definition revision
         id: api-td
         run: |
@@ -83,6 +88,26 @@ jobs:
             del(.taskDefinitionArn,.revision,.status,.requiresAttributes,.compatibilities,.registeredAt,.registeredBy)
             | .containerDefinitions = (.containerDefinitions | map(if .name == "api" then .image = $IMAGE else . end))
           ' api-td.json > api-td-new.json
+
+          TASKDEF_PATH=api-td-new.json node -e "
+          const fs=require('fs');
+          const path=process.env.TASKDEF_PATH;
+          if(!path) { console.error('TASKDEF_PATH missing'); process.exit(1); }
+          const j=JSON.parse(fs.readFileSync(path,'utf8'));
+          const defs=j.containerDefinitions||[];
+          const api=defs.find(c=>c.name==='api');
+          if(!api) { console.error('API container \"api\" not found in task def'); process.exit(1); }
+          api.environment = api.environment || [];
+          const upsert=(name,value)=>{
+            const i=api.environment.findIndex(e=>e.name===name);
+            if(i>=0) api.environment[i].value=value;
+            else api.environment.push({name,value});
+          };
+          upsert('GIT_SHA', process.env.GIT_SHA || 'unknown');
+          upsert('BUILD_TIME_UTC', process.env.BUILD_TIME_UTC || 'unknown');
+          fs.writeFileSync(path, JSON.stringify(j,null,2));
+          console.log('Injected build metadata into', path);
+          "
 
           NEW_API_TD_ARN="$(aws ecs register-task-definition \
             --cli-input-json file://api-td-new.json \
