@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -14,6 +15,10 @@ import { Project, ProjectDocument } from '../projects/project.schema';
 import { Publish, PublishDocument } from './publish.schema';
 import { buildPublishDraftSnapshot } from './publish-snapshot.util';
 import { toIdString } from '../../common/to-id-string';
+import {
+  defaultRendererVersion,
+  validatePublishManifest,
+} from './publish-manifest';
 
 export class PublishPreflightError extends Error {
   readonly code = 'PUBLISH_PREFLIGHT_FAILED';
@@ -661,6 +666,46 @@ ${params.bodyHtml}
       .exec();
   }
 
+  private transitionStatus(params: {
+    publish: PublishDocument;
+    to: 'pending' | 'building' | 'uploading' | 'live' | 'failed';
+    event: string;
+    detail?: string;
+  }) {
+    const now = new Date().toISOString();
+    const currentEvents = Array.isArray(params.publish.stateEvents)
+      ? params.publish.stateEvents
+      : [];
+    const from = params.publish.status;
+    params.publish.status = params.to;
+    params.publish.stateEvents = [
+      ...currentEvents,
+      {
+        at: now,
+        from,
+        to: params.to,
+        event: params.event,
+        detail: params.detail ?? null,
+      },
+    ];
+  }
+
+  private stableJson(value: unknown) {
+    const visit = (input: unknown): unknown => {
+      if (Array.isArray(input)) return input.map((x) => visit(x));
+      if (input && typeof input === 'object') {
+        const rec = input as Record<string, unknown>;
+        const out: Record<string, unknown> = {};
+        for (const key of Object.keys(rec).sort((a, b) => a.localeCompare(b))) {
+          out[key] = visit(rec[key]);
+        }
+        return out;
+      }
+      return input;
+    };
+    return JSON.stringify(visit(value));
+  }
+
   async createAndPublish(params: {
     tenantId: string;
     projectId: string;
@@ -737,11 +782,28 @@ ${params.bodyHtml}
       tenantId: params.tenantId,
       projectId: params.projectId,
       ownerUserId: params.ownerUserId,
-      status: 'publishing',
+      status: 'pending',
       baseUrl,
       errorMessage: null,
       draftSnapshot,
+      manifest: null,
+      stateEvents: [
+        {
+          at: new Date().toISOString(),
+          from: null,
+          to: 'pending',
+          event: 'publish.requested',
+          detail: null,
+        },
+      ],
     });
+
+    this.transitionStatus({
+      publish,
+      to: 'building',
+      event: 'publish.build.started',
+    });
+    await publish.save();
 
     try {
       const faviconAssetId = this.readString(project.faviconAssetId).trim();
@@ -772,6 +834,23 @@ ${params.bodyHtml}
 
       let sharedCss = '';
       const publishRoot = publishedBucketKey;
+      const manifestPages: Array<{
+        page_id: string;
+        slug: string;
+        hash: string;
+        path: string;
+      }> = [];
+      const manifestAssets: Array<{
+        object_path: string;
+        content_type: string;
+      }> = [];
+
+      this.transitionStatus({
+        publish,
+        to: 'uploading',
+        event: 'publish.upload.started',
+      });
+      await publish.save();
 
       for (const page of pages) {
         const isHome = String(page._id) === String(homePage._id);
@@ -806,6 +885,13 @@ ${params.bodyHtml}
           sharedCss = render.css;
         }
 
+        manifestPages.push({
+          page_id: String(page._id),
+          slug: currentSlug,
+          hash: render.hash,
+          path: `${publishRoot}/${relativePath}`,
+        });
+
         const html = this.staticHtmlDocument({
           headTags: render.headTags,
           cssHref: this.cssHrefForDepth(depth),
@@ -813,11 +899,16 @@ ${params.bodyHtml}
           lang: render.lang,
         });
 
+        const htmlObjectPath = `${publishRoot}/${relativePath}`;
         await this.minio.upload({
-          objectPath: `${publishRoot}/${relativePath}`,
+          objectPath: htmlObjectPath,
           buffer: Buffer.from(html, 'utf-8'),
           mimeType: 'text/html; charset=utf-8',
           sizeBytes: Buffer.byteLength(html),
+        });
+        manifestAssets.push({
+          object_path: htmlObjectPath,
+          content_type: 'text/html; charset=utf-8',
         });
       }
 
@@ -831,14 +922,41 @@ ${params.bodyHtml}
         }).css;
       }
 
+      const stylesObjectPath = `${publishRoot}/styles.css`;
       await this.minio.upload({
-        objectPath: `${publishRoot}/styles.css`,
+        objectPath: stylesObjectPath,
         buffer: Buffer.from(sharedCss, 'utf-8'),
         mimeType: 'text/css; charset=utf-8',
         sizeBytes: Buffer.byteLength(sharedCss),
       });
+      manifestAssets.push({
+        object_path: stylesObjectPath,
+        content_type: 'text/css; charset=utf-8',
+      });
 
-      publish.status = 'live';
+      const manifestHashSource = this.stableJson({
+        pages: manifestPages,
+        assets: manifestAssets,
+      });
+      const manifestHash = createHash('sha256')
+        .update(manifestHashSource)
+        .digest('hex');
+      const manifest = validatePublishManifest({
+        schema_version: '1.0',
+        site_id: params.projectId,
+        publish_id: String(publish._id),
+        hash: manifestHash,
+        pages: manifestPages,
+        assets: manifestAssets,
+        renderer_version: defaultRendererVersion(),
+      });
+
+      publish.manifest = manifest;
+      this.transitionStatus({
+        publish,
+        to: 'live',
+        event: 'publish.live',
+      });
       publish.errorMessage = null;
       await publish.save();
 
@@ -875,7 +993,12 @@ ${params.bodyHtml}
         publishedVersion,
       };
     } catch (error) {
-      publish.status = 'failed';
+      this.transitionStatus({
+        publish,
+        to: 'failed',
+        event: 'publish.failed',
+        detail: error instanceof Error ? error.message : 'Publish failed',
+      });
       publish.errorMessage =
         error instanceof Error ? error.message : 'Publish failed';
       await publish.save();

@@ -57,3 +57,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 
 - [x] B5-T01: Preview renderer contract `{ html, css, hash }` enforced with pre-render normalize/validate strategy.
 - [x] B5-T02: CSS rules enforced with `--baw-*` tokens, ID-scoped selectors, and stability tests.
+
+- [x] B6-T01: Publish manifest schema implemented/validated with stable stored values.
+- [x] B6-T02: Publish state transitions logged for auditable state machine traceability.
