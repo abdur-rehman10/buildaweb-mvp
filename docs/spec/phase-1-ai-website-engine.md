@@ -45,6 +45,8 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 - [ ] R-010: Repeat run determinism (same input => same outputs).
 - [ ] R-011: Image accessibility policy enforces non-empty alt text deterministically.
 - [ ] R-012: One-H1-per-page rule enforces deterministic demotion strategy.
+- [ ] R-013: Canonical section template library validates to schema.v1 deterministically.
+- [ ] R-014: Token placeholders resolve to token or deterministic literal fallback.
 
 
 ## Batch progress
@@ -65,3 +67,6 @@ Use this tracker to manage delivery of Phase-1 engine invariants and keep implem
 
 - [x] B7-T01: Image alt-text determinism enforced via strict validation and repair defaults.
 - [x] B7-T02: One-h1-per-page rule enforced with deterministic extra-h1 demotion.
+
+- [x] B8-T01: Canonical section templates centralized and validated against schema.v1.
+- [x] B8-T02: Token placeholder resolution enforces deterministic token/literal behavior.
