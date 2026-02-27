@@ -2,63 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { z } from 'zod';
 import {
-  phase1EnumSchema,
   phase1HeadlineSchema,
   phase1ParagraphSchema,
   phase1StrictObject,
 } from './phase1-strict-validator';
 import { PexelsService } from './pexels.service';
 import { readStrictnessMode, repairPayload } from './repair-pipeline';
+import {
+  AiGeneratedSection,
+  buildCanonicalSectionTemplates,
+  canonicalTemplateTypeList,
+  sectionSchema,
+} from './section-templates';
 
 type JsonRecord = Record<string, unknown>;
 
 const IMAGE_PLACEHOLDER_SRC = 'https://placehold.co/1200x800?text=Image';
-
-const featureItemSchema = phase1StrictObject({
-  title: phase1HeadlineSchema(),
-  description: phase1ParagraphSchema(),
-});
-
-const heroSectionSchema = phase1StrictObject({
-  type: phase1EnumSchema(['hero']),
-  headline: phase1HeadlineSchema(),
-  subheadline: phase1ParagraphSchema(),
-  cta: phase1HeadlineSchema(),
-  imageQuery: phase1ParagraphSchema().optional(),
-  imageUrl: z.string().trim().url().optional(),
-});
-
-const featuresSectionSchema = phase1StrictObject({
-  type: phase1EnumSchema(['features']),
-  items: z.array(featureItemSchema).min(1),
-});
-
-const ctaSectionSchema = phase1StrictObject({
-  type: phase1EnumSchema(['cta']),
-  headline: phase1HeadlineSchema(),
-  cta: phase1HeadlineSchema(),
-  imageQuery: phase1ParagraphSchema().optional(),
-  imageUrl: z.string().trim().url().optional(),
-});
-
-const testimonialsSectionSchema = phase1StrictObject({
-  type: phase1EnumSchema(['testimonials']),
-  items: z
-    .array(
-      phase1StrictObject({
-        name: phase1HeadlineSchema(),
-        quote: phase1ParagraphSchema(),
-      }),
-    )
-    .min(1),
-});
-
-const sectionSchema = z.discriminatedUnion('type', [
-  heroSectionSchema,
-  featuresSectionSchema,
-  ctaSectionSchema,
-  testimonialsSectionSchema,
-]);
 
 const generatedPageSchema = phase1StrictObject({
   slug: z.string().trim().min(1),
@@ -151,7 +110,7 @@ const generatedSiteSchema = z
     }
   });
 
-export type AiGeneratedSection = z.infer<typeof sectionSchema>;
+export type { AiGeneratedSection } from './section-templates';
 export type AiGeneratedPage = z.infer<typeof generatedPageSchema>;
 export type AiGeneratedSite = z.infer<typeof generatedSiteSchema>;
 
@@ -226,52 +185,21 @@ export class AiService {
         {
           slug: 'home',
           title: 'Home',
-          sections: [
-            {
-              type: 'hero',
-              headline: summary || 'Launch your business website in minutes',
-              subheadline:
-                'Build trust and convert visitors with a clear, professional site structure.',
-              cta: 'Get started',
-              imageQuery: 'modern business hero workspace',
-            },
-            {
-              type: 'features',
-              items: [
-                {
-                  title: 'Fast setup',
-                  description:
-                    'Publish a clear, conversion-focused site without design overhead.',
-                },
-                {
-                  title: 'Easy updates',
-                  description:
-                    'Update pages and messaging quickly from one simple editor.',
-                },
-                {
-                  title: 'Growth ready',
-                  description:
-                    'Start with essential pages and expand as your business grows.',
-                },
-              ],
-            },
-            {
-              type: 'testimonials',
-              items: [
-                {
-                  name: 'Happy Client',
-                  quote:
-                    'This process made launching our website much easier than expected.',
-                },
-              ],
-            },
-            {
-              type: 'cta',
-              headline: 'Ready to build your website?',
-              cta: 'Start now',
-              imageQuery: 'team collaboration office',
-            },
-          ],
+          sections: buildCanonicalSectionTemplates({
+            'business.name': 'Generated Website',
+            'business.industry': 'general business',
+            'image.heroQuery': 'modern business hero workspace',
+            'pricing.starter': '$29/mo',
+            'pricing.growth': '$99/mo',
+          }).map((section) =>
+            section.type === 'hero'
+              ? {
+                  ...section,
+                  headline:
+                    summary || 'Launch your business website in minutes',
+                }
+              : section,
+          ),
         },
       ],
     };
@@ -308,10 +236,11 @@ export class AiService {
       '      "slug": "home",',
       '      "title": "string",',
       '      "sections": [',
-      '        { "type": "hero", "headline": "string", "subheadline": "string", "cta": "string", "imageQuery": "string" },',
-      '        { "type": "features", "items": [{ "title": "string", "description": "string" }] },',
-      '        { "type": "testimonials", "items": [{ "name": "string", "quote": "string" }] },',
-      '        { "type": "cta", "headline": "string", "cta": "string", "imageQuery": "string" }',
+      `        Allowed canonical section types: ${canonicalTemplateTypeList().join(', ')}`,
+      '        Hero schema: { "type": "hero", "headline": "string", "subheadline": "string", "cta": "string", "imageQuery": "string" },',
+      '        Features schema: { "type": "features", "items": [{ "title": "string", "description": "string" }] },',
+      '        Pricing schema: { "type": "pricing", "headline": "string", "plans": [{ "name": "string", "price": "string", "features": ["string"] }] },',
+      '        Footer schema: { "type": "footer", "text": "string", "links": [{ "label": "string", "href": "string" }] }',
       '      ]',
       '    }',
       '  ]',
