@@ -339,12 +339,34 @@ describe('ProjectsApiScreen toasts', () => {
     });
   });
 
-  it('disables create project form when a project already exists', async () => {
+  it('allows create project form even when a project already exists', async () => {
     renderScreen();
 
-    const createButton = await screen.findByRole('button', { name: 'Project limit reached' });
-    expect((createButton as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('MVP limit: one project per user.')).not.toBeNull();
+    const createButton = await screen.findByRole('button', { name: 'Create Project' });
+    expect((createButton as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('opens returned project id after create and refreshes projects list', async () => {
+    const onSelectProject = vi.fn();
+    vi.mocked(projectsApi.list)
+      .mockResolvedValueOnce({ projects: [] })
+      .mockResolvedValueOnce({ projects: [project] });
+    vi.mocked(projectsApi.create).mockResolvedValue({ project_id: 'project-1' });
+
+    renderScreen({ activeProjectId: null, onSelectProject });
+
+    const nameInput = await screen.findByLabelText('Project name');
+    fireEvent.change(nameInput, { target: { value: 'My Site' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectsApi.create).toHaveBeenCalledWith({
+        name: 'My Site',
+        defaultLocale: 'en',
+      });
+      expect(onSelectProject).toHaveBeenCalledWith('project-1');
+      expect(projectsApi.list).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('disables delete when project has only one page and shows a hint', async () => {
