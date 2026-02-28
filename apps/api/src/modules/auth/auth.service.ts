@@ -47,6 +47,15 @@ export class AuthService {
     return trimmed.length > 0 ? trimmed : null;
   }
 
+  private bcryptRounds() {
+    const configured = this.config.get<string>('BCRYPT_SALT_ROUNDS');
+    const parsed = Number.parseInt(String(configured ?? ''), 10);
+    if (Number.isInteger(parsed) && parsed >= 4 && parsed <= 31) {
+      return parsed;
+    }
+    return 12;
+  }
+
   private isDuplicateKeyError(error: unknown) {
     if (!error || typeof error !== 'object') return false;
     const code = (error as { code?: unknown }).code;
@@ -100,8 +109,10 @@ export class AuthService {
       };
     }
 
-    const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
-    const passwordHash = await bcrypt.hash(params.password, rounds);
+    const passwordHash = await bcrypt.hash(
+      params.password,
+      this.bcryptRounds(),
+    );
     let userRecord: AuthUserRecord;
     try {
       const createdUser: unknown = await this.users.create({
@@ -260,8 +271,10 @@ export class AuthService {
       };
     }
 
-    const rounds = Number(this.config.get('BCRYPT_SALT_ROUNDS') ?? 12);
-    const passwordHash = await bcrypt.hash(params.newPassword, rounds);
+    const passwordHash = await bcrypt.hash(
+      params.newPassword,
+      this.bcryptRounds(),
+    );
     const updateResult = await this.users.updatePasswordHashById(
       String(resetRecord.userId),
       passwordHash,

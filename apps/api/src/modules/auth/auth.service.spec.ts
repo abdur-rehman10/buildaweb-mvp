@@ -109,6 +109,43 @@ describe('AuthService password reset flow', () => {
     expect(firstCreateArg?.passwordHash).not.toBe('Password123');
   });
 
+  it('falls back to safe bcrypt rounds when BCRYPT_SALT_ROUNDS is invalid', async () => {
+    config.get.mockImplementation((key: string) => {
+      if (key === 'NODE_ENV') return 'development';
+      if (key === 'PASSWORD_RESET_TOKEN_PEPPER') return 'pepper';
+      if (key === 'PASSWORD_RESET_TTL_MINUTES') return '30';
+      if (key === 'BCRYPT_SALT_ROUNDS') return 'invalid';
+      if (key === 'JWT_EXPIRES_IN') return '1d';
+      return undefined;
+    });
+
+    users.findByEmail.mockResolvedValue(null);
+    users.create.mockResolvedValue({
+      _id: '507f1f77bcf86cd799439012',
+      email: 'safe@example.com',
+      name: null,
+      tenantId: 'default',
+      passwordHash: 'hashed-password',
+    });
+
+    const result = await service.signup({
+      email: 'safe@example.com',
+      password: 'Password123',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(users.create).toHaveBeenCalledTimes(1);
+    const createMock = users.create as jest.Mock<
+      unknown,
+      [Record<string, unknown>]
+    >;
+    const payload = createMock.mock.calls[0]?.[0] as
+      | { passwordHash?: unknown }
+      | undefined;
+    expect(typeof payload?.passwordHash).toBe('string');
+    expect(payload?.passwordHash).not.toBe('Password123');
+  });
+
   it('returns duplicate email error when signup hits unique index race', async () => {
     users.findByEmail.mockResolvedValue(null);
     users.create.mockRejectedValue({ code: 11000 });
