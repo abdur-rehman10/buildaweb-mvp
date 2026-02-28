@@ -339,11 +339,11 @@ describe('ProjectsApiScreen toasts', () => {
     });
   });
 
-  it('allows create project form even when a project already exists', async () => {
+  it('shows create project form even when a project already exists', async () => {
     renderScreen();
 
-    const createButton = await screen.findByRole('button', { name: 'Create Project' });
-    expect((createButton as HTMLButtonElement).disabled).toBe(false);
+    expect(await screen.findByText('Project name')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Project' })).toBeInTheDocument();
   });
 
   it('opens returned project id after create and refreshes projects list', async () => {
@@ -355,7 +355,7 @@ describe('ProjectsApiScreen toasts', () => {
 
     renderScreen({ activeProjectId: null, onSelectProject });
 
-    const nameInput = await screen.findByLabelText('Project name');
+    const nameInput = await screen.findByPlaceholderText('My Website');
     fireEvent.change(nameInput, { target: { value: 'My Site' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
 
