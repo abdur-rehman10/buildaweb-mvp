@@ -18,6 +18,7 @@ import {
   type NavigationItem,
   type ProjectSummary,
   type PublishStatus,
+  type GenerationJobSummary,
 } from '../../lib/api';
 import { useLatestPublish } from '../hooks/useLatestPublish';
 import { getUserFriendlyErrorMessage } from '../../lib/error-messages';
@@ -40,6 +41,20 @@ interface ProjectsApiScreenProps {
 }
 
 type ProjectSettingsAssetField = 'logoAssetId' | 'faviconAssetId' | 'defaultOgImageAssetId';
+
+
+type GenerationDebugState = {
+  projectId: string | null;
+  generateUrl: string | null;
+  generateHttpStatus: number | null;
+  generateResponse: unknown;
+  generateError: string | null;
+  pollingUrl: string | null;
+  latestJob: GenerationJobSummary | null;
+  latestJobRaw: unknown;
+  lastPollAt: string | null;
+  noJobWarning: boolean;
+};
 
 function toPublishedDisplayBaseUrl(baseUrl: string): string {
   const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
@@ -93,6 +108,23 @@ function formatPublishHistoryTime(value?: string | null): string {
 
 const GENERATION_POLL_INTERVAL_MS = 1000;
 const GENERATION_POLL_TIMEOUT_MS = 60_000;
+const GENERATION_MISSING_JOB_WARNING_MS = 10_000;
+
+
+function emptyGenerationDebugState(): GenerationDebugState {
+  return {
+    projectId: null,
+    generateUrl: null,
+    generateHttpStatus: null,
+    generateResponse: null,
+    generateError: null,
+    pollingUrl: null,
+    latestJob: null,
+    latestJobRaw: null,
+    lastPollAt: null,
+    noJobWarning: false,
+  };
+}
 
 function emptyProjectSettings(locale = 'en'): ProjectSettings {
   return {
@@ -126,6 +158,8 @@ export function ProjectsApiScreen({
   const [generationStatus, setGenerationStatus] = useState<'idle' | 'queued' | 'running' | 'succeeded' | 'failed'>('idle');
   const [generateMessage, setGenerateMessage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  const [generationDebugOpen, setGenerationDebugOpen] = useState(false);
+  const [generationDebug, setGenerationDebug] = useState<GenerationDebugState>(emptyGenerationDebugState());
 
   const [newPageTitle, setNewPageTitle] = useState('');
   const [newPageSlug, setNewPageSlug] = useState('');
@@ -220,6 +254,11 @@ export function ProjectsApiScreen({
         : null;
   const previewDisabledReason = projectPages.length === 0 ? 'Create at least one page before previewing.' : null;
   const normalizedGeneratePrompt = generatePrompt.trim();
+  const debugEnabled =
+    import.meta.env.DEV ||
+    (import.meta.env.MODE ?? '').toLowerCase().includes('staging') ||
+    (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1');
+
   const generatePromptIsTooShort = normalizedGeneratePrompt.length > 0 && normalizedGeneratePrompt.length < 20;
 
   const normalizeNavigationItems = (items: unknown): NavigationItem[] => {
@@ -462,6 +501,7 @@ export function ProjectsApiScreen({
       setGenerateMessage(null);
     setGenerateError(null);
     setGenerationStatus('idle');
+    setGenerationDebug(emptyGenerationDebugState());
       setGenerateError(null);
       setGenerationStatus('idle');
       setProjectSettings(emptyProjectSettings());
@@ -827,28 +867,63 @@ export function ProjectsApiScreen({
 
   const pollLatestGenerationJob = async (projectId: string) => {
     const timeoutAt = Date.now() + GENERATION_POLL_TIMEOUT_MS;
+    let noJobSinceAt: number | null = null;
 
     while (Date.now() < timeoutAt) {
-      const latest = await projectsApi.getLatestGeneration(projectId);
-      const job = latest.job;
+      try {
+        const latest = await projectsApi.getLatestGeneration(projectId);
+        const job = latest.job;
+        const polledAt = new Date().toISOString();
 
-      if (!job) {
-        await new Promise<void>((resolve) => {
-          window.setTimeout(() => resolve(), GENERATION_POLL_INTERVAL_MS);
-        });
-        continue;
+        setGenerationDebug((prev) => ({
+          ...prev,
+          latestJob: job,
+          latestJobRaw: latest,
+          lastPollAt: polledAt,
+        }));
+
+        if (!job) {
+          if (noJobSinceAt === null) {
+            noJobSinceAt = Date.now();
+          }
+
+          if (Date.now() - noJobSinceAt >= GENERATION_MISSING_JOB_WARNING_MS) {
+            setGenerationDebug((prev) => ({ ...prev, noJobWarning: true }));
+            setGenerateMessage(
+              'No generation job found. Likely auth/user scope mismatch or projectId mismatch.',
+            );
+          }
+
+          await new Promise<void>((resolve) => {
+            window.setTimeout(() => resolve(), GENERATION_POLL_INTERVAL_MS);
+          });
+          continue;
+        }
+
+        noJobSinceAt = null;
+        setGenerationDebug((prev) => ({ ...prev, noJobWarning: false }));
+
+        if (job.status === 'queued' || job.status === 'running') {
+          setGenerationStatus(job.status);
+          setGenerateMessage('Generating your website...');
+          await new Promise<void>((resolve) => {
+            window.setTimeout(() => resolve(), GENERATION_POLL_INTERVAL_MS);
+          });
+          continue;
+        }
+
+        return job;
+      } catch (err) {
+        const apiError = err instanceof ApiError ? err : null;
+        if (apiError) {
+          const pollingMessage = `Generation status polling failed (status ${apiError.status}).`;
+          appToast.error(pollingMessage, {
+            eventKey: `generate-poll-error:${projectId}`,
+          });
+          setGenerationDebug((prev) => ({ ...prev, generateError: pollingMessage }));
+        }
+        throw err;
       }
-
-      if (job.status === 'queued' || job.status === 'running') {
-        setGenerationStatus(job.status);
-        setGenerateMessage('Generating your website...');
-        await new Promise<void>((resolve) => {
-          window.setTimeout(() => resolve(), GENERATION_POLL_INTERVAL_MS);
-        });
-        continue;
-      }
-
-      return job;
     }
 
     return null;
@@ -868,7 +943,21 @@ export function ProjectsApiScreen({
 
     try {
       const projectId = await ensureProjectForGeneration();
-      await projectsApi.generate(projectId, { prompt: normalizedGeneratePrompt });
+      const generateUrl = `/api/v1/projects/${encodeURIComponent(projectId)}/generate`;
+      const pollingUrl = `/api/v1/projects/${encodeURIComponent(projectId)}/generation/latest`;
+      setGenerationDebug({
+        ...emptyGenerationDebugState(),
+        projectId,
+        generateUrl,
+        pollingUrl,
+      });
+
+      const generateResponse = await projectsApi.generate(projectId, { prompt: normalizedGeneratePrompt });
+      setGenerationDebug((prev) => ({
+        ...prev,
+        generateHttpStatus: 201,
+        generateResponse,
+      }));
 
       const latestJob = await pollLatestGenerationJob(projectId);
       if (!latestJob) {
@@ -922,6 +1011,10 @@ export function ProjectsApiScreen({
       appToast.success(pageCount ? `Generated ${pageCount} pages` : 'Site generated with AI', {
         eventKey: `generate-success:${projectId}`,
       });
+
+      if (!pageCount || pageCount <= 0) {
+        setGenerateMessage('Generation returned no pages; check AI output/validation.');
+      }
     } catch (err) {
       const apiError = err instanceof ApiError ? err : null;
       if (apiError?.status === 401) {
@@ -935,9 +1028,15 @@ export function ProjectsApiScreen({
 
       setGenerationStatus('failed');
       const message = getUserFriendlyErrorMessage(err, 'Failed to generate site');
-      setGenerateError(message);
-      setGenerateMessage(message);
-      appToast.error(message, {
+      const messageWithStatus = apiError ? `${message} (status ${apiError.status})` : message;
+      setGenerateError(messageWithStatus);
+      setGenerateMessage(messageWithStatus);
+      setGenerationDebug((prev) => ({
+        ...prev,
+        generateHttpStatus: apiError?.status ?? prev.generateHttpStatus,
+        generateError: messageWithStatus,
+      }));
+      appToast.error(messageWithStatus, {
         eventKey: `generate-error:${activeProjectId ?? 'new-project'}`,
       });
     } finally {
@@ -1182,6 +1281,9 @@ export function ProjectsApiScreen({
             onChange={(event) => {
               setGeneratePrompt(event.target.value);
               if (generateError) setGenerateError(null);
+              if (generationDebug.generateError) {
+                setGenerationDebug((prev) => ({ ...prev, generateError: null }));
+              }
             }}
             placeholder="Create a modern website for a coffee shop with Home, Menu, About, and Contact pages."
             className="mt-1 min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -1227,6 +1329,51 @@ export function ProjectsApiScreen({
           <p className="text-sm text-destructive" role="alert">
             {generateError}
           </p>
+        )}
+        {debugEnabled && (
+          <div className="rounded-md border border-border bg-muted/20 p-3 space-y-2">
+            <button
+              type="button"
+              className="text-sm font-medium underline"
+              onClick={() => setGenerationDebugOpen((prev) => !prev)}
+            >
+              {generationDebugOpen ? 'Hide generation debug panel' : 'Show generation debug panel'}
+            </button>
+            {generationDebugOpen && (
+              <div className="space-y-2 text-xs">
+                <p><strong>Project ID:</strong> {generationDebug.projectId ?? 'n/a'}</p>
+                <p><strong>Generate URL:</strong> {generationDebug.generateUrl ?? 'n/a'}</p>
+                <p><strong>Generate HTTP status:</strong> {generationDebug.generateHttpStatus ?? 'n/a'}</p>
+                <p><strong>Polling URL:</strong> {generationDebug.pollingUrl ?? 'n/a'}</p>
+                <p><strong>Last poll:</strong> {generationDebug.lastPollAt ?? 'n/a'}</p>
+                {generationDebug.noJobWarning && (
+                  <p className="text-amber-700 dark:text-amber-400">
+                    No generation job found. Likely auth/user scope mismatch or projectId mismatch.
+                  </p>
+                )}
+                {generationDebug.latestJob?.status === 'failed' && generationDebug.latestJob.errorMessage && (
+                  <p className="text-destructive font-semibold">Latest job failed: {generationDebug.latestJob.errorMessage}</p>
+                )}
+                {generationDebug.latestJob?.status === 'succeeded' &&
+                  (!generationDebug.latestJob.meta?.pageCount || generationDebug.latestJob.meta.pageCount <= 0) && (
+                    <p className="text-amber-700 dark:text-amber-400">
+                      Generation returned no pages; check AI output/validation.
+                    </p>
+                  )}
+                <div>
+                  <p className="font-medium">Generate response / error</p>
+                  <pre className="overflow-auto rounded bg-background p-2">{JSON.stringify({
+                    response: generationDebug.generateResponse,
+                    error: generationDebug.generateError,
+                  }, null, 2)}</pre>
+                </div>
+                <div>
+                  <p className="font-medium">Latest job JSON</p>
+                  <pre className="overflow-auto rounded bg-background p-2">{JSON.stringify(generationDebug.latestJobRaw, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </Card>
 
