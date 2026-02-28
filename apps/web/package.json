@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -69,7 +71,9 @@
     "jsdom": "^28.0.0",
     "tailwindcss": "4.1.12",
     "vite": "6.3.5",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/user-event": "^14.6.1"
   },
   "peerDependencies": {
     "react": "18.3.1",
