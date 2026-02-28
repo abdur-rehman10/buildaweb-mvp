@@ -18,6 +18,7 @@ import { toIdString } from '../../common/to-id-string';
 import { AiGenerationError, AiInvalidJsonError } from '../ai/ai.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsService } from './projects.service';
+import { GenerationService } from '../generation/generation.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { GenerateProjectDto } from './dto/generate-project.dto';
 import { SetHomePageDto } from './dto/set-home-page.dto';
@@ -30,6 +31,7 @@ import { getAuthContext } from '../../common/auth-context';
 export class ProjectsController {
   constructor(
     private readonly projects: ProjectsService,
+    private readonly generation: GenerationService,
     private readonly config: ConfigService,
   ) {}
 
@@ -132,6 +134,99 @@ export class ProjectsController {
     @Req() req: AuthRequest,
   ) {
     return this.generateProjectFromPrompt({ dto, req });
+  }
+
+  @Get(':projectId/generation/latest')
+  async getLatestGenerationJob(
+    @Param('projectId') projectId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
+
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
+    if (!project) {
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const job = await this.generation.getLatestForProject({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
+
+    return ok({
+      job: job
+        ? {
+            id: String(job._id),
+            projectId: String(job.projectId),
+            status: job.status,
+            startedAt: job.startedAt ?? null,
+            finishedAt: job.finishedAt ?? null,
+            errorCode: job.errorCode ?? null,
+            errorMessage: job.errorMessage ?? null,
+            meta: job.meta ?? null,
+            createdAt: job.createdAt,
+            updatedAt: job.updatedAt,
+          }
+        : null,
+    });
+  }
+
+  @Get(':projectId/generation/:jobId')
+  async getGenerationJobById(
+    @Param('projectId') projectId: string,
+    @Param('jobId') jobId: string,
+    @Req() req: AuthRequest,
+  ) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
+
+    const project = await this.projects.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+    });
+    if (!project) {
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const job = await this.generation.getByIdScoped({
+      tenantId,
+      ownerUserId,
+      projectId,
+      jobId,
+    });
+
+    if (!job) {
+      throw new HttpException(
+        fail('NOT_FOUND', 'Not found'),
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    return ok({
+      job: {
+        id: String(job._id),
+        projectId: String(job.projectId),
+        status: job.status,
+        startedAt: job.startedAt ?? null,
+        finishedAt: job.finishedAt ?? null,
+        errorCode: job.errorCode ?? null,
+        errorMessage: job.errorMessage ?? null,
+        meta: job.meta ?? null,
+        createdAt: job.createdAt,
+        updatedAt: job.updatedAt,
+      },
+    });
   }
 
   @Get()

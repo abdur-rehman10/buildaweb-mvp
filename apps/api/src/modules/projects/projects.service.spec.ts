@@ -34,12 +34,20 @@ type MockPublishModel = {
   find: jest.Mock;
 };
 
+type MockGenerationService = {
+  createQueued: jest.Mock;
+  markRunning: jest.Mock;
+  markSucceeded: jest.Mock;
+  markFailed: jest.Mock;
+};
+
 describe('ProjectsService.create', () => {
   let service: ProjectsService;
   let projectModel: MockProjectModel;
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
   let publishModel: MockPublishModel;
+  let generationService: MockGenerationService;
 
   beforeEach(() => {
     projectModel = {
@@ -65,12 +73,20 @@ describe('ProjectsService.create', () => {
       find: jest.fn(),
     };
 
+    generationService = {
+      createQueued: jest.fn(),
+      markRunning: jest.fn(),
+      markSucceeded: jest.fn(),
+      markFailed: jest.fn(),
+    };
+
     service = new ProjectsService(
       projectModel as unknown as Model<ProjectDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
       { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
+      generationService as never,
     );
   });
 
@@ -116,6 +132,7 @@ describe('ProjectsService.createFromPrompt', () => {
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
   let publishModel: MockPublishModel;
+  let generationService: MockGenerationService;
   let ai: { generateSiteFromPrompt: jest.Mock };
 
   beforeEach(() => {
@@ -140,6 +157,13 @@ describe('ProjectsService.createFromPrompt', () => {
 
     publishModel = {
       find: jest.fn(),
+    };
+
+    generationService = {
+      createQueued: jest.fn(),
+      markRunning: jest.fn(),
+      markSucceeded: jest.fn(),
+      markFailed: jest.fn(),
     };
 
     ai = {
@@ -173,12 +197,14 @@ describe('ProjectsService.createFromPrompt', () => {
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
       ai as unknown as AiService,
+      generationService as never,
     );
   });
 
   it('uses provided valid projectId when it belongs to user', async () => {
     const resolvedProject = { _id: '507f1f77bcf86cd799439100' };
     const generationResult = { homePageId: 'page-1', pageCount: 2 };
+    generationService.createQueued.mockResolvedValue({ _id: 'job-1' });
 
     const resolveProjectForGenerationSpy = jest
       .spyOn(service, 'resolveProjectForGeneration')
@@ -199,6 +225,18 @@ describe('ProjectsService.createFromPrompt', () => {
       ownerUserId: 'user-1',
       projectId: '507f1f77bcf86cd799439100',
     });
+    expect(generationService.createQueued).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: '507f1f77bcf86cd799439100',
+      prompt: 'Generate a website',
+    });
+    expect(generationService.markRunning).toHaveBeenCalledWith('job-1');
+    expect(generationService.markSucceeded).toHaveBeenCalledWith({
+      jobId: 'job-1',
+      pageCount: 2,
+      homePageId: 'page-1',
+    });
     expect(result).toEqual({
       homePageId: 'page-1',
       pageCount: 2,
@@ -209,6 +247,7 @@ describe('ProjectsService.createFromPrompt', () => {
   it('creates or returns project when projectId is missing and proceeds with generation', async () => {
     const resolvedProject = { _id: '507f1f77bcf86cd799439101' };
     const generationResult = { homePageId: 'page-2', pageCount: 3 };
+    generationService.createQueued.mockResolvedValue({ _id: 'job-2' });
 
     const resolveProjectForGenerationSpy = jest
       .spyOn(service, 'resolveProjectForGeneration')
@@ -228,10 +267,39 @@ describe('ProjectsService.createFromPrompt', () => {
       ownerUserId: 'user-1',
       projectId: undefined,
     });
+    expect(generationService.markSucceeded).toHaveBeenCalledWith({
+      jobId: 'job-2',
+      pageCount: 3,
+      homePageId: 'page-2',
+    });
     expect(result).toEqual({
       homePageId: 'page-2',
       pageCount: 3,
       projectId: '507f1f77bcf86cd799439101',
+    });
+  });
+
+  it('marks generation job as failed and rethrows', async () => {
+    const resolvedProject = { _id: '507f1f77bcf86cd799439102' };
+
+    generationService.createQueued.mockResolvedValue({ _id: 'job-3' });
+    jest
+      .spyOn(service, 'resolveProjectForGeneration')
+      .mockResolvedValue(resolvedProject as never);
+    ai.generateSiteFromPrompt.mockRejectedValue(new Error('AI unavailable'));
+
+    await expect(
+      service.createFromPrompt({
+        tenantId: 'default',
+        ownerUserId: 'user-1',
+        prompt: 'Generate a website',
+      }),
+    ).rejects.toThrow('AI unavailable');
+
+    expect(generationService.markFailed).toHaveBeenCalledWith({
+      jobId: 'job-3',
+      errorCode: null,
+      errorMessage: 'AI unavailable',
     });
   });
 });
@@ -242,6 +310,7 @@ describe('ProjectsService.setHomePage', () => {
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
   let publishModel: MockPublishModel;
+  let generationService: MockGenerationService;
 
   beforeEach(() => {
     projectModel = {
@@ -273,12 +342,20 @@ describe('ProjectsService.setHomePage', () => {
       find: jest.fn(),
     };
 
+    generationService = {
+      createQueued: jest.fn(),
+      markRunning: jest.fn(),
+      markSucceeded: jest.fn(),
+      markFailed: jest.fn(),
+    };
+
     service = new ProjectsService(
       projectModel as unknown as Model<ProjectDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
       { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
+      generationService as never,
     );
   });
 
@@ -368,6 +445,7 @@ describe('ProjectsService.settings', () => {
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
   let publishModel: MockPublishModel;
+  let generationService: MockGenerationService;
 
   beforeEach(() => {
     projectModel = {
@@ -399,12 +477,20 @@ describe('ProjectsService.settings', () => {
       find: jest.fn(),
     };
 
+    generationService = {
+      createQueued: jest.fn(),
+      markRunning: jest.fn(),
+      markSucceeded: jest.fn(),
+      markFailed: jest.fn(),
+    };
+
     service = new ProjectsService(
       projectModel as unknown as Model<ProjectDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
       { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
+      generationService as never,
     );
   });
 
@@ -541,6 +627,7 @@ describe('ProjectsService.draftStatus', () => {
   let pageModel: MockPageModel;
   let navigationModel: MockNavigationModel;
   let publishModel: MockPublishModel;
+  let generationService: MockGenerationService;
 
   beforeEach(() => {
     projectModel = {
@@ -566,12 +653,20 @@ describe('ProjectsService.draftStatus', () => {
       find: jest.fn(),
     };
 
+    generationService = {
+      createQueued: jest.fn(),
+      markRunning: jest.fn(),
+      markSucceeded: jest.fn(),
+      markFailed: jest.fn(),
+    };
+
     service = new ProjectsService(
       projectModel as unknown as Model<ProjectDocument>,
       pageModel as unknown as Model<PageDocument>,
       navigationModel as unknown as Model<NavigationDocument>,
       publishModel as unknown as Model<PublishDocument>,
       { generateSiteFromPrompt: jest.fn() } as unknown as AiService,
+      generationService as never,
     );
   });
 
