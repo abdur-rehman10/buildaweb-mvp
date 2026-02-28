@@ -171,7 +171,6 @@ export function ProjectsApiScreen({
   const publishedUrlInput = publishedUrl ? toPublishUrlInput(publishedUrl) : null;
   const publishedHomeUrl = publishedUrlInput ? buildPublishIndexUrl(publishedUrlInput) : publishedUrl;
   const activeProject = activeProjectId ? projects.find((project) => project.id === activeProjectId) ?? null : null;
-  const hasReachedProjectLimit = projects.length > 0;
   const hasUnpublishedChangesFromProjectsList =
     typeof activeProject?.hasUnpublishedChanges === 'boolean' ? activeProject.hasUnpublishedChanges : null;
   const hasUnpublishedChanges =
@@ -1003,13 +1002,6 @@ export function ProjectsApiScreen({
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    if (hasReachedProjectLimit) {
-      appToast.error('You already have a project in MVP. Open your existing project.', {
-        eventKey: 'project-create-limit-reached',
-      });
-      return;
-    }
-
     setCreating(true);
     setError(null);
     try {
@@ -1018,10 +1010,10 @@ export function ProjectsApiScreen({
         defaultLocale: defaultLocale.trim() || 'en',
       });
       setName('');
-      await loadProjects();
       onSelectProject(res.project_id);
-      appToast.success('Project created', {
-        eventKey: `project-created:${res.project_id}`,
+      await loadProjects();
+      appToast.success('Project ready', {
+        eventKey: `project-ready:${res.project_id}`,
       });
     } catch (err) {
       const message = getUserFriendlyErrorMessage(err, 'Failed to create project');
@@ -1083,22 +1075,19 @@ export function ProjectsApiScreen({
             onChange={(e) => setName(e.target.value)}
             placeholder="My Website"
             required
-            disabled={hasReachedProjectLimit || creating}
+            disabled={creating}
           />
           <Input
             label="Default locale"
             value={defaultLocale}
             onChange={(e) => setDefaultLocale(e.target.value)}
             placeholder="en"
-            disabled={hasReachedProjectLimit || creating}
+            disabled={creating}
           />
-          <Button type="submit" disabled={creating || !name.trim() || hasReachedProjectLimit}>
-            {creating ? 'Creating...' : hasReachedProjectLimit ? 'Project limit reached' : 'Create Project'}
+          <Button type="submit" disabled={creating || !name.trim()}>
+            {creating ? 'Creating...' : 'Create Project'}
           </Button>
         </form>
-        {hasReachedProjectLimit && (
-          <p className="mt-3 text-sm text-muted-foreground">MVP limit: one project per user.</p>
-        )}
       </Card>
 
       <Card className="p-4 space-y-3">
