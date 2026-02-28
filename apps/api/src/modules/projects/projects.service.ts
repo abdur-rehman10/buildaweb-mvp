@@ -722,28 +722,60 @@ export class ProjectsService {
     return this.mapSettings(refreshedProject);
   }
 
+  async resolveProjectForGeneration(params: {
+    tenantId: string;
+    ownerUserId: string;
+    projectId?: string;
+  }) {
+    const projectId =
+      typeof params.projectId === 'string' &&
+      Types.ObjectId.isValid(params.projectId)
+        ? params.projectId
+        : null;
+
+    if (projectId) {
+      const scopedProject = await this.getByIdScoped({
+        tenantId: params.tenantId,
+        ownerUserId: params.ownerUserId,
+        projectId,
+      });
+      if (scopedProject) {
+        return scopedProject;
+      }
+    }
+
+    return this.create({
+      tenantId: params.tenantId,
+      ownerUserId: params.ownerUserId,
+      name: 'My Website',
+      defaultLocale: 'en',
+    });
+  }
+
   async createFromPrompt(params: {
     tenantId: string;
     ownerUserId: string;
-    projectId: string;
+    projectId?: string;
     prompt: string;
   }) {
-    const project = await this.getByIdScoped({
+    const project = await this.resolveProjectForGeneration({
       tenantId: params.tenantId,
       ownerUserId: params.ownerUserId,
       projectId: params.projectId,
     });
-    if (!project) {
-      throw new NotFoundException('Project not found');
-    }
 
     const generated = await this.ai.generateSiteFromPrompt(params.prompt);
-    return this.replaceProjectContentFromGeneration({
+    const generation = await this.replaceProjectContentFromGeneration({
       tenantId: params.tenantId,
       ownerUserId: params.ownerUserId,
-      projectId: params.projectId,
+      projectId: String(project._id),
       generated,
     });
+
+    return {
+      ...generation,
+      projectId: String(project._id),
+    };
   }
 
   async replaceProjectContentFromGeneration(params: {

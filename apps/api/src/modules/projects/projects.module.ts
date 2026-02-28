@@ -30,9 +30,15 @@ import { ProjectsController } from './projects.controller';
 })
 export class ProjectsModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(AuthRateLimitMiddleware).forRoutes({
-      path: 'projects/:projectId/generate',
-      method: RequestMethod.POST,
-    });
+    consumer.apply(AuthRateLimitMiddleware).forRoutes(
+      {
+        path: 'projects/:projectId/generate',
+        method: RequestMethod.POST,
+      },
+      {
+        path: 'projects/generate',
+        method: RequestMethod.POST,
+      },
+    );
   }
 }

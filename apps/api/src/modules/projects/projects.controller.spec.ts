@@ -382,6 +382,7 @@ describe('ProjectsController.generateProject', () => {
     projects.createFromPrompt.mockResolvedValue({
       homePageId: '507f1f77bcf86cd799439011',
       pageCount: 2,
+      projectId: '507f1f77bcf86cd799439100',
     });
 
     const result = await controller.generateProject(
@@ -402,6 +403,34 @@ describe('ProjectsController.generateProject', () => {
         success: true,
         projectId: '507f1f77bcf86cd799439100',
         previewUrl: 'http://13.50.101.211/editor/507f1f77bcf86cd799439100',
+      },
+    });
+  });
+
+  it('generates site without projectId by resolving project first', async () => {
+    projects.createFromPrompt.mockResolvedValue({
+      homePageId: '507f1f77bcf86cd799439011',
+      pageCount: 2,
+      projectId: '507f1f77bcf86cd799439101',
+    });
+
+    const result = await controller.generateProjectWithoutProjectId(
+      { prompt: 'Generate a startup website' },
+      { user: { sub: 'user-1', tenantId: 'default' } },
+    );
+
+    expect(projects.createFromPrompt).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: undefined,
+      prompt: 'Generate a startup website',
+    });
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        success: true,
+        projectId: '507f1f77bcf86cd799439101',
+        previewUrl: 'http://13.50.101.211/editor/507f1f77bcf86cd799439101',
       },
     });
   });
