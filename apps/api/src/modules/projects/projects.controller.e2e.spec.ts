@@ -1,6 +1,5 @@
 import {
   ExecutionContext,
-  ForbiddenException,
   INestApplication,
   UnauthorizedException,
   ValidationPipe,
@@ -38,7 +37,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
     projectsService = {
       create: jest.fn(() => {
         if (createdProjectId) {
-          throw new ForbiddenException('User already has a project');
+          return Promise.resolve({ _id: createdProjectId });
         }
         createdProjectId = 'project-1';
         return Promise.resolve({ _id: createdProjectId });
@@ -111,7 +110,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
     await app.close();
   });
 
-  it('allows first project creation and blocks second project creation with 403', async () => {
+  it('returns same project id when project creation is called twice', async () => {
     const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
 
     const firstCreateResponse = await request(server as never)
@@ -138,14 +137,55 @@ describe('ProjectsController single-project enforcement (request)', () => {
         defaultLocale: 'en',
       });
 
-    expect(secondCreateResponse.status).toBe(403);
+    expect(secondCreateResponse.status).toBe(201);
     expect(secondCreateResponse.body).toEqual({
-      ok: false,
-      error: {
-        code: 'PROJECT_ALREADY_EXISTS',
-        message: 'User already has a project',
+      ok: true,
+      data: {
+        project_id: 'project-1',
       },
     });
+
+    projectsService.listByOwnerWithDraftStatus.mockResolvedValue([
+      {
+        project: {
+          _id: 'project-1',
+          name: 'Main Project',
+          status: 'draft',
+          defaultLocale: 'en',
+          homePageId: null,
+          latestPublishId: null,
+          publishedAt: null,
+          siteName: null,
+          logoAssetId: null,
+          faviconAssetId: null,
+          defaultOgImageAssetId: null,
+          locale: 'en',
+          createdAt: new Date('2026-02-08T09:00:00.000Z'),
+          updatedAt: new Date('2026-02-08T09:00:00.000Z'),
+        },
+        hasUnpublishedChanges: true,
+      },
+    ]);
+
+    const listResponse = await request(server as never)
+      .get('/api/v1/projects')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(listResponse.status).toBe(200);
+    const listBody = listResponse.body as {
+      ok: boolean;
+      data: { projects: Array<Record<string, unknown>> };
+    };
+    expect(listBody.ok).toBe(true);
+    expect(listBody.data.projects).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'project-1',
+          name: 'Main Project',
+          defaultLocale: 'en',
+        }),
+      ]),
+    );
   });
 
   it('generates site content and returns previewUrl', async () => {

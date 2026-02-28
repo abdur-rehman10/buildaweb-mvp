@@ -1,8 +1,4 @@
-import {
-  ForbiddenException,
-  HttpException,
-  NotFoundException,
-} from '@nestjs/common';
+import { HttpException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
@@ -56,26 +52,20 @@ describe('ProjectsController.createProject', () => {
     });
   });
 
-  it('returns PROJECT_ALREADY_EXISTS when user already has a project', async () => {
-    projects.create.mockRejectedValue(
-      new ForbiddenException('User already has a project'),
+  it('returns existing project id when user already has a project', async () => {
+    projects.create.mockResolvedValue({ _id: '507f1f77bcf86cd799439100' });
+
+    const result = await controller.createProject(
+      { name: 'Second site', defaultLocale: 'en' },
+      { user: { sub: 'user-1', tenantId: 'default' } },
     );
 
-    await expect(
-      controller.createProject(
-        { name: 'Second site', defaultLocale: 'en' },
-        { user: { sub: 'user-1', tenantId: 'default' } },
-      ),
-    ).rejects.toMatchObject({
-      status: 403,
-      response: {
-        ok: false,
-        error: {
-          code: 'PROJECT_ALREADY_EXISTS',
-          message: 'User already has a project',
-        },
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        project_id: '507f1f77bcf86cd799439100',
       },
-    } as Partial<HttpException>);
+    });
   });
 });
 
