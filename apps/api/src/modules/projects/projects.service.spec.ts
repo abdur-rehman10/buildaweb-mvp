@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
@@ -75,7 +74,7 @@ describe('ProjectsService.create', () => {
     );
   });
 
-  it('throws ForbiddenException when owner already has a project', async () => {
+  it('returns existing project when owner already has a project', async () => {
     projectModel.findOne.mockReturnValue({
       exec: jest.fn().mockResolvedValue({ _id: 'project-1' }),
     });
@@ -87,16 +86,18 @@ describe('ProjectsService.create', () => {
         name: 'My Project',
         defaultLocale: 'en',
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toEqual({ _id: 'project-1' });
 
     expect(projectModel.create).not.toHaveBeenCalled();
   });
 
-  it('converts duplicate key errors to ForbiddenException', async () => {
-    projectModel.findOne.mockReturnValue({
-      exec: jest.fn().mockResolvedValue(null),
-    });
+  it('returns existing project on duplicate key error', async () => {
     projectModel.create.mockRejectedValue({ code: 11000 });
+    projectModel.findOne
+      .mockReturnValueOnce({ exec: jest.fn().mockResolvedValue(null) })
+      .mockReturnValueOnce({
+        exec: jest.fn().mockResolvedValue({ _id: 'project-1' }),
+      });
 
     await expect(
       service.create({
@@ -105,7 +106,7 @@ describe('ProjectsService.create', () => {
         name: 'My Project',
         defaultLocale: 'en',
       }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).resolves.toEqual({ _id: 'project-1' });
   });
 });
 

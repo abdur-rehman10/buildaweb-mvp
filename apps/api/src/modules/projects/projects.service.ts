@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -374,7 +373,7 @@ export class ProjectsService {
       ownerUserId: params.ownerUserId,
     });
     if (existingProject) {
-      throw new ForbiddenException('User already has a project');
+      return existingProject;
     }
 
     try {
@@ -387,7 +386,14 @@ export class ProjectsService {
       });
     } catch (error) {
       if (this.isDuplicateKeyError(error)) {
-        throw new ForbiddenException('User already has a project');
+        const existingOnDuplicate = await this.findFirstByOwner({
+          tenantId: params.tenantId,
+          ownerUserId: params.ownerUserId,
+        });
+        if (existingOnDuplicate) {
+          return existingOnDuplicate;
+        }
+        throw new InternalServerErrorException('Failed to create project');
       }
       throw error;
     }

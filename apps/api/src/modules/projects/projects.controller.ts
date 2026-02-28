@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   HttpException,
   HttpStatus,
@@ -42,23 +41,12 @@ export class ProjectsController {
   async createProject(@Body() dto: CreateProjectDto, @Req() req: AuthRequest) {
     const { ownerUserId, tenantId } = getAuthContext(req);
 
-    let project: { _id: unknown };
-    try {
-      project = await this.projects.create({
-        tenantId,
-        ownerUserId,
-        name: dto.name,
-        defaultLocale: dto.defaultLocale ?? 'en',
-      });
-    } catch (error) {
-      if (error instanceof ForbiddenException) {
-        throw new HttpException(
-          fail('PROJECT_ALREADY_EXISTS', 'User already has a project'),
-          HttpStatus.FORBIDDEN,
-        );
-      }
-      throw error;
-    }
+    const project = await this.projects.create({
+      tenantId,
+      ownerUserId,
+      name: dto.name,
+      defaultLocale: dto.defaultLocale ?? 'en',
+    });
 
     return ok({ project_id: toIdString(project._id) });
   }
