@@ -111,6 +111,7 @@ function renderScreen(
 
 describe('ProjectsApiScreen toasts', () => {
   afterEach(() => {
+    window.history.pushState({}, '', '/dashboard');
     cleanup();
   });
 
@@ -190,6 +191,19 @@ describe('ProjectsApiScreen toasts', () => {
     vi.mocked(pagesApi.duplicate).mockResolvedValue({
       page_id: 'page-home-copy',
     });
+  });
+
+
+  it('renders generation debug panel when debug flag is enabled', async () => {
+    window.history.pushState({}, '', '/dashboard?debug=1');
+
+    renderScreen();
+
+    const toggle = await screen.findByRole('button', { name: 'Show generation debug panel' });
+    fireEvent.click(toggle);
+
+    expect(await screen.findByText('Project ID:')).toBeInTheDocument();
+    expect(screen.getByText('Generate URL:')).toBeInTheDocument();
   });
 
   it('shows a success toast when duplicating a page', async () => {
@@ -291,7 +305,7 @@ describe('ProjectsApiScreen toasts', () => {
 
     await waitFor(() => {
       expect(appToast.error).toHaveBeenCalledWith(
-        'AI response failed, try again.',
+        'AI response failed, try again. (status 502)',
         expect.objectContaining({
           eventKey: 'generate-error:project-1',
         }),
