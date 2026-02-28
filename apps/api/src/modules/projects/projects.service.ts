@@ -12,6 +12,7 @@ import {
 } from '../navigation/navigation.schema';
 import { Page, PageDocument } from '../pages/page.schema';
 import { Publish, PublishDocument } from '../publish/publish.schema';
+import { GenerationService } from '../generation/generation.service';
 import {
   buildPublishDraftSnapshot,
   snapshotSignature,
@@ -95,6 +96,7 @@ export class ProjectsService {
     @InjectModel(Publish.name)
     private readonly publishModel: Model<PublishDocument>,
     private readonly ai: AiService,
+    private readonly generation: GenerationService,
   ) {}
 
   private normalizeOptionalString(value: unknown): string | null {
@@ -752,6 +754,23 @@ export class ProjectsService {
     });
   }
 
+  private extractGenerationErrorCode(error: unknown): string | null {
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = (error as { code?: unknown }).code;
+      if (typeof code === 'string' && code.trim()) {
+        return code.trim().slice(0, 100);
+      }
+    }
+    return null;
+  }
+
+  private extractGenerationErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message.trim()) {
+      return error.message;
+    }
+    return 'Failed to generate site';
+  }
+
   async createFromPrompt(params: {
     tenantId: string;
     ownerUserId: string;
@@ -763,19 +782,44 @@ export class ProjectsService {
       ownerUserId: params.ownerUserId,
       projectId: params.projectId,
     });
+    const resolvedProjectId = String(project._id);
 
-    const generated = await this.ai.generateSiteFromPrompt(params.prompt);
-    const generation = await this.replaceProjectContentFromGeneration({
+    const job = await this.generation.createQueued({
       tenantId: params.tenantId,
       ownerUserId: params.ownerUserId,
-      projectId: String(project._id),
-      generated,
+      projectId: resolvedProjectId,
+      prompt: params.prompt,
     });
 
-    return {
-      ...generation,
-      projectId: String(project._id),
-    };
+    await this.generation.markRunning(String(job._id));
+
+    try {
+      const generated = await this.ai.generateSiteFromPrompt(params.prompt);
+      const generation = await this.replaceProjectContentFromGeneration({
+        tenantId: params.tenantId,
+        ownerUserId: params.ownerUserId,
+        projectId: resolvedProjectId,
+        generated,
+      });
+
+      await this.generation.markSucceeded({
+        jobId: String(job._id),
+        pageCount: generation.pageCount,
+        homePageId: generation.homePageId,
+      });
+
+      return {
+        ...generation,
+        projectId: resolvedProjectId,
+      };
+    } catch (error) {
+      await this.generation.markFailed({
+        jobId: String(job._id),
+        errorCode: this.extractGenerationErrorCode(error),
+        errorMessage: this.extractGenerationErrorMessage(error),
+      });
+      throw error;
+    }
   }
 
   async replaceProjectContentFromGeneration(params: {

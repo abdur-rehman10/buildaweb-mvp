@@ -7,6 +7,7 @@ import {
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthRateLimitMiddleware } from '../auth/auth-rate-limit.middleware';
 import { AiModule } from '../ai/ai.module';
+import { GenerationModule } from '../generation/generation.module';
 import { Navigation, NavigationSchema } from '../navigation/navigation.schema';
 import { Page, PageSchema } from '../pages/page.schema';
 import { Publish, PublishSchema } from '../publish/publish.schema';
@@ -17,6 +18,7 @@ import { ProjectsController } from './projects.controller';
 @Module({
   imports: [
     AiModule,
+    GenerationModule,
     MongooseModule.forFeature([
       { name: Project.name, schema: ProjectSchema },
       { name: Page.name, schema: PageSchema },

@@ -12,6 +12,7 @@ import type { Server } from 'http';
 import type { AuthRequest } from '../../types/auth-request';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProjectsController } from './projects.controller';
+import { GenerationService } from '../generation/generation.service';
 import { ProjectsService } from './projects.service';
 
 type MockProjectsService = {
@@ -25,9 +26,15 @@ type MockProjectsService = {
   createFromPrompt: jest.Mock;
 };
 
+type MockGenerationService = {
+  getLatestForProject: jest.Mock;
+  getByIdScoped: jest.Mock;
+};
+
 describe('ProjectsController single-project enforcement (request)', () => {
   let app: INestApplication;
   let projectsService: MockProjectsService;
+  let generationService: MockGenerationService;
   let jwt: JwtService;
   let createdProjectId: string | null;
 
@@ -55,12 +62,18 @@ describe('ProjectsController single-project enforcement (request)', () => {
       }),
     };
 
+    generationService = {
+      getLatestForProject: jest.fn(),
+      getByIdScoped: jest.fn(),
+    };
+
     jwt = new JwtService({ secret: 'test-jwt-secret' });
 
     const moduleRef = await Test.createTestingModule({
       controllers: [ProjectsController],
       providers: [
         { provide: ProjectsService, useValue: projectsService },
+        { provide: GenerationService, useValue: generationService },
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('http://13.50.101.211') },
@@ -243,6 +256,41 @@ describe('ProjectsController single-project enforcement (request)', () => {
       ownerUserId: 'user-1',
       projectId: undefined,
       prompt: 'Create a personal blog website',
+    });
+  });
+
+  it('returns latest generation job for project', async () => {
+    const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
+
+    projectsService.getByIdScoped.mockResolvedValue({ _id: 'project-1' });
+    generationService.getLatestForProject.mockResolvedValue({
+      _id: 'job-1',
+      projectId: 'project-1',
+      status: 'succeeded',
+      startedAt: null,
+      finishedAt: null,
+      errorCode: null,
+      errorMessage: null,
+      meta: { pageCount: 2, homePageId: 'page-1' },
+      createdAt: null,
+      updatedAt: null,
+    });
+
+    const response = await request(server as never)
+      .get('/api/v1/projects/project-1/generation/latest')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    const body = response.body as {
+      ok: boolean;
+      data: { job: Record<string, unknown> };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.data.job).toMatchObject({
+      id: 'job-1',
+      projectId: 'project-1',
+      status: 'succeeded',
+      meta: { pageCount: 2, homePageId: 'page-1' },
     });
   });
 });

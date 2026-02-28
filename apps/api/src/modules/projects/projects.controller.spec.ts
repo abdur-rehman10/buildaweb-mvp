@@ -32,6 +32,10 @@ describe('ProjectsController.createProject', () => {
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
+      {
+        getLatestForProject: jest.fn(),
+        getByIdScoped: jest.fn(),
+      } as never,
       config as unknown as ConfigService,
     );
   });
@@ -98,6 +102,10 @@ describe('ProjectsController.setProjectHomePage', () => {
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
+      {
+        getLatestForProject: jest.fn(),
+        getByIdScoped: jest.fn(),
+      } as never,
       config as unknown as ConfigService,
     );
   });
@@ -181,6 +189,10 @@ describe('ProjectsController.getProject', () => {
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
+      {
+        getLatestForProject: jest.fn(),
+        getByIdScoped: jest.fn(),
+      } as never,
       config as unknown as ConfigService,
     );
   });
@@ -277,6 +289,10 @@ describe('ProjectsController.settings', () => {
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
+      {
+        getLatestForProject: jest.fn(),
+        getByIdScoped: jest.fn(),
+      } as never,
       config as unknown as ConfigService,
     );
   });
@@ -374,6 +390,10 @@ describe('ProjectsController.generateProject', () => {
 
     controller = new ProjectsController(
       projects as unknown as ProjectsService,
+      {
+        getLatestForProject: jest.fn(),
+        getByIdScoped: jest.fn(),
+      } as never,
       config as unknown as ConfigService,
     );
   });
@@ -431,6 +451,73 @@ describe('ProjectsController.generateProject', () => {
         success: true,
         projectId: '507f1f77bcf86cd799439101',
         previewUrl: 'http://13.50.101.211/editor/507f1f77bcf86cd799439101',
+      },
+    });
+  });
+});
+
+describe('ProjectsController.getLatestGenerationJob', () => {
+  let controller: ProjectsController;
+  let projects: {
+    getByIdScoped: jest.Mock;
+  };
+  let generation: {
+    getLatestForProject: jest.Mock;
+    getByIdScoped: jest.Mock;
+  };
+  let config: { get: jest.Mock };
+
+  beforeEach(() => {
+    projects = {
+      getByIdScoped: jest.fn(),
+    };
+    generation = {
+      getLatestForProject: jest.fn(),
+      getByIdScoped: jest.fn(),
+    };
+    config = { get: jest.fn() };
+
+    controller = new ProjectsController(
+      projects as never,
+      generation as never,
+      config as unknown as ConfigService,
+    );
+  });
+
+  it('returns latest job data when present', async () => {
+    projects.getByIdScoped.mockResolvedValue({ _id: 'project-1' });
+    generation.getLatestForProject.mockResolvedValue({
+      _id: 'job-1',
+      projectId: 'project-1',
+      status: 'succeeded',
+      startedAt: null,
+      finishedAt: null,
+      errorCode: null,
+      errorMessage: null,
+      meta: { pageCount: 2, homePageId: 'page-1' },
+      createdAt: null,
+      updatedAt: null,
+    });
+
+    const result = await controller.getLatestGenerationJob('project-1', {
+      user: { sub: 'user-1', tenantId: 'default' },
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        job: {
+          id: 'job-1',
+          projectId: 'project-1',
+          status: 'succeeded',
+          startedAt: null,
+          finishedAt: null,
+          errorCode: null,
+          errorMessage: null,
+          meta: { pageCount: 2, homePageId: 'page-1' },
+          createdAt: null,
+          updatedAt: null,
+        },
       },
     });
   });
