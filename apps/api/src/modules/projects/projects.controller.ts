@@ -37,28 +37,13 @@ export class ProjectsController {
     return Types.ObjectId.isValid(value);
   }
 
-  @Post()
-  async createProject(@Body() dto: CreateProjectDto, @Req() req: AuthRequest) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
-
-    const project = await this.projects.create({
-      tenantId,
-      ownerUserId,
-      name: dto.name,
-      defaultLocale: dto.defaultLocale ?? 'en',
-    });
-
-    return ok({ project_id: toIdString(project._id) });
-  }
-
-  @Post(':projectId/generate')
-  async generateProject(
-    @Param('projectId') projectId: string,
-    @Body() dto: GenerateProjectDto,
-    @Req() req: AuthRequest,
-  ) {
-    const { ownerUserId, tenantId } = getAuthContext(req);
-    const prompt = dto.prompt.trim();
+  private async generateProjectFromPrompt(params: {
+    projectId?: string;
+    dto: GenerateProjectDto;
+    req: AuthRequest;
+  }) {
+    const { ownerUserId, tenantId } = getAuthContext(params.req);
+    const prompt = params.dto.prompt.trim();
 
     if (!prompt) {
       throw new HttpException(
@@ -68,10 +53,10 @@ export class ProjectsController {
     }
 
     try {
-      await this.projects.createFromPrompt({
+      const result = await this.projects.createFromPrompt({
         tenantId,
         ownerUserId,
-        projectId,
+        projectId: params.projectId,
         prompt,
       });
 
@@ -79,12 +64,12 @@ export class ProjectsController {
         this.config.get<string>('PUBLIC_APP_URL')?.trim().replace(/\/$/, '') ??
         '';
       const previewUrl = publicAppUrl
-        ? `${publicAppUrl}/editor/${projectId}`
-        : `/editor/${projectId}`;
+        ? `${publicAppUrl}/editor/${result.projectId}`
+        : `/editor/${result.projectId}`;
 
       return ok({
         success: true,
-        projectId,
+        projectId: result.projectId,
         previewUrl,
       });
     } catch (error) {
@@ -116,6 +101,37 @@ export class ProjectsController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  @Post()
+  async createProject(@Body() dto: CreateProjectDto, @Req() req: AuthRequest) {
+    const { ownerUserId, tenantId } = getAuthContext(req);
+
+    const project = await this.projects.create({
+      tenantId,
+      ownerUserId,
+      name: dto.name,
+      defaultLocale: dto.defaultLocale ?? 'en',
+    });
+
+    return ok({ project_id: toIdString(project._id) });
+  }
+
+  @Post(':projectId/generate')
+  async generateProject(
+    @Param('projectId') projectId: string,
+    @Body() dto: GenerateProjectDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.generateProjectFromPrompt({ projectId, dto, req });
+  }
+
+  @Post('generate')
+  async generateProjectWithoutProjectId(
+    @Body() dto: GenerateProjectDto,
+    @Req() req: AuthRequest,
+  ) {
+    return this.generateProjectFromPrompt({ dto, req });
   }
 
   @Get()

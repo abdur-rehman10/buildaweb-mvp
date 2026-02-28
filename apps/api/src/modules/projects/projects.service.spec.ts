@@ -110,6 +110,132 @@ describe('ProjectsService.create', () => {
   });
 });
 
+describe('ProjectsService.createFromPrompt', () => {
+  let service: ProjectsService;
+  let projectModel: MockProjectModel;
+  let pageModel: MockPageModel;
+  let navigationModel: MockNavigationModel;
+  let publishModel: MockPublishModel;
+  let ai: { generateSiteFromPrompt: jest.Mock };
+
+  beforeEach(() => {
+    projectModel = {
+      create: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      updateOne: jest.fn(),
+    };
+
+    pageModel = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      updateMany: jest.fn(),
+      updateOne: jest.fn(),
+    };
+
+    navigationModel = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+    };
+
+    publishModel = {
+      find: jest.fn(),
+    };
+
+    ai = {
+      generateSiteFromPrompt: jest.fn().mockResolvedValue({
+        project: { name: 'Generated Site' },
+        seo: {
+          title: 'Generated Site',
+          description: 'Generated desc',
+          keywords: [],
+        },
+        pages: [
+          {
+            title: 'Home',
+            slug: '/',
+            sections: [
+              {
+                type: 'hero',
+                headline: 'Welcome',
+                subheadline: 'Sub',
+                cta: 'Get started',
+              },
+            ],
+          },
+        ],
+      }),
+    };
+
+    service = new ProjectsService(
+      projectModel as unknown as Model<ProjectDocument>,
+      pageModel as unknown as Model<PageDocument>,
+      navigationModel as unknown as Model<NavigationDocument>,
+      publishModel as unknown as Model<PublishDocument>,
+      ai as unknown as AiService,
+    );
+  });
+
+  it('uses provided valid projectId when it belongs to user', async () => {
+    const resolvedProject = { _id: '507f1f77bcf86cd799439100' };
+    const generationResult = { homePageId: 'page-1', pageCount: 2 };
+
+    const resolveProjectForGenerationSpy = jest
+      .spyOn(service, 'resolveProjectForGeneration')
+      .mockResolvedValue(resolvedProject as never);
+    jest
+      .spyOn(service, 'replaceProjectContentFromGeneration')
+      .mockResolvedValue(generationResult);
+
+    const result = await service.createFromPrompt({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: '507f1f77bcf86cd799439100',
+      prompt: 'Generate a website',
+    });
+
+    expect(resolveProjectForGenerationSpy).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: '507f1f77bcf86cd799439100',
+    });
+    expect(result).toEqual({
+      homePageId: 'page-1',
+      pageCount: 2,
+      projectId: '507f1f77bcf86cd799439100',
+    });
+  });
+
+  it('creates or returns project when projectId is missing and proceeds with generation', async () => {
+    const resolvedProject = { _id: '507f1f77bcf86cd799439101' };
+    const generationResult = { homePageId: 'page-2', pageCount: 3 };
+
+    const resolveProjectForGenerationSpy = jest
+      .spyOn(service, 'resolveProjectForGeneration')
+      .mockResolvedValue(resolvedProject as never);
+    jest
+      .spyOn(service, 'replaceProjectContentFromGeneration')
+      .mockResolvedValue(generationResult);
+
+    const result = await service.createFromPrompt({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      prompt: 'Generate a website',
+    });
+
+    expect(resolveProjectForGenerationSpy).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: undefined,
+    });
+    expect(result).toEqual({
+      homePageId: 'page-2',
+      pageCount: 3,
+      projectId: '507f1f77bcf86cd799439101',
+    });
+  });
+});
+
 describe('ProjectsService.setHomePage', () => {
   let service: ProjectsService;
   let projectModel: MockProjectModel;

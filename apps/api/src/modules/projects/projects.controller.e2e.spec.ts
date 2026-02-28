@@ -51,6 +51,7 @@ describe('ProjectsController single-project enforcement (request)', () => {
       createFromPrompt: jest.fn().mockResolvedValue({
         homePageId: 'page-1',
         pageCount: 2,
+        projectId: 'project-1',
       }),
     };
 
@@ -210,6 +211,38 @@ describe('ProjectsController single-project enforcement (request)', () => {
       ownerUserId: 'user-1',
       projectId: 'project-1',
       prompt: 'Create a SaaS landing site',
+    });
+  });
+
+  it('generates site content without project id by resolving project for user', async () => {
+    const token = await jwt.signAsync({ sub: 'user-1', tenantId: 'default' });
+
+    projectsService.createFromPrompt.mockResolvedValueOnce({
+      homePageId: 'page-2',
+      pageCount: 3,
+      projectId: 'project-2',
+    });
+
+    const response = await request(server as never)
+      .post('/api/v1/projects/generate')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ prompt: 'Create a personal blog website' });
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      ok: true,
+      data: {
+        success: true,
+        projectId: 'project-2',
+        previewUrl: 'http://13.50.101.211/editor/project-2',
+      },
+    });
+
+    expect(projectsService.createFromPrompt).toHaveBeenCalledWith({
+      tenantId: 'default',
+      ownerUserId: 'user-1',
+      projectId: undefined,
+      prompt: 'Create a personal blog website',
     });
   });
 });
