@@ -75,3 +75,26 @@ Ensure docs stay aligned with code/process changes and enforce the Docs Update P
 ### Definition of Done
 - The consistency check is documented clearly.
 - `MINI:T03` can be referenced directly from TASKLIST items.
+
+---
+
+## MINI:T04 — Env Separation Check (Staging vs Prod)
+
+### Purpose
+Prevent accidental routing/deploy overlap.
+
+### Steps
+- Fetch `/api/v1/health` from staging and prod.
+- Compare `git_sha` and `build_time_utc`.
+- If they are identical when we expect staging-only deploy, STOP and report `staging/prod not separated`.
+
+### Commands (examples)
+- `curl -s https://staging.buildaweb.ai/api/v1/health`
+- `curl -s https://buildaweb.ai/api/v1/health`
+
+### Pass criteria
+- `staging git_sha != prod git_sha` (unless a prod deploy just happened intentionally).
+
+### Fail criteria
+- Identical `git_sha` + identical `build_time_utc` unexpectedly.
+- Missing `git_sha`/`build_time_utc` fields.
