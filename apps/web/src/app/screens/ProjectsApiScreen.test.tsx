@@ -26,6 +26,7 @@ vi.mock('../../lib/api', () => {
       list: vi.fn(),
       create: vi.fn(),
       generate: vi.fn(),
+      getLatestGeneration: vi.fn(),
       get: vi.fn(),
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
@@ -145,6 +146,14 @@ describe('ProjectsApiScreen toasts', () => {
       success: true,
       projectId: 'project-1',
       previewUrl: '/editor/project-1',
+    });
+    vi.mocked(projectsApi.getLatestGeneration).mockResolvedValue({
+      job: {
+        id: 'job-1',
+        projectId: 'project-1',
+        status: 'succeeded',
+        meta: { pageCount: 2, homePageId: 'page-home' },
+      },
     });
     vi.mocked(projectsApi.getSettings).mockResolvedValue({
       settings: {
@@ -334,6 +343,91 @@ describe('ProjectsApiScreen toasts', () => {
         'Network error. Please check your connection and try again.',
         expect.objectContaining({
           eventKey: 'page-duplicate-error:project-1:page-home',
+        }),
+      );
+    });
+  });
+
+
+  it('renders generating status while polling latest job', async () => {
+    const onOpenPage = vi.fn();
+
+    let resolveLatest: ((value: {
+      job: {
+        id: string;
+        projectId: string;
+        status: 'succeeded';
+        meta: { pageCount: number; homePageId: string };
+      };
+    }) => void) | null = null;
+
+    vi.mocked(projectsApi.getLatestGeneration).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveLatest = resolve;
+      }),
+    );
+
+    renderScreen({ onOpenPage });
+
+    const promptInput = await screen.findByLabelText('AI prompt');
+    fireEvent.change(promptInput, {
+      target: {
+        value: 'Create a modern SaaS site for a startup with Home, Pricing, About, and Contact pages.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(await screen.findByText(/Generating your site/)).toBeInTheDocument();
+
+    resolveLatest?.({
+      job: {
+        id: 'job-1',
+        projectId: 'project-1',
+        status: 'succeeded',
+        meta: { pageCount: 2, homePageId: 'page-home' },
+      },
+    });
+
+    await waitFor(() => {
+      expect(appToast.success).toHaveBeenCalledWith(
+        'Generated 2 pages',
+        expect.objectContaining({
+          eventKey: 'generate-success:project-1',
+        }),
+      );
+      expect(onOpenPage).toHaveBeenCalled();
+    });
+  });
+
+  it('shows generation failure message from latest status job', async () => {
+    vi.mocked(projectsApi.getLatestGeneration).mockResolvedValueOnce({
+      job: {
+        id: 'job-1',
+        projectId: 'project-1',
+        status: 'failed',
+        errorMessage: 'Provider overloaded. Try again shortly.',
+        meta: null,
+      },
+    });
+
+    renderScreen();
+
+    const promptInput = await screen.findByLabelText('AI prompt');
+    fireEvent.change(promptInput, {
+      target: {
+        value: 'Create a modern SaaS site for a startup with Home, Pricing, About, and Contact pages.',
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Provider overloaded. Try again shortly.');
+    await waitFor(() => {
+      expect(appToast.error).toHaveBeenCalledWith(
+        'Provider overloaded. Try again shortly.',
+        expect.objectContaining({
+          eventKey: 'generate-failed:project-1',
         }),
       );
     });

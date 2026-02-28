@@ -91,6 +91,9 @@ function formatPublishHistoryTime(value?: string | null): string {
   return new Date(ts).toLocaleString();
 }
 
+const GENERATION_POLL_INTERVAL_MS = 1000;
+const GENERATION_POLL_TIMEOUT_MS = 60_000;
+
 function emptyProjectSettings(locale = 'en'): ProjectSettings {
   return {
     siteName: null,
@@ -120,7 +123,9 @@ export function ProjectsApiScreen({
   const [defaultLocale, setDefaultLocale] = useState('en');
   const [generatePrompt, setGeneratePrompt] = useState('');
   const [generatingSite, setGeneratingSite] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState<'idle' | 'queued' | 'running' | 'succeeded' | 'failed'>('idle');
   const [generateMessage, setGenerateMessage] = useState<string | null>(null);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   const [newPageTitle, setNewPageTitle] = useState('');
   const [newPageSlug, setNewPageSlug] = useState('');
@@ -455,6 +460,10 @@ export function ProjectsApiScreen({
       setLastPageId(null);
       setProjectPages([]);
       setGenerateMessage(null);
+    setGenerateError(null);
+    setGenerationStatus('idle');
+      setGenerateError(null);
+      setGenerationStatus('idle');
       setProjectSettings(emptyProjectSettings());
       setProjectSettingsAssetUrls({});
       setProjectSettingsMessage(null);
@@ -815,6 +824,36 @@ export function ProjectsApiScreen({
     return created.project_id;
   };
 
+
+  const pollLatestGenerationJob = async (projectId: string) => {
+    const timeoutAt = Date.now() + GENERATION_POLL_TIMEOUT_MS;
+
+    while (Date.now() < timeoutAt) {
+      const latest = await projectsApi.getLatestGeneration(projectId);
+      const job = latest.job;
+
+      if (!job) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => resolve(), GENERATION_POLL_INTERVAL_MS);
+        });
+        continue;
+      }
+
+      if (job.status === 'queued' || job.status === 'running') {
+        setGenerationStatus(job.status);
+        setGenerateMessage('Generating your website...');
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => resolve(), GENERATION_POLL_INTERVAL_MS);
+        });
+        continue;
+      }
+
+      return job;
+    }
+
+    return null;
+  };
+
   const startAiGeneration = async () => {
     if (!normalizedGeneratePrompt) {
       setGenerateMessage('Please describe your website before generating.');
@@ -822,17 +861,51 @@ export function ProjectsApiScreen({
     }
 
     setGeneratingSite(true);
-    setGenerateMessage(null);
+    setGenerationStatus('queued');
+    setGenerateMessage('Generation queued...');
+    setGenerateError(null);
     setError(null);
 
     try {
       const projectId = await ensureProjectForGeneration();
       await projectsApi.generate(projectId, { prompt: normalizedGeneratePrompt });
+
+      const latestJob = await pollLatestGenerationJob(projectId);
+      if (!latestJob) {
+        throw new Error('Generation timed out. Please try again.');
+      }
+
+      if (latestJob.status === 'failed') {
+        const message = latestJob.errorMessage || 'AI generation failed. Please try again.';
+        setGenerationStatus('failed');
+        setGenerateError(message);
+        setGenerateMessage(message);
+        appToast.error(message, {
+          eventKey: `generate-failed:${projectId}`,
+        });
+        return;
+      }
+
+      setGenerationStatus('succeeded');
+      const pageCount =
+        typeof latestJob.meta?.pageCount === 'number' && Number.isFinite(latestJob.meta.pageCount)
+          ? latestJob.meta.pageCount
+          : null;
+
       const pages = await loadProjectPages(projectId);
       await loadNavigation(projectId);
       await loadPublishHistory(projectId);
 
-      const resolvedPageId = pages[0]?.id ?? null;
+      const preferredHomePageId =
+        typeof latestJob.meta?.homePageId === 'string' && latestJob.meta.homePageId.trim()
+          ? latestJob.meta.homePageId
+          : null;
+
+      const resolvedPageId =
+        (preferredHomePageId && pages.some((page) => page.id === preferredHomePageId) ? preferredHomePageId : null) ??
+        pages[0]?.id ??
+        null;
+
       if (resolvedPageId) {
         window.localStorage.setItem(`baw_last_page_${projectId}`, resolvedPageId);
         setLastPageId(resolvedPageId);
@@ -842,8 +915,11 @@ export function ProjectsApiScreen({
         onSelectProject(projectId);
       }
 
-      setGenerateMessage('AI generation completed. Your pages are ready.');
-      appToast.success('Site generated with AI', {
+      const successMessage = pageCount
+        ? `AI generation completed. Generated ${pageCount} pages.`
+        : 'AI generation completed. Your pages are ready.';
+      setGenerateMessage(successMessage);
+      appToast.success(pageCount ? `Generated ${pageCount} pages` : 'Site generated with AI', {
         eventKey: `generate-success:${projectId}`,
       });
     } catch (err) {
@@ -857,7 +933,9 @@ export function ProjectsApiScreen({
         return;
       }
 
+      setGenerationStatus('failed');
       const message = getUserFriendlyErrorMessage(err, 'Failed to generate site');
+      setGenerateError(message);
       setGenerateMessage(message);
       appToast.error(message, {
         eventKey: `generate-error:${activeProjectId ?? 'new-project'}`,
@@ -1101,7 +1179,10 @@ export function ProjectsApiScreen({
           Prompt
           <textarea
             value={generatePrompt}
-            onChange={(event) => setGeneratePrompt(event.target.value)}
+            onChange={(event) => {
+              setGeneratePrompt(event.target.value);
+              if (generateError) setGenerateError(null);
+            }}
             placeholder="Create a modern website for a coffee shop with Home, Menu, About, and Contact pages."
             className="mt-1 min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40"
             aria-label="AI prompt"
@@ -1132,9 +1213,19 @@ export function ProjectsApiScreen({
         {generatePromptIsTooShort && (
           <p className="text-xs text-muted-foreground">Add more detail. 20+ characters is recommended.</p>
         )}
-        {generateMessage && (
+        {generatingSite && (generationStatus === 'queued' || generationStatus === 'running') && (
+          <p className="text-sm text-muted-foreground" role="status">
+            ⏳ Generating your site... ({generationStatus})
+          </p>
+        )}
+        {generateMessage && !generateError && (
           <p className="text-sm text-muted-foreground" role="status">
             {generateMessage}
+          </p>
+        )}
+        {generateError && (
+          <p className="text-sm text-destructive" role="alert">
+            {generateError}
           </p>
         )}
       </Card>

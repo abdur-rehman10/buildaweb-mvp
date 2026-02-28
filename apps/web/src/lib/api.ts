@@ -251,6 +251,29 @@ export type GenerateProjectResult = {
   previewUrl: string;
 };
 
+
+export type GenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export type GenerationJobSummary = {
+  id: string;
+  projectId: string;
+  status: GenerationJobStatus;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  meta?: {
+    pageCount?: number;
+    homePageId?: string;
+  } | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type GetLatestGenerationJobResult = {
+  job: GenerationJobSummary | null;
+};
+
 export type CreatePageInput = {
   title: string;
   slug: string;
@@ -496,6 +519,14 @@ export const projectsApi = {
       method: 'POST',
       body: JSON.stringify(input),
     });
+  },
+  getLatestGeneration(projectId: string) {
+    return apiRequest<GetLatestGenerationJobResult>(
+      `/v1/projects/${encodeURIComponent(projectId)}/generation/latest`,
+      {
+        method: 'GET',
+      },
+    );
   },
 };
 
