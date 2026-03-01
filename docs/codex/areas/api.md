@@ -16,6 +16,7 @@
 ## Commands
 Run from repository root:
 - `pnpm --dir apps/api run lint`
+- `pnpm --dir apps/api run typecheck`
 - `pnpm --dir apps/api run test`
 - `pnpm --dir apps/api run build`
 

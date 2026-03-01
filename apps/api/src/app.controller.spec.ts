@@ -1,4 +1,4 @@
-import { AppController } from './app.controller';
+import { AppController, HealthResponse } from './app.controller';
 import { Connection } from 'mongoose';
 
 describe('AppController', () => {
@@ -15,7 +15,7 @@ describe('AppController', () => {
 
   describe('health', () => {
     it('should return API health payload', () => {
-      const result = appController.health();
+      const result: HealthResponse = appController.health();
 
       expect(result).toMatchObject({
         ok: true,

@@ -11,7 +11,6 @@ import {
   PasswordResetToken,
   PasswordResetTokenDocument,
 } from './password-reset-token.schema';
-
 const DEFAULT_TENANT = 'default';
 
 type AuthUserRecord = {
@@ -97,7 +96,7 @@ export class AuthService {
     const tenantId = this.tenantId();
     const normalizedEmail = this.normalizeEmail(params.email);
     const normalizedName = this.normalizeName(params.name);
-    const existingUser: unknown = await this.users.findByEmail(
+    const existingUser = await this.users.findByEmail(
       tenantId,
       normalizedEmail,
     );
@@ -115,7 +114,7 @@ export class AuthService {
     );
     let userRecord: AuthUserRecord;
     try {
-      const createdUser: unknown = await this.users.create({
+      const createdUser = await this.users.create({
         tenantId,
         email: normalizedEmail,
         passwordHash,
@@ -152,10 +151,7 @@ export class AuthService {
   async login(params: { email: string; password: string }) {
     const tenantId = this.tenantId();
     const normalizedEmail = this.normalizeEmail(params.email);
-    const foundUser: unknown = await this.users.findByEmail(
-      tenantId,
-      normalizedEmail,
-    );
+    const foundUser = await this.users.findByEmail(tenantId, normalizedEmail);
     if (!foundUser) {
       return {
         ok: false as const,
@@ -224,10 +220,7 @@ export class AuthService {
 
   async forgotPassword(params: { email: string }) {
     const tenantId = this.tenantId();
-    const foundUser: unknown = await this.users.findByEmail(
-      tenantId,
-      params.email,
-    );
+    const foundUser = await this.users.findByEmail(tenantId, params.email);
 
     if (!foundUser) {
       return { ok: true as const };

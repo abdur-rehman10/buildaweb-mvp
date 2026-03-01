@@ -9,7 +9,10 @@ export class UsersService {
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
   ) {}
 
-  async findByEmail(tenantId: string, email: string) {
+  async findByEmail(
+    tenantId: string,
+    email: string,
+  ): Promise<UserDocument | null> {
     return this.userModel
       .findOne({ tenantId, email: email.toLowerCase() })
       .exec();
@@ -20,7 +23,7 @@ export class UsersService {
     email: string;
     passwordHash: string;
     name?: string | null;
-  }) {
+  }): Promise<UserDocument> {
     return this.userModel.create({
       tenantId: params.tenantId,
       email: params.email.toLowerCase(),
@@ -30,7 +33,7 @@ export class UsersService {
     });
   }
 
-  async safeById(id: string) {
+  async safeById(id: string): Promise<UserDocument | null> {
     return this.userModel
       .findById(id)
       .select('_id email name tenantId status createdAt updatedAt')

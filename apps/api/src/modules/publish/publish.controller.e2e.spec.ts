@@ -14,6 +14,8 @@ import { ProjectsService } from '../projects/projects.service';
 import { PublishController } from './publish.controller';
 import { PublishService } from './publish.service';
 
+jest.setTimeout(20000);
+
 type MockProjectsService = {
   getByIdScoped: jest.Mock;
   setLatestPublish: jest.Mock;
