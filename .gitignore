@@ -157,3 +157,12 @@ docs/mvp-super-audit.md
 
 # Codex/SSH keys (never commit)
 codex_cloud_id_ed25519*
+docs/ai/output/*
+!docs/ai/output/.gitkeep
+.pnpm-store/
+.vscode/*
+.vscode/*
+!.vscode/settings.json
+.vscode/*
+!.vscode/settings.json
+.vscode/

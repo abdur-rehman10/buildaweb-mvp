@@ -108,7 +108,7 @@ async function bootstrap() {
   console.log(`API running on http://localhost:${port}/api/v1`);
 }
 
-bootstrap().catch((err: unknown) => {
+void bootstrap().catch((err: unknown) => {
   console.error(err);
   process.exit(1);
 });

@@ -2,12 +2,27 @@ import { Controller, Get } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, ConnectionStates } from 'mongoose';
 
+export type HealthResponse = {
+  ok: true;
+  service: string;
+  ts: string;
+  git_sha: string;
+  build_time_utc: string;
+};
+
+export type DbPingResponse = {
+  ok: boolean;
+  mongoReadyState: ConnectionStates;
+  db: string;
+  ts: string;
+};
+
 @Controller()
 export class AppController {
   constructor(@InjectConnection() private readonly connection: Connection) {}
 
   @Get('health')
-  health() {
+  health(): HealthResponse {
     return {
       ok: true,
       service: 'buildaweb-api',
@@ -18,7 +33,7 @@ export class AppController {
   }
 
   @Get('db/ping')
-  dbPing() {
+  dbPing(): DbPingResponse {
     const state = this.connection.readyState;
     return {
       ok: state === ConnectionStates.connected,

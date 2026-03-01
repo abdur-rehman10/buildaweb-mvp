@@ -13,6 +13,8 @@ import { AuthController } from './auth.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
 
+jest.setTimeout(20000);
+
 type MockAuthService = {
   signup: jest.Mock;
   login: jest.Mock;

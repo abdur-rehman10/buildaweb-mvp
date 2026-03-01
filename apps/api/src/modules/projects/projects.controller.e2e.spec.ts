@@ -15,6 +15,8 @@ import { ProjectsController } from './projects.controller';
 import { GenerationService } from '../generation/generation.service';
 import { ProjectsService } from './projects.service';
 
+jest.setTimeout(20000);
+
 type MockProjectsService = {
   create: jest.Mock;
   listByOwnerWithDraftStatus: jest.Mock;

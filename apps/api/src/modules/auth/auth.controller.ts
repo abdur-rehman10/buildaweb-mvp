@@ -18,6 +18,10 @@ import { UsersService } from '../users/users.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import type { Request } from 'express';
+import type { JwtPayload } from './jwt.strategy';
+
+type RequestWithOptionalId = Request & { id?: string };
+type RequestWithUser = RequestWithOptionalId & { user?: JwtPayload };
 
 @Controller('auth')
 export class AuthController {
@@ -28,7 +32,7 @@ export class AuthController {
     private readonly users: UsersService,
   ) {}
 
-  private requestId(req: Request & { id?: string }) {
+  private requestId(req: RequestWithOptionalId) {
     const headerId =
       req?.headers?.['x-request-id'] ?? req?.headers?.['x-requestid'];
     if (typeof req?.id === 'string' && req.id.trim()) return req.id.trim();
@@ -42,8 +46,8 @@ export class AuthController {
     return undefined;
   }
 
-  private getAuthContext(req: Request) {
-    const userValue = (req as Request & { user?: unknown }).user;
+  private getAuthContext(req: RequestWithUser) {
+    const userValue = req.user;
     if (!userValue || typeof userValue !== 'object') {
       throw new HttpException(
         fail('UNAUTHORIZED', 'Unauthorized'),
@@ -63,7 +67,7 @@ export class AuthController {
   }
 
   @Post('signup')
-  async signup(@Body() dto: SignupDto, @Req() req: Request & { id?: string }) {
+  async signup(@Body() dto: SignupDto, @Req() req: RequestWithOptionalId) {
     const email = dto.email.trim().toLowerCase();
     const requestId = this.requestId(req);
     this.logger.log(
@@ -103,10 +107,7 @@ export class AuthController {
   }
 
   @Post('register')
-  async register(
-    @Body() dto: SignupDto,
-    @Req() req: Request & { id?: string },
-  ) {
+  async register(@Body() dto: SignupDto, @Req() req: RequestWithOptionalId) {
     return this.signup(dto, req);
   }
 
@@ -140,7 +141,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  async me(@Req() req: Request) {
+  async me(@Req() req: RequestWithUser) {
     const { userId } = this.getAuthContext(req);
     const user = await this.users.safeById(userId);
     if (!user) return fail('USER_NOT_FOUND', 'User not found');

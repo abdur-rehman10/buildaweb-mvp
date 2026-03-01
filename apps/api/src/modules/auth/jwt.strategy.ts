@@ -7,8 +7,13 @@ import { ConfigService } from '@nestjs/config';
 export type JwtPayload = { sub: string; tenantId: string };
 
 type JwtExtractor = (req: Request) => string | null;
-const extractJwtFactory = ExtractJwt as unknown as {
+type ExtractJwtFactory = {
   fromAuthHeaderAsBearerToken: () => JwtExtractor;
+};
+
+const createBearerTokenExtractor = (): JwtExtractor => {
+  const extractJwtFactory = ExtractJwt as unknown as ExtractJwtFactory;
+  return extractJwtFactory.fromAuthHeaderAsBearerToken();
 };
 
 const JwtPassportStrategy = PassportStrategy(
@@ -29,7 +34,7 @@ export class JwtStrategy extends JwtPassportStrategy {
     }
 
     super({
-      jwtFromRequest: extractJwtFactory.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: createBearerTokenExtractor(),
       secretOrKey: secret,
     });
   }
