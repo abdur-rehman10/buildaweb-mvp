@@ -20,7 +20,9 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "agent:plan": "node scripts/agentic/run.mjs plan",
-    "agent:qa": "node scripts/agentic/run.mjs qa"
+    "agent:qa": "node scripts/agentic/run.mjs qa",
+    "agent:review": "node scripts/agentic/run.mjs review",
+    "agent:release": "node scripts/agentic/run.mjs release"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
